@@ -415,12 +415,9 @@ describe('recordSalary validation', () => {
 
 describe('slipDocument', () => {
 	it("answers with the statement's OWN file, never another the person is linked to", async () => {
-		// setBonus used to take the first linked document with a file, whatever
-		// shelf it was on — so it could read a TAX statement hunting for a
-		// payslip's bonus line, and August's correction could learn January's
-		// wording. Naming the document removes the question rather than guarding
-		// against it: a statement's documentId IS its slip, which is also the
-		// only key that still answers once a month can hold two payslips.
+		// A statement's documentId IS its slip — the only key that still answers
+		// once a month can hold two payslips, and the only way to avoid pulling
+		// another linked document (e.g. a tax statement) by accident.
 		await testDb.insert(document).values([
 			{
 				id: rowId('doc-tax'),

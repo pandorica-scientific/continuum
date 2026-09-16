@@ -1,8 +1,7 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// Net worth as a line with a scale: three gridlines the loader labelled on
-	// one shared step, and a year mark along the foot. It was a bare sparkline,
-	// which said "up" or "down" and nothing about by how much or since when.
+	// one shared step, and a year mark along the foot.
 	let {
 		data
 	}: {
@@ -99,7 +98,6 @@
 	}
 	.y-axis {
 		position: relative;
-		/* The x labels below the canvas take one line; the axis stops above it. */
 		margin-bottom: calc(var(--text-xs) * 1.6);
 		width: 3.5em;
 		font-size: var(--text-xs);

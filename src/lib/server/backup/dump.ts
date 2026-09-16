@@ -73,10 +73,8 @@ export async function dumpDatabase(): Promise<string> {
 
 		for (const table of ordered) {
 			// Generated columns are omitted by COPY … TO STDOUT but present in
-			// information_schema, so naming one makes every header a column wider
-			// than the rows beneath it — which is what made every dump taken
-			// before v0.4.3 unrestorable. Eleven tables carry a generated
-			// `entity_kind`, so this was not a corner case.
+			// information_schema, so naming one would make every header a column
+			// wider than the rows beneath it.
 			const cols = await sql`
 				select column_name from information_schema.columns
 				where table_schema = 'public' and table_name = ${table}

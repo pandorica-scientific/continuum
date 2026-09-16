@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// The wordings a payslip prints, in the languages a household is likely to be
-// paid in. Learning covers any language after one correction; these decide
-// whether the FIRST slip from a new employer reads itself.
+// Wordings a payslip prints in the languages a household is likely paid in.
+// These decide whether the FIRST slip from a new employer reads itself.
 import { describe, expect, it } from 'vitest';
 import { detectPeriod, extractCandidates, pickGross, pickNet } from '$lib/salary';
 
@@ -55,11 +54,8 @@ describe('reading a payslip in each language', () => {
 });
 
 describe('what must never be read as gross', () => {
-	/**
-	 * Total employment cost sits above gross on the page and is LARGER than it.
-	 * Every language's word for it has to be excluded, or a slip that prints the
-	 * cost line and no gross line hands the cost over as the salary.
-	 */
+	// Total employment cost sits above gross and is LARGER than it; each language's
+	// word for it must be excluded or a cost-only slip hands the cost over as salary.
 	it('leaves employer cost alone in each language', () => {
 		for (const [cost, gross] of [
 			['Arbeitgeberkosten 5.400,00', 'Gesamtbrutto 4.200,00'],

@@ -8,10 +8,8 @@ import {
 } from '$lib/charts/salary-chart-geometry';
 
 /**
- * What a salary bar means. Where it goes is `line-chart.test.ts` now: the
- * stacking, the hairline floor, the change scale and the hover geometry moved
- * into the shared engine in v0.8.1, and are tested there against every chart
- * that draws them rather than twice, once per screen.
+ * Tests only what a salary bar's segments mean; drawing geometry (stacking,
+ * hairline floor, change scale, hover) lives in line-chart.test.ts.
  */
 const year = (over: Partial<Record<string, unknown>> = {}) =>
 	({
@@ -40,8 +38,7 @@ describe('barValues', () => {
 	});
 
 	it('divides by the months actually recorded in average mode', () => {
-		// A year with four payslips is compared as a monthly rate, not as a short
-		// year — that comparison is the whole reason the mode exists.
+		// A partial year is compared as a monthly rate, not as a short year.
 		const v = barValues(
 			year({ grossMonths: 4, baseTotalMinor: '28000000', bonusTotalMinor: '0' }),
 			'avg'
@@ -73,8 +70,7 @@ describe('ceilingFor', () => {
 
 describe('the blocks a salary bar is made of', () => {
 	it('seats the bonus on the baseline with the base above it', () => {
-		// The other way round, a bonus that changed size every year moved the
-		// base's boundary for a reason that had nothing to do with the base.
+		// Bonus below base so a changing bonus never moves the base's boundary.
 		const out = salaryBarSegments(year(), 'total');
 		expect(out.map((s) => s.kind)).toEqual(['bonus', 'base']);
 	});

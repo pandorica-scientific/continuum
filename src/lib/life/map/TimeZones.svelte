@@ -60,11 +60,9 @@
 	 *
 	 * Written DOWNWARD, which is what makes this simple. A zone is a tall thin
 	 * strip, so a horizontal label is wider than the thing it names and a run of
-	 * European zones collided into a smear — the previous version packed them
-	 * onto stacked rows to cope, which scattered them at four different heights
-	 * and still overflowed. Turned ninety degrees a label needs the band's WIDTH,
-	 * which every band has, so each one sits in its own strip at the same height
-	 * and nothing needs stacking.
+	 * European zones collides into a smear. Turned ninety degrees a label needs
+	 * the band's WIDTH, which every band has, so each one sits in its own strip
+	 * at the same height and nothing needs stacking.
 	 */
 	const marks = $derived.by(() =>
 		bands
@@ -101,9 +99,9 @@
 
 		<!--
 			Barely clamped: the label is turned on its side, so it is about a dozen
-			pixels wide and needs almost no margin. At the old 98% ceiling UTC+12:00
-			— whose band is cut in half by the right edge of the map, so it anchors
-			at 99% — was pulled back on top of UTC+11:00.
+			pixels wide and needs almost no margin. Clamped to 99%, not 98% — UTC+12:00's
+			band is cut in half by the map's right edge and anchors there, and 98%
+			would pull the label back on top of UTC+11:00.
 		-->
 		{#each marks as mark (mark.zone)}
 			<span class="mark mono" style:left="clamp(1%, {mark.percent}%, 99%)">
@@ -178,10 +176,8 @@
 	/*
 	 * Down the band rather than across it, and legible on the band's own colour.
 	 *
-	 * It used to be 8px of `--rose` on bands filled with `--rose`, which is the
-	 * same hue reading against itself — the halo was doing all the work and
-	 * losing. `--fg1` over a dark halo separates from lit and unlit bands alike,
-	 * so one rule covers both instead of two that have to be kept in step.
+	 * `--fg1` over a dark halo separates from lit and unlit bands alike, so one
+	 * rule covers both instead of two that have to be kept in step.
 	 */
 	.mark {
 		position: absolute;

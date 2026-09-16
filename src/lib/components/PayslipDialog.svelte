@@ -1,11 +1,7 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
-	// Adding a payslip, in the same dialog the Tax screen files a statement in.
-	//
-	// It was an inline card that pushed the whole table down when open, and a
-	// refusal had to be plumbed back through the page's `form` prop to reopen it
-	// with what it refused. A modal holds its own draft, so a refusal simply
-	// stays on screen with the figures still in the fields.
+	// A modal holds its own draft, so a refusal stays on screen with the
+	// figures still in the fields.
 	import { untrack } from 'svelte';
 	import { enhance } from '$app/forms';
 	import { messageFromActionResult, shouldCloseAfterAction } from '$lib/actions/result';
@@ -34,50 +30,19 @@
 	let gross = $state('');
 	let net = $state('');
 	let bonus = $state('');
-	/**
-	 * The currency the slip is PRINTED in.
-	 *
-	 * Starts empty and stays required. Until v0.5.1 it was silently the
-	 * household's base currency, which filed Czech payslips as euro — so the one
-	 * thing this field must never do is offer a default nobody looked at. The
-	 * slip fills it in when the slip says which currency it is.
-	 */
+	/** Currency the slip is printed in. Stays empty by default — never default
+	 *  to the household base, which would silently mislabel foreign slips. */
 	let currency = $state('');
-	/**
-	 * Where the currency in the field came from, so the note can say which.
-	 *
-	 * "Read from the slip" and "the same as the last one you filed" are different
-	 * claims: the first is printed on the paper, the second is a good guess about
-	 * a job that has not changed. Saying the second in the words of the first
-	 * would be the same quiet assumption this field exists to remove.
-	 */
+	/** Where `currency` came from, so the note can say "read from the slip"
+	 *  vs. "same as last time" rather than conflating the two. */
 	let currencyFrom = $state<'slip' | 'learned' | null>(null);
-	/**
-	 * What the month already held when this slip was filed.
-	 *
-	 * A month can hold more than one payslip since v0.5.5 — two jobs are two
-	 * slips — and an upload no longer replaces what is there. That is the right
-	 * behaviour and an invisible one: filing August twice by mistake looks
-	 * exactly like filing two jobs on purpose, so the dialog says which happened
-	 * and stays open long enough to be read.
-	 */
+	/** A month can hold more than one payslip (two jobs = two slips), so an
+	 *  upload never replaces what's there; this says what already existed. */
 	let alsoFiled = $state<{ periodMonth: string; count: number } | null>(null);
-	/**
-	 * The slip was recognised as one already filed, so nothing was added.
-	 *
-	 * The opposite news from `alsoFiled` and just as invisible without saying
-	 * it: an upload that corrected a statement rather than making one looks,
-	 * from here, exactly like an upload that did nothing at all.
-	 */
+	/** Set when the upload matches a slip already filed, so nothing was added. */
 	let sameSlip = $state<{ periodMonth: string; moved: boolean } | null>(null);
-	/**
-	 * The dialog has done its work and is waiting to be dismissed.
-	 *
-	 * Held open so the news is read — but held open AS A FORM it was unreadable:
-	 * the fields were still filled, the Add button was still there, and the only
-	 * way to find out whether the slip had been filed was to press Add again and
-	 * risk filing it twice. In this state there is nothing left to submit.
-	 */
+	/** Dialog has finished and is waiting to be dismissed; the form is hidden
+	 *  so a second Add press can't re-file the same slip. */
 	const settled = $derived(alsoFiled !== null || sameSlip !== null);
 
 	/** Back to an empty draft, for the next slip, without leaving and returning. */
@@ -98,26 +63,15 @@
 	}
 	let fileName = $state<string | null>(null);
 	let actionError = $state<string | null>(null);
-	// A browser will not let a file input be repopulated, so a refusal after one
-	// was chosen has to say the file must be picked again rather than letting a
-	// silent re-submit drop the upload.
+	// A browser won't repopulate a file input, so a refusal must ask for it again.
 	let fileWasChosen = $state(false);
 	let showHint = $state(false);
 
-	// Reading the chosen file so its figures can be checked before anything is
-	// written. Filing blind and correcting afterwards is what this replaces —
-	// and a correction teaches the reader a label, so a wrong one taught it the
-	// wrong thing.
 	let reading = $state(false);
 	let readNote = $state<string | null>(null);
 
-	/**
-	 * Which fields the person actually edited.
-	 *
-	 * A prefilled figure is still the reader's answer, not a decision, and the
-	 * server needs to know the difference: it decides whether the month counts as
-	 * hand-corrected, and whether a label is learned from it.
-	 */
+	/** Which fields were hand-edited vs. prefilled; the server uses this to
+	 *  decide whether a month counts as hand-corrected and whether to learn a label. */
 	let touched = $state<string[]>([]);
 	const touch = (field: string) => {
 		if (!touched.includes(field)) touched = [...touched, field];
@@ -136,8 +90,7 @@
 				return;
 			}
 			const read = (await response.json()) as Record<string, string | null>;
-			// Only fields nobody has touched: a figure already typed is a decision
-			// and the reader does not get to overwrite it.
+			// Only fill fields the reader hasn't touched — never overwrite a typed value.
 			if (!touched.includes('gross')) gross = read.gross ?? '';
 			if (!touched.includes('net')) net = read.net ?? '';
 			if (!touched.includes('bonus')) bonus = read.bonus ?? '';
@@ -160,8 +113,6 @@
 
 <Modal title="Add payslip" {onclose}>
 	{#snippet titleAside()}
-		<!-- Beside the title rather than down among the buttons: it explains what
-		     the whole dialog is asking for, not what Add does. -->
 		<button
 			type="button"
 			class="icon-btn"
@@ -178,9 +129,7 @@
 		action="?/addPayslip"
 		enctype="multipart/form-data"
 		onchange={(event) => {
-			// Bubbles up from the dropzone's own input. This handler is not a
-			// filename display: it starts reading the slip, which is what fills
-			// the three figures in.
+			// Bubbles up from the dropzone's input; starts reading the slip.
 			const target = event.target as HTMLInputElement;
 			if (target?.type !== 'file') return;
 			const picked = target.files?.[0] ?? null;
@@ -195,10 +144,8 @@
 					result.type === 'success' ? ((result.data?.alsoFiled as typeof alsoFiled) ?? null) : null;
 				sameSlip =
 					result.type === 'success' ? ((result.data?.sameSlip as typeof sameSlip) ?? null) : null;
-				// The figures the entry refused come back with the failure, READ ones
-				// included: "net cannot be more than gross" is unanswerable without
-				// seeing which two numbers it meant, and a slip read from a PDF put
-				// nothing in these fields to begin with.
+				// Refused figures (including ones read from the slip) come back with
+				// the failure so the error can reference them.
 				if (result.type === 'failure') {
 					const values = result.data?.values as Record<string, string> | undefined;
 					if (values) {
@@ -213,9 +160,6 @@
 				}
 				// Never reset: the draft is the whole reason this is a dialog.
 				await update({ reset: false });
-				// Held open when the month already had a slip, or when this file was
-				// one already filed, so what just happened is read rather than
-				// guessed at from a row appearing twice — or from no row appearing.
 				if (shouldCloseAfterAction(result.type) && !settled) onclose();
 				if (settled) {
 					fileName = null;
@@ -228,11 +172,6 @@
 		<input type="hidden" name="touched" value={touched.join(',')} />
 
 		{#if settled}
-			<!-- The form is GONE, not merely annotated. Left standing it said
-			     nothing about whether the slip had been filed: the fields were
-			     still full and Add was still there, so the only way to find out
-			     was to press Add a second time — on a screen where a second press
-			     files a second payslip. What is left is the news and two ways out. -->
 			{#if sameSlip}
 				<p class="also">
 					Nothing was added. This is the payslip already filed for {sameSlip.periodMonth}{#if sameSlip.moved},
@@ -251,9 +190,6 @@
 			</div>
 		{:else}
 			{#if showHint}
-				<!-- Behind an ⓘ rather than always on: it explains the model once, and a
-			     paragraph read on the first upload and skipped on every one after is
-			     not worth the space it takes permanently. -->
 				<p class="hint">
 					A payslip states gross and net; the bonus is part of gross, so gross 100 000 with a 25 000
 					bonus means a base of 75 000. The slip is read for all three and for its month. Anything
@@ -272,17 +208,11 @@
 					Currency read from the slip as {currency} — change it if that is wrong.
 				</p>
 			{:else if currencyFrom === 'learned'}
-				<!-- Named as the guess it is. The slip printed no currency; this is the
-			     one stated last time for this person, and it is remembered so the
-			     question is not asked again every month for the same job. -->
 				<p class="reading">
 					This slip does not name a currency. {currency} is what was stated last time — change it if this
 					month is different.
 				</p>
 			{:else if fileWasChosen && !currency}
-				<!-- Said out loud rather than filled in quietly. The base currency is
-			     where this household REPORTS; it is not evidence of what anybody
-			     was paid. -->
 				<p class="refile">
 					The slip does not name a currency. Pick the one it was paid in — this household reports in
 					{baseCurrency}, which is not the same question.
@@ -322,9 +252,7 @@
 							currencyFrom = null;
 						}}
 					>
-						<!-- No preselected currency. An empty option a browser refuses to
-					     submit is the whole point: the household's base sitting here by
-					     default is exactly how six koruna payslips became euro. -->
+						<!-- Empty option a browser refuses to submit — no preselected currency. -->
 						<option value="" disabled>Which currency?</option>
 						{#each currencies as code (code)}
 							<option value={code}>{currencyLabel(code)}</option>
@@ -390,15 +318,10 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 		gap: var(--space-5) var(--space-6);
-		/* Controls line up along their BOTTOM edge: a label that wraps to two
-		   lines would otherwise push its input a line below the ones beside it,
-		   and a row of controls that no longer lines up stops reading as a row. */
+		/* Align controls on their bottom edge so a wrapped label doesn't drop
+		   its input below the row. */
 		align-items: end;
 	}
-	/* Without this the labels fall back to the page default and lay themselves
-	   out inline, so "Whose" sat beside its select while "Month" sat above its
-	   own — every field a different shape. The tax dialog states the same rule
-	   for the same reason. */
 	label {
 		display: flex;
 		flex-direction: column;
@@ -406,8 +329,7 @@
 		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
-	/* Only what the base control layer cannot know: these live in 1fr grid
-	   tracks and have to be allowed to be narrower than their content. */
+	/* Allow narrower than content — these live in 1fr grid tracks. */
 	.payslip-form input,
 	.payslip-form select {
 		min-width: 0;

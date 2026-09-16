@@ -11,9 +11,8 @@ const MAX_FAILURES = 8;
 
 describe('rate limiter scopes', () => {
 	it('a locked-out API caller does not lock the sign-in form', () => {
-		// A dashboard polling with a revoked token used to spend the household's
-		// login budget: behind a reverse proxy every client arrives from the same
-		// address, so one stale script shut everyone out of the app.
+		// Behind a reverse proxy every client arrives from the same address, so a
+		// stale script's API failures must not spend the login budget.
 		const address = '10.0.0.7';
 		for (let i = 0; i < MAX_FAILURES; i++) recordFailure('api', address);
 
@@ -37,8 +36,7 @@ describe('rate limiter scopes', () => {
 		}
 		recordSuccess('login', address);
 		expect(blockedForSeconds('login', address)).toBe(0);
-		// The API budget is deliberately not cleared by a successful sign-in,
-		// so token guessing cannot be reset by logging in.
+		// The API budget is deliberately not cleared by a successful sign-in.
 		expect(blockedForSeconds('api', address)).toBeGreaterThan(0);
 	});
 
@@ -49,17 +47,14 @@ describe('rate limiter scopes', () => {
 	});
 
 	it('attempts against one account do not lock the rest of the household', () => {
-		// Behind any reverse proxy the whole household shares one
-		// address, so an address-only budget meant eight bogus attempts against
-		// one person refused everyone's sign-in.
+		// Behind any reverse proxy the whole household shares one address.
 		const address = '100.64.0.1';
 		for (let i = 0; i < MAX_FAILURES; i++) recordFailure('login', address, 'person-robert');
 		expect(blockedForSeconds('login', address, 'person-robert')).toBeGreaterThan(0);
 		expect(blockedForSeconds('login', address, 'person-tereza')).toBe(0);
 	});
 
-	// Rotating account names is already answered by collapsing every unknown one
-	// to a single subject, so they share one budget without a coarser
+	// Collapsing every unknown account name to a single subject avoids a coarser
 	// address-wide tier — which behind a proxy would be the whole household.
 	it('rotating unknown account IDs spends one shared unknown-account budget', () => {
 		const address = '198.51.100.17';
@@ -74,8 +69,7 @@ describe('rate limiter scopes', () => {
 		expect(blockedForSeconds('login', address, loginLimitSubject('person-robert', true))).toBe(0);
 	});
 
-	// One wrong password must not refuse
-	// every other member: behind a reverse proxy the household is one address.
+	// One wrong password must not refuse every other member of the household.
 	it('does not let one account or door lock out the rest of the household', () => {
 		const address = '198.51.100.23';
 		for (let i = 0; i < MAX_FAILURES * 2; i++) {

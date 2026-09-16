@@ -6,16 +6,8 @@
 	/**
 	 * A hue mixed into the ground behind a stroke icon or an emoji.
 	 *
-	 * v0.8.1's single most repeated shape: it precedes a screen title, a panel
-	 * title, an account row, a card head and a nav row, at five sizes and in
-	 * every hue the palette has. Written once because the alternative was the
-	 * `.tiles` story again — the same 30px rounded square declared in forty
-	 * component stylesheets, drifting a pixel of radius at a time.
-	 *
-	 * The ONE number this owns that the caller does not is the radius. It is a
-	 * function of the size and not a prop, because a 26px tile at radius 14 and
-	 * a 46px tile at radius 8 are both wrong, and a caller choosing freely will
-	 * eventually pick one of them.
+	 * Radius is derived from size, not a prop — leaving it free would let
+	 * callers pick a wrong combination like 26px at radius 14.
 	 */
 	interface Props {
 		/** A palette token name, with or without the leading dashes: `teal`, `--teal`. */
@@ -35,9 +27,8 @@
 
 	const token = $derived(hue.startsWith('--') ? hue : `--${hue}`);
 
-	// Steps rather than a ratio: the scale has names for 8, 10 and 12, and a
-	// computed 8.4px would be a raw value beside the token that means the same
-	// thing. Above 40px the scale stops and the design's own numbers take over.
+	// Steps rather than a ratio, matching the named radius tokens (8/10/12);
+	// above 40px falls back to explicit values.
 	const radius = $derived(
 		size <= 26
 			? 'var(--radius-md)'
@@ -50,8 +41,7 @@
 						: '14px'
 	);
 
-	// An icon fills a little over half its tile at every size the design uses:
-	// 14 in 26, 16 in 30, 22 in 44, 24 in 46.
+	// An icon fills a little over half its tile at every size in use.
 	const glyph = $derived(Math.round(size * 0.52));
 </script>
 
@@ -82,17 +72,14 @@
 		border-radius: var(--tile-radius);
 		background: color-mix(in srgb, var(--tile-hue) var(--tile-alpha), transparent);
 		color: var(--tile-hue);
-		/* Never squeezed by the flexible column beside it: a tile that has lost
-		   two pixels reads as a different tile, and the name next to it has an
-		   ellipsis for exactly this. */
+		/* Never squeezed by the flexible column beside it. */
 		flex: none;
 		transition: background-color var(--dur) var(--ease);
 	}
 	.tile.active {
 		background: color-mix(in srgb, var(--tile-hue) var(--tile-alpha-active), transparent);
 	}
-	/* An emoji is drawn by the platform and ignores `color`; it only needs to be
-	   sized to sit in the tile the way an icon does. */
+	/* An emoji ignores `color`, so it's only sized to match an icon's footprint. */
 	.emoji {
 		font-size: calc(var(--glyph) * 1.05);
 		line-height: 1;

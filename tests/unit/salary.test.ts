@@ -44,9 +44,7 @@ describe('extractCandidates', () => {
 	});
 
 	it('reads an English payslip at full magnitude, not its first four digits', () => {
-		// Without a comma-grouped alternative the amount pattern fell through to
-		// `\d{1,3}[.,]\d{2}` and matched "45,23" out of "45,231.00", so the slip
-		// was filed as 45.23 — a thousandfold error, silently.
+		// Regression: without a comma-grouped alternative, "45,231.00" matched only "45,23".
 		const english = ['Gross pay 62,000.00', 'Tax withheld 16,769.00', 'Net pay 45,231.00'];
 		const candidates = extractCandidates(english, 'CZK');
 		expect(candidates.some((c) => c.label === 'net pay' && c.amountMinor === 4523100n)).toBe(true);
@@ -92,15 +90,13 @@ describe('pickGross and pickNet', () => {
 	});
 
 	it('never picks total employment cost as gross', () => {
-		// Czech slips print superhrubá mzda ABOVE gross. With the old
-		// largest-amount fallback this was the single most likely wrong answer.
+		// Superhrubá mzda prints ABOVE gross and must not be mistaken for it.
 		const c = extractCandidates(['Superhrubá mzda 83 080,00', 'K výplatě 45 231,00'], 'CZK');
 		expect(pickGross(c, null)).toBeNull();
 	});
 
 	it('does not guess when the slip names no pay line at all', () => {
-		// No fallback to the largest amount. A null the form can ask about beats
-		// a confident wrong number filed silently.
+		// No fallback to the largest amount — a null the form can ask about beats a silent wrong number.
 		const c = extractCandidates(['Doprava 1 200,00', 'Stravenky 900,00'], 'CZK');
 		expect(pickGross(c, null)).toBeNull();
 		expect(pickNet(c, null)).toBeNull();
@@ -128,14 +124,10 @@ describe('pickGross and pickNet', () => {
 	});
 });
 
-// Real payslips are TABLES. extractPdfLines joins a row's cells with spaces, so
-// one physical row arrives as one long line carrying several amounts, and every
-// amount after the keyword gets a label that still contains it. Taking the last
-// match then returns the rightmost COLUMN rather than a total — which read a
-// Czech slip's tax column as its gross.
+// A row's cells are joined with spaces, so one line carries several amounts and
+// taking the last match can return the wrong COLUMN instead of the total.
 describe('pickGross and pickNet on tabular slips', () => {
-	// A real row, cells joined: label, gross, hours header, hours, the employee's
-	// social insurance, then the tax.
+	// One real row: label, gross, hours header, hours, employee's social insurance, tax.
 	const czechRow = 'Hrubá mzda 70 135 hod.vč.přesč. 176 SP zaměstnanec 4 980 Daň 10 530';
 
 	it('takes the amount next to the keyword, not the last one on the row', () => {
@@ -156,8 +148,7 @@ describe('pickGross and pickNet on tabular slips', () => {
 	});
 
 	it('leaves net at or below gross, which is what made the month recordable', () => {
-		// Before this rule the pair came out as gross 10 530 / net 54 038, which
-		// recordSalary correctly refused — and the month was dropped in silence.
+		// Regression: a misread pair (gross 10 530 / net 54 038) got the whole month silently dropped.
 		const c = extractCandidates(
 			[
 				czechRow,
@@ -183,8 +174,7 @@ describe('pickGross and pickNet on tabular slips', () => {
 	});
 
 	it('still falls back to a containing label when nothing sits next to the keyword', () => {
-		// Some exporters put the amount a column further along. Better a looser
-		// match than no figure at all.
+		// Some exporters put the amount a column further along.
 		const c = extractCandidates(['Hrubá mzda za období 62 000,00'], 'CZK');
 		expect(pickGross(c, null)?.amountMinor).toBe(6200000n);
 	});
@@ -200,10 +190,7 @@ describe('detectPeriod', () => {
 	});
 
 	it('reads every month name in the table, diacritics included', () => {
-		// `\b` is defined over [A-Za-z0-9_], so between a space and "ú" there is
-		// no boundary and `\búnor\b` never matched. Nine names failed that way,
-		// which quietly removed five months a year from the salary history and
-		// the tax prefill.
+		// Regression: `\b` doesn't see a boundary before diacritics, so `\búnor\b` never matched.
 		const expected: Array<[string, string]> = [
 			['leden', '01'],
 			['ledna', '01'],
@@ -258,9 +245,7 @@ describe('salaryStats', () => {
 		expect(salaryStats([], null)).toHaveLength(0);
 	});
 
-	// The reason the two are kept apart. A payslip is gross, a bank credit is
-	// net; averaging them together produces a figure that is neither, and lower
-	// than the truth.
+	// A payslip is gross, a bank credit is net; averaging them together is neither.
 	it('keeps gross and net apart, each over the months that have it', () => {
 		const rows = salaryStats(
 			[
@@ -293,8 +278,7 @@ describe('salaryStats', () => {
 		expect(rows[0].grossAvgMinor).toBeNull();
 	});
 
-	// Otherwise the year somebody started uploading payslips reports a pay RISE
-	// of thirty percent, and the year they stopped reports a cut.
+	// Otherwise switching from payslips to bank data reports a fake pay rise or cut.
 	it('does not compare a gross year against a net one', () => {
 		const rows = salaryStats(
 			[
@@ -370,8 +354,7 @@ describe('mergeSalaryYears', () => {
 	});
 
 	it('recomputes the monthly average over the merged months, not by averaging averages', () => {
-		// Two people paid very differently for different numbers of months: the
-		// mean of their averages is not the household's average month.
+		// The mean of two people's averages is not the household's average month.
 		const merged = mergeSalaryYears([
 			[y({ grossTotalMinor: 120000000n, grossMonths: 12 })],
 			[y({ grossTotalMinor: 20000000n, grossMonths: 2 })]
@@ -440,8 +423,7 @@ describe('lastBaseIncrease', () => {
 	});
 
 	it('ignores a fall', () => {
-		// A pay cut is not an increase, and calling the last change an increase
-		// would put a red figure under a green label.
+		// A pay cut is not an increase.
 		expect(lastBaseIncrease([y(2024, 6), y(2025, -4)])).toEqual({ year: 2024, pct: 6 });
 	});
 

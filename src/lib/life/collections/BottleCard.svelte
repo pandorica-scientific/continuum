@@ -1,10 +1,8 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	/**
-	 * One bottling in the grid.
-	 *
-	 * A row is not one physical bottle, so the card carries a count as well as a
-	 * state: "3 sealed, 1 open" is a different evening from "4 sealed".
+	 * One bottling in the grid. A row is not one physical bottle, so the card
+	 * carries a count as well as a state ("3 sealed, 1 open" vs "4 sealed").
 	 */
 	import { drinkPhase, phaseHue, phaseWord } from '$lib/life/collections/drink-by';
 	import { stateOf } from '$lib/life/collections/ownership';

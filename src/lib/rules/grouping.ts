@@ -2,15 +2,12 @@
 /**
  * The Rules screen's arithmetic, kept pure: no DOM, no Svelte, no database.
  *
- * A household that has been filing for a year has dozens of rules, and the
- * screen used to be all of them in one flat list behind a pager — which meant
- * the question people actually arrive with ("which of my rules is wrong?")
- * was answered by reading every row. Grouping by category answers it in the
- * headers: a group whose average trust is red has a rule in it worth opening.
+ * Rules are grouped by category so the question people arrive with ("which
+ * of my rules is wrong?") is answered in the headers: a group whose average
+ * trust is red has a rule in it worth opening.
  *
- * Written here rather than in the component for the same reason `layout.ts`
- * is: every subtle bug on that screen will be a bug in this file, and there is
- * no browser suite to catch it in a rendered page.
+ * Written here rather than in the component since there is no browser suite
+ * to catch a subtle bug in a rendered page.
  */
 
 /** One rule as the screen needs it. A subset of what the loader returns. */

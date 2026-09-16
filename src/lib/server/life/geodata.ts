@@ -2,17 +2,12 @@
 /**
  * The outlines the Map draws, read off the disk they were fetched onto.
  *
- * `geodata/` is written at image-build time by `scripts/fetch-geodata.mjs`,
- * exactly as tessdata is, and never at runtime. So everything here is a read of
- * files that are already there — or the honest report that a developer has not
- * run the fetch yet, which is a state the Map is expected to draw rather than a
- * reason to fail.
+ * `geodata/` is written at image-build time by `scripts/fetch-geodata.mjs` and
+ * never at runtime, so a missing manifest means the fetch has not run — a
+ * state the Map is expected to draw, not a reason to fail.
  *
- * NOTHING here joins a request to a path. A slug is looked up in the manifest
- * and the manifest's own answer is what opens; a name that is not in it does
- * not reach the filesystem at all. That is the same lesson `/files/[name]`
- * carries: a path built from something a browser sent is a traversal waiting to
- * be found.
+ * NOTHING here joins a request to a path: a slug is looked up in the
+ * manifest, and a name that is not in it never reaches the filesystem at all.
  */
 import { gunzipSync } from 'node:zlib';
 import { geoBounds, geoContains, geoEquirectangular, geoPath } from 'd3-geo';
@@ -75,20 +70,17 @@ let manifest: GeoManifest | null = null;
 export function geoManifest(): GeoManifest | null {
 	if (manifest) return manifest;
 	const path = join(GEODATA_DIR, 'manifest.json');
-	// A MISS IS NOT CACHED. Caching it would mean a developer who runs the fetch
-	// while the server is up sees "not fetched" until they restart — and the
-	// only cost of re-checking is one `existsSync` on a page nobody is loading
-	// in a loop.
+	// A MISS IS NOT CACHED: caching it would freeze "not fetched" until a
+	// restart, and re-checking costs one `existsSync` on a page nobody hits in
+	// a loop.
 	if (!existsSync(path)) return null;
 	try {
-		// Synchronous deliberately: this is one small file, read once, and every
-		// caller below would otherwise have to be async to ask a question whose
-		// answer never changes.
+		// Synchronous deliberately: one small file, read once, for a question
+		// whose answer never changes.
 		manifest = JSON.parse(readFileSync(path, 'utf8')) as GeoManifest;
 	} catch {
-		// A half-written manifest is the same situation as no manifest: the map
-		// says the geodata is missing and names the command that fixes it. Not
-		// cached either — a fetch that was still writing will finish.
+		// A half-written manifest is treated as no manifest. Not cached either —
+		// a fetch that was still writing will finish.
 		return null;
 	}
 	return manifest;
@@ -153,11 +145,10 @@ export function slugForCountry(code: string): string | null {
 /**
  * The world, already projected, so a browser never parses the topology.
  *
- * This is the fix for the several-second stall when the Map opens: the outline
- * is 756 kB of TopoJSON, and turning it into 240 path strings is a parse, a
- * mesh reconstruction and 240 projections — all on the main thread, all before
- * anything on the screen responds. Doing it here costs one server render and is
- * then cached for the life of the process, because the world does not change.
+ * Turning the raw TopoJSON into path strings is a parse, a mesh
+ * reconstruction and a projection per country — all main-thread work the Map
+ * would otherwise redo on every open. Done here once and cached for the life
+ * of the process, since the world does not change.
  */
 let drawn: WorldShapes | null = null;
 
@@ -189,11 +180,9 @@ export async function projectedWorld(): Promise<WorldShapes | null> {
 /**
  * The time-zone card's bands, and which zone each country sits in.
  *
- * Worked out here, once, and cached: the zones file is a megabyte of geometry
- * and the browser has no use for it. What the card needs is a path per band —
- * rounded at fetch time — and the answer to "which zone is this country in",
- * which is a containment test over 40 bands that has no business running on a
- * phone.
+ * Worked out here, once, and cached: the browser has no use for the raw
+ * geometry, only a path per band and which zone each country falls in — a
+ * containment test that has no business running on a phone.
  */
 let zonesReady: ZoneCard | null = null;
 
@@ -221,12 +210,9 @@ export async function zoneCard(): Promise<ZoneCard | null> {
 	/*
 	 * Where each offset is printed.
 	 *
-	 * The label is drawn vertically at the FOOT of the card, so it is measured
-	 * there — three earlier anchors all failed by measuring the band somewhere
-	 * the text does not sit. But the foot of an equirectangular map is
-	 * Antarctica, where the zones fan out from the pole and OVERLAP: UTC+11
-	 * reaches 676-706 and UTC+12 reaches 690-720, so both labels centred within
-	 * fourteen units of each other and sat on top of one another.
+	 * The label is drawn at the FOOT of the card, so it is measured there — but
+	 * the foot of an equirectangular map is Antarctica, where zones fan out
+	 * from the pole and OVERLAP.
 	 *
 	 * So each column is given a single owner. Where two zones both reach a
 	 * column it goes to the one whose own meridian is nearer, and each label is
@@ -236,13 +222,8 @@ export async function zoneCard(): Promise<ZoneCard | null> {
 	const LABEL_ROWS = [286, 310, 334, 352];
 
 	/*
-	 * The probe points, inverted ONCE.
-	 *
-	 * Inside the per-zone loop this was the same 1,440 inversions redone for
-	 * every band, and the `geoContains` behind them was the real cost: forty
-	 * zones × 360 columns × four rows is 57,600 point-in-multipolygon tests
-	 * against geometry with tens of thousands of vertices, which measured
-	 * sixteen seconds on the shipped `zones.json.gz` — paid by whoever opened
+	 * The probe points, inverted ONCE rather than redone per zone — the
+	 * `geoContains` tests behind them are the real cost, paid by whoever opens
 	 * the Map first after a restart, since this answer is cached but never
 	 * warmed.
 	 */
@@ -257,12 +238,10 @@ export async function zoneCard(): Promise<ZoneCard | null> {
 	/**
 	 * Whether a point is inside a feature's bounding box — west may wrap east.
 	 *
-	 * The width is folded rather than taken modulo 360, which would turn a box
-	 * that spans the whole circle into a box of width zero and reject every
-	 * point in it. `geoBounds` reports exactly that — `[[-180, …], [180, …]]` —
-	 * for anything containing a pole or reaching more than half way round, and
-	 * this pass is only ever allowed to be a cheap NO: a box test that rejects
-	 * what `geoContains` would accept is a hole in the band, not a saving.
+	 * Width is folded rather than taken modulo 360, since a box spanning the
+	 * whole circle would otherwise read as width zero and reject every point.
+	 * This test may only ever return a cheap NO: rejecting what `geoContains`
+	 * would accept is a hole in the band, not a saving.
 	 */
 	const inBox = (box: [[number, number], [number, number]], point: [number, number]): boolean => {
 		if (point[1] < box[0][1] || point[1] > box[1][1]) return false;
@@ -278,9 +257,8 @@ export async function zoneCard(): Promise<ZoneCard | null> {
 			properties: null,
 			geometry
 		}));
-		// A box test first, because it rejects almost every pair for the price of
-		// four comparisons and leaves `geoContains` only the handful that could
-		// actually be inside.
+		// A box test first — cheap, and rejects almost every pair before
+		// `geoContains` runs on the rest.
 		const boxes = features.map(
 			(feature) => geoBounds(feature as never) as [[number, number], [number, number]]
 		);
@@ -370,10 +348,10 @@ export async function zoneCard(): Promise<ZoneCard | null> {
 
 	zonesReady = {
 		coastline,
-		// Every band, always. Filtering this list once dropped the half-hour
-		// offsets — India, Iran, Nepal, Venezuela — out of the PAINTING as well
-		// as out of the labelling, and they came out as black holes in the map.
-		// A band with nowhere to put its label still has somewhere to be drawn.
+		// Every band, always: filtering here would drop the half-hour offsets
+		// (India, Iran, Nepal, Venezuela) from the PAINTING too, not just the
+		// labelling. A band with nowhere to put its label still has somewhere
+		// to be drawn.
 		bands: bands.map((band) => ({
 			zone: band.zone,
 			label: band.label,

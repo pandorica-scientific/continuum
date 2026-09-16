@@ -2,13 +2,12 @@
 /**
  * Two people, one bottle, one number.
  *
- * The ownership counts are the only figures in Collections that two browsers
- * can change at the same second — a phone in the kitchen pressing `+` while the
- * laptop logs a tasting. Read-then-write across two round trips loses one of
- * the two, and the loss is silent: both screens say they saved.
+ * The ownership counts are the only figures in Collections that two
+ * browsers can change at the same second. Read-then-write across two round
+ * trips loses one of the two, silently: both screens say they saved.
  *
- * So the arithmetic is passed INTO the write and the row is held while it runs.
- * These tests are about that, not about the arithmetic, which is pure and
+ * So the arithmetic is passed into the write and the row is held while it
+ * runs. These tests are about that, not the arithmetic, which is pure and
  * tested in `bottle-ownership.test.ts`.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -76,9 +75,9 @@ describe('moving a count', () => {
 		expect(await currentCounts(id, harness.db)).toEqual({ owned: 4, opened: 1 });
 	});
 
-	// `remove` finishes the open bottle first, so a `−` that lands after an
-	// opening puts the cork back. That is the rule, not a race: what the lock
-	// guarantees is that both moves are APPLIED, which is the count of bottles.
+	// `remove` finishes the open bottle first, so a `−` after an opening puts
+	// the cork back — the lock guarantees both moves are applied, not a
+	// particular order.
 	it('applies a press and its opposite, whichever order they land in', async () => {
 		const id = await makeBottle(3, 0);
 		await Promise.all([moveCounts(id, add, harness.db), moveCounts(id, remove, harness.db)]);

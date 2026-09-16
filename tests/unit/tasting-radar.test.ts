@@ -1,10 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-/**
- * The shape a bottle's tasting notes make.
- *
- * Geometry with no DOM in it, tested beside the other chart arithmetic — the
- * product's rule for every chart.
- */
+// Geometry with no DOM in it, tested beside the other chart arithmetic.
 import { describe, expect, it } from 'vitest';
 import { LEAST_AXES, RINGS, tastingRadar } from '$lib/charts/tasting-radar';
 

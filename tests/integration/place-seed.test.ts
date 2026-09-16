@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * Seeding the curated places.
- *
- * Two properties matter more than the rest and both are here: seeding twice
- * changes nothing, and a place that leaves the dataset keeps the record of
- * somebody having seen it. The second is the one way this feature could destroy
- * something a person made, so it is asserted directly rather than reasoned
- * about.
+ * Seeding is idempotent, and a place that leaves the dataset keeps the record
+ * of somebody having seen it — the one way this feature could destroy
+ * something a person made.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';

@@ -26,17 +26,14 @@
 
 	let { data, form } = $props();
 
-	// The threshold field follows the checkbox as it is clicked, not as it was
-	// last saved: a disabled field is never posted, so switching the exemption
-	// on and typing a threshold in the same visit must save both.
+	// Follows the checkbox as clicked, not as last saved — a disabled field is
+	// never posted, so both must save when toggled and typed in the same visit.
 	let exemptLongHeld = $derived(data.investTax?.exemptLongHeld ?? false);
 
 	/**
 	 * The nine things this screen configures, and which of them this person has.
-	 *
-	 * Availability mirrors the `{#if}` around each section exactly — a nav entry
-	 * leading to a section that will not render is a dead click, and the two
-	 * conditions living apart is how they would drift.
+	 * Availability mirrors the `{#if}` around each section exactly, or a nav
+	 * entry could lead to a section that never renders.
 	 */
 	const sections = $derived(
 		(
@@ -100,13 +97,11 @@
 	// The Google callback redirects back with its outcome in the query string.
 	const calendarNotice = $derived(page.url.searchParams.get('calendar'));
 
-	// The name is submitted alongside the id so it can be stored and shown later:
-	// a CalDAV collection URL or a Google calendar id tells a person nothing about
-	// which of their calendars they picked.
-	// Which account is mid-sync. A pass can take several seconds against a real
-	// server, and with no feedback the button looks like it did nothing.
+	// Which account is mid-sync. A pass can take several seconds, and with no
+	// feedback the button looks like it did nothing.
 	let syncing = $state<string | null>(null);
 
+	// Remembered because a CalDAV/Google calendar id alone tells a person nothing about which one this is.
 	let pickedName = $state<string | null>(null);
 	const rememberName = (event: Event) => {
 		const select = event.currentTarget as HTMLSelectElement;
@@ -115,35 +110,10 @@
 	const chosenName = (calendars: { id: string; name: string }[]) =>
 		pickedName ?? calendars[0]?.name ?? '';
 
-	// Watch a backup through to its outcome.
-	//
-	// `runBackupNow` answers as soon as the run has *started* — dumping the
-	// database and copying every upload takes as long as it takes, and nobody
-	// should hold a browser open for it. Nothing then looked again, so the
-	// status line stopped at "the result appears here when it finishes", a
-	// promise this page had no way of keeping, until someone reloaded by hand.
-	//
-	// Watching `backupRunning` alone is not enough. The answer this page happens
-	// to render can predate the run — press Save and Back up now in quick
-	// succession and the two invalidations race — and then the flag that would
-	// have armed the watch is never seen at all. So asking for a backup arms it
-	// directly, whatever the loads do.
-	//
-	// It also has to stop. `runBackup` has the run under way before the action
-	// answers, so the first load to land after that is authoritative: a run is
-	// either still going, or its outcome is already recorded. One look that
-	// reports neither means nothing further is coming — a run that died without
-	// recording anything — and the watch ends rather than polling for ever.
-	//
-	// So: how many fresh loads have landed since this page asked for a backup,
-	// or null if it has not asked for one.
-	/** Which category is showing its "move them to" picker, by id. */
 	/**
-	 * The category whose ✕ was pressed, once we know what depends on it.
-	 *
-	 * The count comes first and decides everything: nothing filed under it and
-	 * the delete simply happens, because there is no question to ask. Only when
-	 * something does depend on it is a dialog worth anybody's attention.
+	 * The category whose ✕ was pressed, once we know what depends on it. The
+	 * count decides everything: nothing filed under it and the delete just
+	 * happens, with no dialog to show.
 	 */
 	let deletingLeaf = $state<{
 		id: string;
@@ -156,30 +126,10 @@
 	let checkingLeaf = $state<string | null>(null);
 
 	/**
-	 * Reordering the categories inside a group.
-	 *
-	 * Two ways in, because one is not enough. Dragging is what was asked for and
-	 * is what a mouse expects; the arrow keys are what makes it reachable without
-	 * one, and they are not a lesser path — holding a chip and pressing ← or →
-	 * is faster than dragging for a single step.
-	 *
-	 * A catch-all is excluded from both: it is pinned last by its flag, so
-	 * letting it be picked up would promise a move the ordering will not honour.
-	 */
-	/**
-	 * Reordering the categories inside a group.
-	 *
-	 * POINTER events, not HTML5 drag-and-drop. The first version used `draggable`,
-	 * which does not fire on touch at all — so reordering worked on a desktop and
-	 * simply did nothing on a phone or tablet. Pointer events cover mouse, touch
-	 * and pen with one code path.
-	 *
-	 * The order also rearranges UNDER the finger rather than only on release. A
-	 * drag with no feedback until you let go is a guess, and the first version
-	 * made you take it.
-	 *
-	 * The arrow keys stay: they are how this is reachable without a pointer at
-	 * all, and for a single step they are quicker than dragging.
+	 * Reordering the categories inside a group, via pointer events (covers
+	 * mouse, touch and pen) or the arrow keys — both faster than dragging for a
+	 * single step. A catch-all is excluded from both: it is pinned last by its
+	 * flag, so letting it be picked up would promise a move that never happens.
 	 */
 	let dragging = $state<{ group: string; id: string } | null>(null);
 	/** The order being shown while a drag is in flight, per group. */
@@ -315,6 +265,9 @@
 		expense: 'Money out',
 		savings: 'Money kept'
 	};
+	// Fresh loads since this page asked for a backup, or null if it has not asked.
+	// `data.backupRunning` alone can predate a just-started run (Save + Back up
+	// now racing), so asking for a backup arms the watch directly.
 	let looksSinceAsked = $state<number | null>(null);
 	const watchBackup = $derived(data.backupRunning || looksSinceAsked === 0);
 	$effect(() => {
@@ -345,16 +298,12 @@
 	caption="Everything visible in Continuum is configuration, not content."
 />
 
-<!-- One place, one component. The calendar section used to draw its own copy
-     with a `.form-error` class this file has no rule for — and Svelte scopes
-     styles per component, so a failed calendar connection rendered as unstyled
-     body text below the form. -->
+<!-- One place, one component — Svelte scopes styles per component, so a
+     `.form-error` class defined only in a different file would not apply here. -->
 <ActionError message={form?.message ?? null} />
 
 <div class="settings-grid">
-	<!-- One section at a time. This page was ten of them stacked, which meant
-	     finding the calendar meant scrolling past every module toggle, and the
-	     scroll position was the only thing saying where you were. -->
+	<!-- One section at a time, not all stacked — scroll position alone cannot say where you are. -->
 	<nav class="sec-nav" aria-label="Settings sections">
 		{#each sections as s (s.key)}
 			<button
@@ -413,10 +362,8 @@
 					</form>
 				</div>
 				{#if data.missingRates.none.length + data.missingRates.carried.length > 0}
-					<!-- Used to be a banner above every screen's title, dismissed
-					     without being read. The FACT stays where a figure is approximate
-					     — the sidebar's Money row carries a dot — and the reason lives
-					     here, where the base currency it concerns is set. -->
+					<!-- The sidebar's Money row carries a dot when a figure is approximate;
+					     the reason lives here, next to the base currency it concerns. -->
 					<div class="card rate-note" role="status">
 						<Eyebrow hue="--yellow" icon="alert" label="Approximate exchange rates" />
 						{#if data.missingRates.none.length > 0}
@@ -440,10 +387,8 @@
 					</div>
 				{/if}
 				{#if data.investTax}
-					<!-- reset: false. A successful submit otherwise resets the form, and a
-					     reset restores each field to its DOM default — which is empty,
-					     because Svelte sets a dynamic value as a property and never writes
-					     the attribute. -->
+					<!-- reset: false — Svelte sets a dynamic value as a property, not the
+					     DOM attribute, so a default reset would empty every field. -->
 					<form
 						method="POST"
 						action="?/setTax"
@@ -478,9 +423,7 @@
 							</label>
 							<button type="submit" class="btn btn-primary">Save</button>
 						</div>
-						<!-- Off unless switched on, because a holding-period exemption is a fact
-						     about one country. The Czech time test is three years; somewhere
-						     else it is a different number, or nothing at all. -->
+						<!-- Off by default: the holding-period exemption is a Czech-specific fact, not universal. -->
 						<p class="quiet">
 							Both are yours to set. The exemption matches the Czech three-year time test when you
 							turn it on, and is off by default because it applies nowhere else. The Investments
@@ -693,8 +636,6 @@
 				{/if}
 
 				{#if calendarNotice}
-					<!-- The OAuth callback is a redirect, so its outcome arrives in the URL
-			     rather than as a form result. -->
 					<p class="calendar-notice" role="status">{calendarNotice}</p>
 				{/if}
 
@@ -1098,10 +1039,7 @@
 </div>
 
 {#if deletingLeaf}
-	<!-- Asked in a dialog rather than in the list, because the list is where the
-	     other categories are and pushing them down to make room for a question
-	     loses the thing being asked about. Only reached when something actually
-	     depends on the category: an unused one is deleted without a word. -->
+	<!-- Only reached when something actually depends on the category; an unused one is deleted without a word. -->
 	<Modal title="Delete “{deletingLeaf.name}”?" onclose={() => (deletingLeaf = null)}>
 		<form
 			method="POST"
@@ -1237,8 +1175,7 @@
 		font-size: var(--text-sm);
 		line-height: 1;
 		padding: 0 var(--space-1);
-		/* Without this the browser takes the gesture as a scroll and the chip never
-		   moves — which is exactly how the first version failed on a phone. */
+		/* Without this the browser takes the gesture as a scroll and the chip never moves. */
 		touch-action: none;
 	}
 	.tx-leaf .grip:active {
@@ -1254,9 +1191,6 @@
 		outline: 2px solid var(--blue);
 		outline-offset: 2px;
 	}
-	/* A catch-all is pinned last by its flag, so it offers no grip: a chip that
-	   looks draggable and then refuses to move is worse than one that never
-	   offered. */
 	.tx-leaf.pinned {
 		opacity: 0.85;
 	}
@@ -1605,10 +1539,8 @@
 		gap: var(--space-5);
 		flex-wrap: wrap;
 	}
-	/* Three equal password fields and a button. This used to borrow .add-form,
-	   whose second column is 90px wide for a birth year — which left the
-	   new-password input a third the width of its neighbours. That rule now
-	   lives only in PeopleSettings, next to the form it was written for. */
+	/* Three equal password fields and a button — its own grid, not .add-form's,
+	   whose second column is sized for a birth year field. */
 	.password-form {
 		display: grid;
 		grid-template-columns: repeat(3, minmax(0, 1fr)) auto;

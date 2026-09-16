@@ -110,9 +110,8 @@
 		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 		gap: var(--space-6);
 	}
-	/* Labels are grid items of equal height, so a caption that wraps to two
-	   lines pushed its own input down and out of line with its neighbours.
-	   Anchoring the control to the bottom lets the text grow upwards instead. */
+	/* Anchor the control to the bottom so a wrapped label grows upward instead
+	   of pushing the input out of line with its neighbours. */
 	label {
 		display: flex;
 		flex-direction: column;

@@ -16,8 +16,10 @@ interface RuleDefinitionInput {
 
 type Replay = (handle: Queryable) => Promise<unknown>;
 
-/** Commit a rule mutation and every filing change caused by its replay as one
- * unit. Returning `null` means the target did not exist and skips replay. */
+/**
+ * Commit a rule mutation and every filing change caused by its replay as one
+ * unit. Returning `null` means the target did not exist and skips replay.
+ */
 export async function mutateRuleAndReplay<T>(
 	mutation: (handle: Queryable) => Promise<T | null>,
 	replay: Replay,
@@ -40,9 +42,10 @@ export async function mutateRuleAndReplay<T>(
 		: operation(handle);
 }
 
-/** Replace a manual rule, all of its tag links, and its immediate replay as one
- * mutation. A bad tag, foreign key, or replay can no longer leave a half-saved
- * rule behind. */
+/**
+ * Replace a manual rule, all of its tag links, and its immediate replay as one
+ * mutation, so a bad tag, foreign key, or replay can't leave a half-saved rule.
+ */
 export async function saveRuleDefinition(
 	input: RuleDefinitionInput,
 	replay: Replay,

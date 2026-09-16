@@ -43,8 +43,7 @@ beforeEach(async () => {
 describe('loadSalaryHistory', () => {
 	it('takes every figure from salary_entry, never from the document', async () => {
 		// The document is the FILE: it names the month it covers and nothing about
-		// money. A payslip that also carried an amount was read as gross while the
-		// reader had picked net, which is why the column is gone.
+		// money, so gross/net can never be read off the wrong field.
 		await makeDocument(testDb, {
 			id: DOC,
 			name: 'Payslip 2026-08 · Robert',
@@ -100,10 +99,8 @@ describe('loadSalaryHistory', () => {
 	});
 
 	it('reports a December thirteenth-salary as bonus, not as a raise', async () => {
-		// The shape the demo household seeds: eleven plain months and a December
-		// carrying half a month again as an award. Base must stay flat across it,
-		// because a one-off that moved the base would read as a raise followed by
-		// a pay cut when neither happened.
+		// Base must stay flat across a December award: a one-off that moved the
+		// base would read as a raise followed by a pay cut when neither happened.
 		const gross = 5800000n;
 		const bonus = gross / 2n;
 		const rows = [
@@ -134,10 +131,8 @@ describe('loadSalaryHistory', () => {
 });
 
 describe('latestSalaryByPerson', () => {
-	// What the Overview's Salary panel reports: the newest month, and the month
-	// before it to compare against. Both come off the same fold the year rows
-	// use, so the panel and the Salary screen cannot disagree about what July
-	// earned — and a month evidenced by two employers is added up in both.
+	// Both come off the same fold the year rows use, so the panel and the Salary
+	// screen cannot disagree — and a month with two employers sums both.
 	it('gives the newest month with both jobs in it, and the month before', async () => {
 		const jobA = rowId('document-slip-jul-a');
 		const jobB = rowId('document-slip-jul-b');

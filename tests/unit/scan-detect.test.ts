@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-// `detect.ts` imports opencv for its TYPE only, which is erased — so this pulls
-// no WASM and runs like any other unit test. `detectOnce` itself needs a real
-// runtime and is verified on a device, not here.
+// `detect.ts` imports opencv for its TYPE only (erased), so this needs no WASM.
+// `detectOnce` itself is verified on a device, not here.
 import { readFileSync } from 'node:fs';
 import { DETECT_WIDTH } from '$lib/scan/core/detect';
 import { orderCorners } from '$lib/scan/core/geometry';
@@ -77,10 +76,7 @@ describe('the two readings of a still', () => {
 	});
 
 	it('reads the mask outline, not the photograph', () => {
-		// The measurement that decided this: over real captures, Canny on the
-		// photo returned 383-557 segments and the sixteen longest near-horizontal
-		// ones all lay inside the text block, while the page's own top edge
-		// produced none. The mask's outline returns 29-82 and no typography.
+		// Canny on the photo picks up text lines as edges; the mask's outline doesn't.
 		expect(refine).toMatch(/cv\.MORPH_GRADIENT/);
 		expect(refine).toMatch(/cv\.HoughLinesP\(\s*outline,/);
 		expect(refine).not.toMatch(/cv\.Canny\(/);
@@ -88,9 +84,8 @@ describe('the two readings of a still', () => {
 	});
 
 	it('scores a candidate on support, contrast and area together', () => {
-		// Support alone cropped four paragraphs out of the middle of the page:
-		// a line of type is a strong straight edge too. Contrast is what tells
-		// a page edge from a text edge — paper on one side, desk on the other.
+		// Support alone crops to text lines, which are strong straight edges too;
+		// contrast is what tells a page edge from a text edge.
 		expect(refine).toMatch(/WEIGHT_SUPPORT \* worstSupport/);
 		expect(refine).toMatch(/WEIGHT_CONTRAST \* Math\.min\(1, meanContrast \/ CONTRAST_FULL\)/);
 		expect(refine).toMatch(/WEIGHT_AREA \* area/);
@@ -102,10 +97,8 @@ describe('the two readings of a still', () => {
 	});
 
 	it('names the corners by where they are, not by which line found them', () => {
-		// Four lines bound a quad without saying which corner is the top-left.
-		// Labelling by line role mirrored the page on five of fourteen real
-		// captures, and scored the mirror exactly as well as the right way up
-		// because both are built from the same four lines.
+		// Four lines bound a quad without saying which corner is the top-left;
+		// labelling by line role can mirror the page and score identically.
 		expect(refine).toMatch(
 			/const quad = orderCorners\(\[meeting\.tl, meeting\.tr, meeting\.br, meeting\.bl\]\);/
 		);
@@ -113,17 +106,14 @@ describe('the two readings of a still', () => {
 	});
 
 	it('takes the page boundary from a PADDED mask', () => {
-		// A page held close runs off the edge of the frame. Without the margin
-		// there is no gradient along the image border, so the one side hardest to
-		// frame scored zero and the search kept pulling the quad away from it.
-		// With it, four real captures moved onto A4: 1.33 to 1.43, 1.37 to 1.42.
+		// A page held close runs off the edge of the frame; without padding there
+		// is no gradient along the image border, so that side scores zero.
 		expect(refine).toMatch(/cv\.morphologyEx\(bordered, wide, cv\.MORPH_GRADIENT, thin\)/);
 	});
 
 	it('proposes generously only when there is a pass to check the answer', () => {
-		// Measured: a page with a shadow across it fills 0.68 of its own hull, a
-		// page with a second sheet touching it 0.87, two more real captures 0.76
-		// and 0.84. The strict floor called all four nothing at all.
+		// A shadow or a touching second sheet lowers solidity below the strict floor
+		// without being an actual miss.
 		expect(source).toMatch(
 			/const solidityFloor =\s*refining === 'none' \? MIN_SOLIDITY : SEARCH_MIN_SOLIDITY;/
 		);
@@ -131,25 +121,22 @@ describe('the two readings of a still', () => {
 
 	it('will not accept a quad no better placed than the one it started from', () => {
 		// Putting the edges ON the page's boundary is the one thing this exists
-		// to do. Measured over real captures, every good outcome improves that a
-		// lot — 0.12 to 0.87, 0.16 to 0.70 — while the capture that produced a
-		// visibly loose crop was the only one to go backwards, 0.27 to 0.24.
+		// to do — a candidate that doesn't improve support isn't kept.
 		expect(refine).toMatch(/corners: bestSupport > roughSupport \? best : null/);
 	});
 
 	it('drops a loose candidate the search cannot confirm', () => {
-		// Otherwise loosening the floor just trades a missed page for the sheared
-		// crop across two objects that the search exists to prevent.
+		// Loosening the floor without a search would trade a missed page for a
+		// sheared crop across two objects.
 		expect(source).toMatch(
 			/if \(found\.corners\) best = found\.corners;\s*else if \(!bestIsClean\) best = null;/
 		);
 	});
 
 	it('hands back the lines it fitted even when it found no page', () => {
-		// The case snapping exists for. A photograph the detector cannot confirm
-		// is exactly the one somebody is about to place four corners on by hand,
-		// and the straight edges it DID fit are the only help a thumb can get —
-		// so they ride out on `searching` as well as on a found page.
+		// A photograph the detector can't confirm is exactly the one someone is
+		// about to place corners on by hand, so the fitted lines must ride out
+		// on `searching` too, as a placement aid.
 		expect(source).toMatch(/return \{ kind: 'searching', lines \};/);
 		expect(source).toMatch(
 			/if \(candidates\.length === 0\)\s*return \{ kind: 'searching', lines: anyLines \};/
@@ -163,18 +150,13 @@ describe('the two readings of a still', () => {
 	});
 
 	it('still trusts a clean region when the search finds nothing', () => {
-		// That is the answer this detector gave before there was a search, and on
-		// a clean sheet it is a good one.
+		// A clean sheet's own solidity is already a good enough answer.
 		expect(source).toMatch(/bestIsClean = solidity >= MIN_SOLIDITY;/);
 	});
 
 	it('never runs on a live frame, because there is no longer a live frame to run on', () => {
-		// This used to assert that the viewfinder's loop took the CHEAP reading:
-		// an outline is a framing aid, it does not fire the shutter, and the loop
-		// had about 110 ms a frame. v0.8.6 removed the loop altogether — detection
-		// was OpenCV running nine times a second in the browser, and that heap is
-		// exactly what an iPhone could not always allocate. So the guarantee is
-		// now absolute rather than a budget: nothing detects until the shutter.
+		// v0.8.6 removed the live-frame loop entirely — running OpenCV repeatedly
+		// in the browser was more heap than an iPhone could reliably allocate.
 		const capture = readFileSync('src/lib/scan/client/ScanCapture.svelte', 'utf8');
 		expect(capture).not.toContain('detectOnce');
 		expect(capture).not.toContain('detectBest');
@@ -190,24 +172,22 @@ describe('the two readings of a still', () => {
 	});
 
 	it('judges the two readings on the photograph, not on their own masks', () => {
-		// Support against a mask says only "these lines sit on the boundary MY
-		// segmentation drew", which is not a claim two segmentations can argue
-		// about. Brightness either side of an edge is.
+		// Support against a mask is circular between two segmentations; brightness
+		// either side of an edge is a claim both can be judged on.
 		expect(source).toMatch(/JUDGE_CONTRAST \* Math\.min\(1, meanContrast \/ CONTRAST_FULL\)/);
 		expect(source).toMatch(/JUDGE_SQUARE \* square/);
 		expect(source).toMatch(/JUDGE_AREA \* area/);
 	});
 
 	it('lets the chooser choose, not veto', () => {
-		// Gating there as well threw away a perfectly good crop whose one weak
-		// edge lay against a background nearly the same brightness as the paper.
+		// A hard gate here would throw away a good crop whose one weak edge lies
+		// against a background nearly the same brightness as the paper.
 		expect(source).not.toContain('JUDGE_CONTRAST_FLOOR');
 	});
 
 	it('will not build a quad out of a dart', () => {
-		// Perspective skews a rectangle; it does not turn it into one. Four lines
-		// picked from a pool are under no such obligation, and one wildly skewed
-		// quad scored respectably on support and contrast without this.
+		// Perspective skews a rectangle but doesn't turn it into a dart; four
+		// lines picked from a pool have no such obligation.
 		expect(refine).toMatch(/if \(worstCornerSkew\(quad\) > MAX_CORNER_SKEW\) continue;/);
 	});
 });

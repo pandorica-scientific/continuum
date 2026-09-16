@@ -1,12 +1,9 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	/**
-	 * The shape a bottle's tasting notes make.
-	 *
-	 * Markup only: every number comes from `tasting-radar.ts`, which is tested
-	 * without a browser. The axis labels are HTML pills positioned over the SVG
-	 * rather than `<text>` inside it — a rounded fill behind SVG text needs a
-	 * second element sized by hand, and it never quite fits the word.
+	 * The shape a bottle's tasting notes make. Markup only: every number comes
+	 * from `tasting-radar.ts`. Axis labels are HTML pills over the SVG, not
+	 * `<text>` inside it — a rounded fill behind SVG text never quite fits.
 	 */
 	import { LEAST_AXES, tastingRadar, type Mention } from '$lib/charts/tasting-radar';
 
@@ -30,8 +27,6 @@
 			{/each}
 		</svg>
 
-		<!-- No legend and no caption: the pill IS the label, and a legend beside a
-		     five-axis web is a second thing to read to understand the first. -->
 		{#each radar.axes as axis (axis.note)}
 			<span
 				class="label"
@@ -39,8 +34,7 @@
 				style:top="{(axis.labelY / size) * 100}%"
 				style:--ink="var(--{axis.series})"
 			>
-				<!-- "×2", not a bare 2: the number is how many tastings said it, and
-				     a lone digit beside a word reads as a rank. -->
+				<!-- "×2", not a bare 2, so it doesn't read as a rank. -->
 				{axis.note} <span class="count mono">×{axis.count}</span>
 			</span>
 		{/each}
@@ -75,9 +69,7 @@
 		gap: var(--space-2);
 		padding: 2px var(--space-3);
 		border-radius: var(--radius-pill);
-		/* `--bg2`, not `--card`: the pill floats over the web's own lines, and
-		   `--card` is translucent in the dark theme — a spoke would show through
-		   the word. */
+		/* `--bg2`, not `--card`: `--card` is translucent in dark theme, so a spoke would show through. */
 		background: color-mix(in srgb, var(--ink) 18%, var(--bg2));
 		color: color-mix(in srgb, var(--ink) 70%, var(--fg1));
 		font-size: var(--text-2xs);

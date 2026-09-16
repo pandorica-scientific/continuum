@@ -1,15 +1,7 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
-	//
-	// One subject in the Documents rail's pencil mode: emoji, name, count, and
-	// either the `Household` badge or the `⋯` that archives it.
-	//
-	// A sibling of `ShelfRow` rather than a second set of props on it, because
-	// the two rows differ in the one thing `ShelfRow` exists for: a shelf is the
-	// only sortable row in the app and carries a drag handle, and a subject has
-	// no order to drag into — the rail sorts them. The grid, the height, the
-	// hover fill, the badge and the menu are deliberately identical values, so
-	// the two rows read as one row in two places rather than as two designs.
+	// A sibling of `ShelfRow`, not a second set of props on it — a subject has
+	// no drag order, unlike a shelf, but shares the same grid/height/badge/menu.
 	let {
 		subject,
 		onrename,
@@ -31,8 +23,6 @@
 	<span class="emoji">{subject.emoji}</span>
 	<button type="button" class="label" onclick={() => onrename?.()}>{subject.name}</button>
 	<span class="mono count">{subject.count}</span>
-	<!-- Archived is said, not merely drawn: a dimmed row with no word on it is
-	     indistinguishable from a row that happens to be quiet. -->
 	<span class="tail">
 		{#if subject.archived}
 			<span class="mono badge">Archived</span>
@@ -49,8 +39,7 @@
 <style>
 	.subject-row {
 		display: grid;
-		/* `ShelfRow`'s grid without its 18px handle column: same 26px emoji, same
-		   flexible name, same count, same tail. */
+		/* `ShelfRow`'s grid without its 18px handle column. */
 		grid-template-columns: 26px minmax(0, 1fr) auto minmax(24px, auto);
 		align-items: center;
 		gap: var(--space-3);
@@ -63,9 +52,7 @@
 	.subject-row:hover {
 		background: var(--card2);
 	}
-	/* Dimmed, not hidden — the row is still a row, and its ⋯ is the only way
-	   back. `--fg3` is the quiet colour in both themes; opacity on the emoji
-	   because an emoji has no colour of ours to quieten. */
+	/* Opacity on the emoji since it has no colour of ours to quieten. */
 	.subject-row.archived .label {
 		color: var(--fg3);
 	}

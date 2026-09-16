@@ -43,12 +43,7 @@
 		}
 	});
 
-	/**
-	 * The shelf under the pencil, with where it stands in the rail.
-	 *
-	 * Derived rather than copied, so a rename or a move lands in the dialog that
-	 * asked for it instead of leaving it showing what was true when it opened.
-	 */
+	/** The shelf under the pencil, with its rail position. Derived, not copied, so a rename/move lands live in the dialog. */
 	const editing = $derived.by(() => {
 		if (editingCategory === null) return null;
 		const at = data.categories.findIndex((shelf) => shelf.id === editingCategory);

@@ -1,12 +1,9 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	/**
-	 * Writing down what a bottle tasted like.
-	 *
-	 * Logging this is what opens a bottle — the count rises here rather than
-	 * behind a separate button, because nobody tastes a bottle they did not open
-	 * and asking for two presses is how the counts end up wrong. The dialog says
-	 * so out loud, so the number moving is not a surprise.
+	 * Writing down what a bottle tasted like. Logging this is what opens the
+	 * bottle (rather than a separate button), since nobody tastes one unopened;
+	 * the dialog says so out loud so the count change isn't a surprise.
 	 */
 	import Modal from '$lib/components/Modal.svelte';
 	import Field from '$lib/components/Field.svelte';
@@ -53,9 +50,7 @@
 				</select>
 			</Field>
 			<Field label="Score">
-				<!-- From 1, not 0: the scale the database holds is 1–100, and a
-				     field that offers a number the row refuses is a form that
-				     fails on submit. -->
+				<!-- Min 1: the database column is a 1-100 scale. -->
 				<input type="number" name="score" min="1" max="100" placeholder="91" />
 				<span class="hint">Out of a hundred. Optional.</span>
 			</Field>

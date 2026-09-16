@@ -3,26 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-/**
- * The scan engine is meant to lift into another app with only the token names
- * changing. That is a property of its imports, not of where its files sit — so
- * this is the test that actually holds it.
- *
- * The line is drawn at Continuum's DOMAIN, not at its design system. The engine
- * may use `Icon` and `Segmented` and the tokens in `app.css`: those are exactly
- * the names expected to change when it moves, and redrawing twenty icons to
- * avoid one import would be the wrong trade. What it may never touch is the
- * database, the server, the form actions or SvelteKit's app modules — those are
- * what would make it Continuum-shaped rather than portable.
- */
+// The engine must stay portable: it may use the design system (`Icon`,
+// `Segmented`, app.css tokens) but never the domain, server, db, form actions,
+// or SvelteKit's app modules.
 const ROOT = join('src', 'lib', 'scan');
 const FOREIGN = /from\s+['"](\$lib\/(server|actions|db|stores)|\$app\/|\$env\/)/;
 
-/**
- * Comments are prose, not dependencies. A file explaining that core never sees
- * an HTMLCanvasElement should not be flagged for containing the words — the
- * first version of this test failed on its own documentation.
- */
+// Comments are prose, not dependencies — strip them so a file merely
+// mentioning a forbidden name isn't flagged.
 function code(path: string): string {
 	return readFileSync(path, 'utf8')
 		.replace(/\/\*[\s\S]*?\*\//g, '')
@@ -43,16 +31,13 @@ describe('the scan engine', () => {
 	});
 
 	it('keeps core free of even the design system, so it runs under node', () => {
-		// `client` may import a Svelte component; `core` may not import anything
-		// through an alias at all. That is what keeps the heap tests runnable.
+		// `core` may not import anything through an alias at all — that keeps the heap tests runnable.
 		const offenders = files(join(ROOT, 'core')).filter((path) => /from\s+['"]\$/.test(code(path)));
 		expect(offenders).toEqual([]);
 	});
 
 	it('keeps every browser API out of core', () => {
-		// A canvas, a File or a URL.createObjectURL in here breaks the node
-		// tests — and breaking them silently is how the heap test quietly stops
-		// running while still reporting green.
+		// A browser API here breaks the node tests, and silently — the heap test would still report green.
 		const browserOnly =
 			/\b(document|window|HTMLCanvasElement|OffscreenCanvas|createImageBitmap|URL\.createObjectURL)\b/;
 		const offenders = files(join(ROOT, 'core')).filter((path) => browserOnly.test(code(path)));
@@ -60,12 +45,8 @@ describe('the scan engine', () => {
 	});
 
 	it('never pulls the OpenCV package into a bundle', () => {
-		// It must be imported for TYPES only. A value import drags 10 MB of
-		// JavaScript, with 7.6 MB of base64 WebAssembly inside it, into whichever
-		// chunk touches it — which does not merely load slowly: it hangs the tab
-		// with no error at all. Since v0.8.6 the real thing is loaded by the scan
-		// child, in a server process, and the rule below keeps `client` away from
-		// it entirely.
+		// Must be imported for TYPES only — a value import drags in the WASM bundle
+		// and hangs the tab with no error. The real thing loads in the scan child.
 		const offenders = files(ROOT).filter((path) => {
 			const source = code(path);
 			if (!source.includes('@techstark/opencv-js')) return false;
@@ -75,10 +56,9 @@ describe('the scan engine', () => {
 	});
 
 	it('keeps OpenCV and libheif out of the browser half entirely', () => {
-		// The point of v0.8.6. `client` may no longer reach either package by ANY
-		// import form — not a type import, not a dynamic one. Both now live in the
-		// scan child, a forked process whose heap can be reclaimed by exiting;
-		// Emscripten memory grows and never shrinks, so in a tab it could not be.
+		// `client` may not reach either package by any import form (type or dynamic
+		// included) — both live in the scan child, whose heap can be reclaimed by
+		// exiting, unlike Emscripten memory in a tab.
 		const offenders = files(join(ROOT, 'client')).filter((path) =>
 			/@techstark\/opencv-js|libheif-js/.test(code(path))
 		);
@@ -86,21 +66,10 @@ describe('the scan engine', () => {
 	});
 
 	it('has no entry point nothing enters through', () => {
-		// This used to demand an `index.ts` in each half, and both halves grew one
-		// that nothing ever imported: every caller reaches for the module it
-		// actually wants — `core/accept`, `client/camera.svelte` — which for an
-		// engine meant to be lifted whole is the RIGHT shape, since a barrel over
-		// `core` would drag the HEIC and OpenCV paths into a caller that only
-		// wanted `admitsPdf`.
-		//
-		// What portability actually rests on is the four import rules above. An
-		// unused barrel adds a second way in that nobody takes, so the rule is
-		// now that one must not exist unless it is used.
+		// A barrel over `core` would drag HEIC/OpenCV paths into callers that don't need them.
 		const sources = files('src').concat(files('tests'));
 		const text = sources.map((path) => readFileSync(path, 'utf8')).join('\n');
-		// Both spellings count. Inside the engine the halves reach each other by
-		// relative path — `../core/index.ts`, which is what keeps `core` portable
-		// — and only code outside it uses the alias.
+		// Both spellings count: the alias, and the relative path used inside the engine.
 		const unused = ['core', 'client'].filter(
 			(half) =>
 				readdirSync(join(ROOT, half)).includes('index.ts') &&

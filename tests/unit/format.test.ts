@@ -82,7 +82,7 @@ function fakeZip(entry: {
 	const eocd = new Uint8Array(22);
 	const ev = new DataView(eocd.buffer);
 	ev.setUint32(0, 0x06054b50, true);
-	ev.setUint16(10, 1, true); // one entry
+	ev.setUint16(10, 1, true);
 	ev.setUint32(16, 4, true); // central directory begins after the local header stub
 
 	const out = new Uint8Array(4 + cd.length + eocd.length);

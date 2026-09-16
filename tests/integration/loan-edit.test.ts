@@ -107,8 +107,7 @@ beforeEach(async () => {
 
 describe('updateLoan', () => {
 	it('adds a property the loan was created without', async () => {
-		// The reported case: "if [I] forgot to add another property into a
-		// mortgage". One shared mortgage over two flats is the real household.
+		// One shared mortgage over two flats is the real household.
 		const id = await seedLoan({ secured: [{ propertyId: FLAT_A, sharePct: null }] });
 
 		const result = await updateLoan(
@@ -151,10 +150,8 @@ describe('updateLoan', () => {
 			testDb
 		);
 
-		// The load-bearing guard. A rewrite once deleted the fixation history as a
-		// side effect of an edit, and that history is the loan's evidence: it is
-		// what every interest figure is computed from and it cannot be recovered
-		// from anything else the app stores.
+		// Regression: an edit must never delete fixation history — it is the
+		// loan's sole evidence for every interest figure.
 		expect(await fixations(id)).toEqual(before);
 	});
 
@@ -250,12 +247,8 @@ describe('updateLoan', () => {
 	});
 });
 
-// Reported as fixed and uncorrectable: "cannot edit loan fully — things like
-// rate regime, interest change, interest accrual are fixed".
-//
-// These describe HOW a loan works rather than what it has done, so changing one
-// re-derives the schedule from the periods already recorded. The test that
-// matters is the second: none of them may touch that record.
+// Regime, rate and accrual describe HOW a loan works, not what it has done,
+// so changing one re-derives the schedule without touching recorded periods.
 describe('how a loan works', () => {
 	it('can be corrected after the loan exists', async () => {
 		const id = await seedLoan();
@@ -307,8 +300,7 @@ describe('how a loan works', () => {
 			testDb
 		);
 
-		// The load-bearing guard, restated for the fields added here: an edit is a
-		// correction to a description, never permission to discard the record.
+		// Same guard as above: an edit corrects a description, never discards the record.
 		expect(await fixations(id)).toEqual(before);
 	});
 

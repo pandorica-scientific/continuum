@@ -32,34 +32,23 @@ export const load: LayoutServerLoad = async ({ url, cookies, locals }) => {
 		db.select({ id: person.id, name: person.name }).from(person)
 	]);
 
-	// Loaded on the LAYOUT rather than per screen, because a person's colour has
-	// to be assigned over the whole household to be the same everywhere. A screen
-	// computing it from the people it happens to show would give a household of
-	// two different colours on a page where only one of them appears.
+	// Assigned over the whole household so a person's colour is the same on every screen.
 	const hues = personHues(household.map((p) => p.id));
 
-	// Every converted total falls back to face value when a rate is unknown,
-	// which is the least-bad arithmetic but silently understates the figure by
-	// the size of the rate. Naming the currencies here is what keeps it from
-	// being silent, on every screen at once.
+	// A converted total falls back to face value when a rate is unknown; naming
+	// the missing currencies keeps that from being silent.
 	const missingRates = await missingRateCurrencies(netWorth.baseCurrency);
-	// Read here rather than in the browser so a dismissed banner is never
-	// rendered at all — reading it after hydration made it flash on every load.
+	// Read here rather than in the browser so a dismissed banner never flashes after hydration.
 	const rateWarningDismissed = cookies.get('continuum_rate_dismissed') ?? null;
 
-	// The person's theme, mirrored into the cookie `app.html` reads before paint.
-	// Written on every load rather than only when it changes, so signing in on a
-	// second device — or as somebody else on this one — is corrected by the first
-	// page rather than by the second.
+	// Mirrored into the cookie app.html reads before paint; written on every load
+	// so signing in as someone else (or on another device) is corrected immediately.
 	const theme = themeOrDefault(locals.person?.theme);
 	if (cookies.get(THEME_COOKIE) !== theme) {
 		cookies.set(THEME_COOKIE, theme, themeCookieOptions());
 	}
 
-	// Who is signed in, with their colour. The sidebar's foot used to show the
-	// HOUSEHOLD's initial in a grey disc, which said nothing a person could not
-	// already see in the line beside it; v0.8.1 puts the person there, in the
-	// same hue every screen already tags their payslips and statements with.
+	// Sidebar shows the signed-in person, in the same hue their payslips/statements use elsewhere.
 	const signedInId = locals.person?.id ?? null;
 	const signedIn = locals.person
 		? {
@@ -72,8 +61,7 @@ export const load: LayoutServerLoad = async ({ url, cookies, locals }) => {
 	return {
 		modules,
 		signedIn,
-		// Carried on every screen, not just Settings: an instance anyone can walk
-		// into should say so wherever you are looking, or the state is a surprise.
+		// Shown on every screen, not just Settings, so a shared instance is identifiable everywhere.
 		householdLabel,
 		// `householdPeople`, not `people`: several screens load a `people` of their
 		// own and SvelteKit merges page data over layout data, so the shared list

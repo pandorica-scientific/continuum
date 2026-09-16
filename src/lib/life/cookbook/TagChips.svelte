@@ -1,15 +1,9 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	/**
-	 * A recipe's tags, each in its own colour.
-	 *
-	 * Not `Pill`: a pill is the traffic light and its hues mean state. A tag is
-	 * an identity, so it takes a `--series-*` colour — and its ink is darkened
-	 * by `--series-ink-mix`, because the series values are tuned for a bar chart
-	 * and are too light for eleven-pixel text on paper.
-	 *
-	 * Where a card holds more tags than fit, a `+n` chip carries the rest rather
-	 * than the row growing a second line on some cards and not others.
+	 * A recipe's tags, each in its own colour. Not `Pill` — a pill's hues mean
+	 * state, a tag is an identity, so it takes a `--series-*` colour instead.
+	 * Overflow collapses into a `+n` chip rather than growing a second line.
 	 */
 	interface Tag {
 		id: string;
@@ -56,12 +50,8 @@
 		flex-wrap: wrap;
 		gap: var(--space-2);
 	}
-	/* 15% fill, 40% border, ink darkened towards the foreground — the treatment
-	   the handoff sets for tags, and the same one the tasting notes use.
-	   Carried to 48% rather than the handoff's 68%: over a 15% wash of the same
-	   hue, on a card that is itself washed in its shelf's colour, the greens and
-	   teals sat at 3.7:1 on the light theme, and the guidelines ask AA of every
-	   pill. */
+	/* 48% ink mix, not the usual 68% — over a card already washed in the
+	   shelf's colour, greens/teals fell under AA contrast at the higher value. */
 	.chip {
 		display: inline-flex;
 		align-items: center;

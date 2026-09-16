@@ -2,16 +2,11 @@
 /**
  * The only place a shelf key becomes a UUID.
  *
- * Domain code used to write `shelf: 'payslips'` in four places, which meant the
- * set of shelves was a code enum three modules could disagree about — and did.
- * Now shelves are rows a household owns, so `payslips` may not exist, and the
- * salary tracker has no business knowing that. It asks for the Income & Tax key
- * from `SYSTEM_SHELF_KEYS` and files a document of `type='payslip'`; behaviour
- * hangs off type, never off shelf.
+ * Shelves are rows a household owns, so a key may not exist; behaviour hangs
+ * off document type, never off shelf.
  *
- * Unknown keys THROW. A fallback to inbox would file a payslip somewhere nobody
- * looks and nothing would say so; a key this repo asks for and the database does
- * not have is a defect in this repo.
+ * Unknown keys THROW rather than falling back to inbox: a key this repo asks
+ * for and the database does not have is a defect in this repo.
  */
 import { asc, count, eq, sql } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
@@ -55,11 +50,9 @@ export async function shelfIdByKey(key: string, handle: Queryable = db): Promise
 }
 
 /**
- * `inbox` and `statements` are looked up through this typed helper because
- * their keys are spelled out directly in route code. `finance` and `property`
- * are system shelves too (see `shelf.system`) — payslips, tax attachments,
- * and bills file to them by key — but those writers already asked for them
- * through the untyped `shelfIdByKey`, so they keep doing that.
+ * Typed lookup for `inbox` and `statements`, whose keys are spelled out
+ * directly in route code. `finance` and `property` are system shelves too but
+ * go through the untyped `shelfIdByKey`.
  */
 export async function systemShelfId(key: WrittenShelfKey, handle: Queryable = db): Promise<string> {
 	return shelfIdByKey(key, handle);
@@ -135,13 +128,10 @@ export async function addShelf(
 ): Promise<ShelfRow> {
 	const trimmed = input.label.trim();
 	if (!trimmed) throw new Error('A shelf needs a name.');
-	// A wallet of accounts and a ribbon of people are not layouts anybody could
-	// draw. Refused here rather than in the dialog, because the dialog is not the
-	// only caller and a shelf that cannot be drawn is a screen that cannot open.
+	// Refused here, not just in the dialog: a shelf that cannot be drawn is a screen that cannot open.
 	if (!unitsForTemplate(input.template).includes(input.unit))
 		throw new Error(`A ${input.template} shelf cannot be organised by ${input.unit}.`);
-	// The key is derived once and then immutable, exactly like a category's:
-	// renaming the shelf later must not change what code refers to.
+	// Derived once and then immutable: renaming the shelf must not change what code refers to.
 	const base =
 		trimmed
 			.normalize('NFD')
@@ -167,8 +157,7 @@ export async function addShelf(
 			sortOrder: next,
 			template: input.template,
 			unit: input.unit,
-			// A shelf with no question written for it still HAS one, so the screen
-			// never draws a blank caption. It is prose the household can replace.
+			// A blank caption is never drawn; this default is prose the household can replace.
 			question: input.question?.trim() || 'What is filed here?',
 			laneSeeds: templateDefaults(input.template).laneSeeds
 		})
@@ -196,27 +185,15 @@ export async function documentsOnShelf(id: string, handle: Queryable = db): Prom
 /**
  * Move everything off a shelf and then delete it, or do neither.
  *
- * The only legal delete. `ON DELETE RESTRICT` on `document.shelf_id` is what
- * makes that "always" rather than "in the UI" — a delete that skipped the move
- * is refused by the database, not by a screen.
+ * The only legal delete: `ON DELETE RESTRICT` on `document.shelf_id` means a
+ * delete that skipped the move is refused by the database, not just the UI.
  *
- * A system shelf is refused outright. Eight of the ten seeded shelves carry the
- * flag, for two different reasons:
- *
- * `inbox`, `statements`, `finance` and `property` are referred to by key from
- * code — capture files into inbox, an accepted import files into statements,
- * the salary tracker files payslips and tax attachments into finance, and
- * billing files bills into property — so deleting one breaks the next upload.
- *
- * `identity`, `family`, `health` and `household` are not referred to by key by
- * anything, and deleting one would break nothing that runs. They are fixed for
- * the other reason a thing is fixed: they are the product's answer to where a
- * passport, a birth certificate, a test result or a boiler warranty goes, and
- * an answer a household can delete is not an answer. The guard reads the
- * column, so it does not care which of the two reasons put the flag there.
- *
- * `tenancy` and `vehicles` are seeded and deletable — not every household
- * rents, not every household drives.
+ * A system shelf is refused outright, for one of two reasons: `inbox`,
+ * `statements`, `finance` and `property` are referred to by key from code, so
+ * deleting one breaks the next upload; `identity`, `family`, `health` and
+ * `household` are fixed answers to where a passport, a birth certificate, a
+ * test result or a boiler warranty goes. `tenancy` and `vehicles` are seeded
+ * and deletable.
  */
 export async function reassignAndDelete(
 	id: string,
@@ -277,10 +254,8 @@ export async function setShelfTypes(
 	types: DocumentTypeKey[],
 	handle: Db = db
 ): Promise<void> {
-	// Both halves or neither. As two loose statements, a failure between them —
-	// a type somebody else removed a moment earlier — left the shelf with an
-	// empty list rather than the one it had, which reads as data loss for what
-	// was only a refused edit.
+	// Both halves or neither: a failure between two loose statements would leave
+	// the shelf with an empty list, which reads as data loss.
 	await handle.transaction(async (tx) => {
 		await tx.delete(shelfType).where(eq(shelfType.shelfId, shelfId));
 		if (types.length === 0) return;

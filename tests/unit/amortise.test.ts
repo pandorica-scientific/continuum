@@ -115,7 +115,6 @@ describe('interestForYear', () => {
 });
 
 describe('day-count conventions', () => {
-	// The diagnostic figures from the review: 4 000 000 CZK at 5.29%.
 	const owed = 400000000n;
 	const rate = 5.29;
 
@@ -171,10 +170,8 @@ describe('day-count conventions', () => {
 });
 
 describe('calendar accrual (Česká spořitelna, verified against real statements)', () => {
-	// Robert's actual mortgage: 4.44%, payment 49 681.00 on the 20th,
-	// act/360 on the daily balance over the calendar month. The June and July
-	// 2026 figures come straight from the bank app; the engine must reproduce
-	// them to the haléř.
+	// Real mortgage terms: 4.44%, payment 49 681.00 on the 20th, act/360 on the
+	// daily balance. Figures must reproduce the bank app to the haléř.
 	const terms: LoanTerms = {
 		owedMinor: 982516450n, // 9 825 164.50 before the 20/06 instalment
 		owedAsOfMonth: '2026-06',

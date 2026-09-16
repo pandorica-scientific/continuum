@@ -32,33 +32,24 @@ describe('the scan tokens', () => {
 	});
 
 	it('pins the four scrim tokens across both themes', () => {
-		// A camera frame is not a themed surface: its luminance is unknown and
-		// changes every frame. `--plate`'s light override is near-white, correct
-		// over a light page and unreadable over a dark kitchen at night — which
-		// is the primary usage context. Overriding these is a real regression
-		// that looks like a consistency fix, so it is tested.
+		// A camera frame is not a themed surface: overriding these for the light theme
+		// would make them unreadable over a dark kitchen at night.
 		for (const token of ['--scan-plate', '--scan-plate-edge', '--scan-ink']) {
 			expect(light).not.toContain(`${token}:`);
 		}
 	});
 
 	it('carries detection state in weight and dash, not colour alone', () => {
-		// Three states are DRAWN — found, stable, rejected — and they must be
-		// separable in greyscale, because the backdrop is a camera frame and its
-		// luminance is unknown. `searching` draws nothing at all, deliberately: no
-		// page found means no outline, since a speculative box is a claim the
-		// detector has not made (see OUTLINE in ScanCapture.svelte). It therefore
-		// has a colour token and no weight or dash, and this test used to pin two
-		// tokens nothing could ever read.
+		// found/stable/rejected must be separable in greyscale, since the backdrop's
+		// luminance is unknown. `searching` deliberately draws nothing.
 		expect(css).toMatch(/--detect-w-found:\s*2px/);
 		expect(css).toMatch(/--detect-w-stable:\s*3px/);
-		// Found and rejected share a weight, so the dash is what separates them.
 		expect(css).toMatch(/--detect-dash-rejected:\s*\d+ \d+/);
 	});
 
 	it('reads the safe area from env() rather than a guessed constant', () => {
 		expect(css).toMatch(/--safe-bottom:\s*env\(safe-area-inset-bottom, 0px\)/);
-		// Left and right matter too: a landscape phone has insets on the long edges.
+		// A landscape phone has insets on the long edges too.
 		expect(css).toMatch(/--safe-left:\s*env\(safe-area-inset-left, 0px\)/);
 	});
 
@@ -68,17 +59,13 @@ describe('the scan tokens', () => {
 	});
 
 	it('neutralises transitions under reduced motion, not only animations', () => {
-		// An animation-only override is what a first pass naturally writes, and
-		// it neutralises the obvious sweeps while leaving every transition
-		// running at full speed. Both are motion; the preference asks about
-		// both.
+		// Both are motion; the preference asks about both.
 		expect(reducedMotion).toContain('transition-duration: 1ms !important');
 		expect(reducedMotion).toContain('animation-duration: 1ms !important');
 	});
 
 	it('re-asserts the 90ms button press inside that block', () => {
-		// app.css keeps it deliberately: the colour change still reports the
-		// press, which is the part that carries the information.
+		// The colour change still reports the press, which is what carries the information.
 		expect(reducedMotion).toMatch(/button\s*\{[^}]*transition-duration:\s*90ms/);
 	});
 });

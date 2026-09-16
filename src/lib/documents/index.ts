@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // What the documents screen and its form share that is not shelf-shaped.
-//
-// `SHELVES` used to live here: ten keys and labels the screen, the form and the
-// CHECK constraint all had to agree about. Shelves are rows now — see
-// `src/lib/server/documents/shelves.ts` — so the list is loaded, not compiled.
+// Shelves themselves are rows — see `src/lib/server/documents/shelves.ts`.
 
 import { ENUMS } from '$lib/enums';
 
@@ -60,11 +57,9 @@ export const ALL_TYPES = '__all__';
 /**
  * May a shelf's own list fill the type field, or has somebody answered already?
  *
- * The one rule, read by the inbox review screen and the inspector alike: an
- * empty field or the `other` a form starts on is fair game, and so is a value
- * this rule put there a moment ago — picking Identity and then Statements must
- * not leave a bank statement typed as an identity document. A value somebody
- * CHOSE is never overwritten, which is the whole distinction `proposed` keeps.
+ * An empty field, the `other` a form starts on, or a value this rule put
+ * there a moment ago are fair game. A value somebody CHOSE is never
+ * overwritten — that's the distinction `proposed` keeps.
  */
 export function mayProposeType(current: string | undefined, proposed: boolean): boolean {
 	return current === undefined || current === 'other' || proposed;
@@ -73,10 +68,9 @@ export function mayProposeType(current: string | undefined, proposed: boolean): 
 /**
  * What a type picker offers: the shelf's own list, or everything.
  *
- * Never a restriction — every caller posts whatever is chosen and the server
- * takes any type — so a shelf with no list is a full picker rather than a
- * refusal. The type already chosen stays in the list even when the shelf does
- * not name it, or changing shelf would silently retype the document.
+ * Never a restriction — the server takes any type — so a shelf with no list
+ * is a full picker. The already-chosen type stays in the list even when the
+ * shelf doesn't name it, or changing shelf would silently retype the document.
  */
 export function typeOptionsFor(
 	offered: readonly string[],

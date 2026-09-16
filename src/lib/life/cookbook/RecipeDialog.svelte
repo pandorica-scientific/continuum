@@ -1,17 +1,10 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	/**
-	 * Writing a recipe down.
-	 *
-	 * The ingredients and the steps are repeated rows rather than one textarea
-	 * each: the servings scaler needs a quantity it can multiply, which means it
-	 * needs to know which part of "250 g flour" is the number. A free-text block
-	 * would have to be parsed, and a parser that is wrong once is wrong at the
-	 * table.
-	 *
-	 * A row with no ingredient name is dropped on the way in, so the blank one
-	 * waiting at the bottom costs nothing and there is no "add row" to press
-	 * before typing.
+	 * Writing a recipe down. Ingredients and steps are repeated rows rather
+	 * than one textarea each, since the servings scaler needs to know which
+	 * part of "250 g flour" is the number — free text would need parsing.
+	 * A row with no ingredient name is dropped on the way in.
 	 */
 	import Modal from '$lib/components/Modal.svelte';
 	import Field from '$lib/components/Field.svelte';
@@ -53,23 +46,15 @@
 		recipe?: Existing | null;
 		message?: string | null;
 		onclose: () => void;
-		/**
-		 * Pressed when there is nowhere to put a recipe yet. Optional: the edit
-		 * case always has at least the shelf the recipe is already on.
-		 */
+		/** Pressed when there is nowhere to put a recipe yet. */
 		onneedcategory?: () => void;
 	} = $props();
 
-	/**
-	 * Read once. The dialog is created fresh each time it opens, so `recipe`
-	 * cannot change underneath it — and making these derived would undo whatever
-	 * was typed the moment anything else re-rendered.
-	 */
+	/** Read once — the dialog is created fresh each open, so `recipe` won't change. */
 	// svelte-ignore state_referenced_locally
 	let emoji = $state(recipe?.emoji || '🍽️');
 
-	// Whatever the recipe has, plus a blank row or three to type into: there is
-	// no "add a row" to press before writing the next ingredient.
+	// Plus a few blank rows to type into without pressing "add row" first.
 	// svelte-ignore state_referenced_locally
 	let ingredientRows = $state((recipe?.ingredients.length ?? 0) + 3);
 	// svelte-ignore state_referenced_locally
@@ -81,9 +66,7 @@
 
 <Modal title={recipe ? `Edit ${recipe.name}` : 'New recipe'} {onclose}>
 	{#if categories.length === 0}
-		<!-- A cold start. The shelf field is required and there is nothing to pick,
-		     so saying it plainly beats a browser telling somebody to choose from an
-		     empty list. -->
+		<!-- Shelf is required but nothing exists yet to pick. -->
 		<div class="first">
 			<p>
 				A recipe goes on a shelf — Weeknight, Baking, whatever this household actually cooks — and

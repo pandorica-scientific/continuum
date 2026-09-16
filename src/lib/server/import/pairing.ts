@@ -106,10 +106,6 @@ export function accountKeysMatch(a: string, b: string): boolean {
 
 	// Everywhere else the national number is the IBAN's own body, so the same
 	// account written both ways differs only by country and check digits.
-	// Requiring a Czech identity on both sides meant a Polish or Revolut account
-	// could never match its own IBAN: own-account transfers stopped pairing and
-	// kept counting as real income and real spending, and resolveAccount saw no
-	// match and minted a duplicate account that every row was re-imported under.
 	const aIsIban = isIban(keyA);
 	const bIsIban = isIban(keyB);
 	// Two different IBANs are two different accounts, and two national forms

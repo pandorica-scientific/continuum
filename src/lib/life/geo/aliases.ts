@@ -2,29 +2,17 @@
 /**
  * What the two map datasets call the same country.
  *
- * The world outline comes from world-atlas and the province outlines from
- * Natural Earth, and they do not agree on names. world-atlas writes "Czechia",
- * "Bosnia and Herz." and "Dem. Rep. Congo"; Natural Earth writes "Czech
- * Republic", "Bosnia and Herzegovina" and "Democratic Republic of the Congo".
- * Forty-eight of the 241 differ.
- *
- * Without this table a country silently falls back to scratching as one piece
- * — which does not look like a bug, it looks like a design choice, so nobody
- * reports it. `scripts/fetch-geodata.mjs` therefore FAILS when a name it cannot
- * resolve appears, rather than carrying on.
- *
- * Shared by the build script and the runtime on purpose: two copies of this is
- * two chances for one of them to learn a name the other has not.
+ * world-atlas (world outline) and Natural Earth (province outlines) disagree
+ * on 48 of 241 country names — e.g. "Czechia" vs "Czech Republic". Without
+ * this table a country silently falls back to scratching as one piece, so
+ * `scripts/fetch-geodata.mjs` FAILS on an unresolved name instead. Shared by
+ * the build script and the runtime so there is one copy to keep current.
  */
 
 /**
- * world-atlas name → Natural Earth `admin` name.
- *
- * Only the ones that actually differ. Twenty-two of them are pure
- * abbreviation — "Is." for "Islands", "St." for "Saint" — and are listed
- * explicitly rather than expanded by a rule, because a rule that rewrote "S."
- * to "South" would also rewrite "S. Sudan" correctly and "St-Martin" wrongly,
- * and a table is a thing you can read.
+ * world-atlas name → Natural Earth `admin` name. Only the ones that differ,
+ * listed explicitly rather than by an abbreviation rule (a rule expanding
+ * "S." to "South" would break "St-Martin").
  */
 export const COUNTRY_NAME_ALIASES: Readonly<Record<string, string>> = {
 	'Antigua and Barb.': 'Antigua and Barbuda',
@@ -77,13 +65,8 @@ export const COUNTRY_NAME_ALIASES: Readonly<Record<string, string>> = {
 };
 
 /**
- * Countries the province dataset has no rows for at all.
- *
- * Natural Earth's admin-1 file covers 253 administrations; world-atlas draws a
- * few outlines that are not among them, so their alpha-2 code cannot be read
- * off a province. They scratch as one piece, correctly — there are no province
- * outlines to cut them along — and this is what gives them a code to be
- * recorded as visited under.
+ * Countries with no province rows at all in Natural Earth's admin-1 file, so
+ * their alpha-2 code can't be read off a province. They scratch as one piece.
  */
 export const COUNTRY_CODE_OVERRIDES: Readonly<Record<string, string>> = {
 	Palestine: 'PS'
@@ -91,13 +74,8 @@ export const COUNTRY_CODE_OVERRIDES: Readonly<Record<string, string>> = {
 
 /**
  * Regions Natural Earth files under a country that does not control them.
- *
- * Crimea and Sevastopol are recorded with `admin: "Russia"`, which is de facto
- * control rather than sovereignty. They are moved to Ukraine, matching on the
- * English and local spellings both datasets use.
- *
- * Applied at BUILD time, in the trim script, so there is one place to correct
- * and no branch in the runtime. Russia is left with 83 regions.
+ * Crimea and Sevastopol are recorded as `admin: "Russia"` (de facto control,
+ * not sovereignty) and moved to Ukraine here, at build time.
  */
 export const REGION_ADMIN_OVERRIDES: readonly {
 	from: string;
@@ -116,26 +94,15 @@ export const adminNameFor = (worldAtlasName: string): string =>
 	COUNTRY_NAME_ALIASES[worldAtlasName] ?? worldAtlasName;
 
 /**
- * Where Natural Earth's `region` is still not the administrative region.
+ * Where Natural Earth's `region` is still not the administrative region a
+ * person names, even after the build dissolves provinces onto it.
  *
- * The build dissolves a country's provinces onto their `region` when GeoNames
- * calls the province a local subdivision, and that is right for France's
- * départements, Italy's province and Spain's provincias. Two countries need a
- * second pass on top of it, because Natural Earth's `region` there is a
- * statistical grouping rather than the division anybody names:
+ * The United Kingdom: Natural Earth splits Scotland/Wales into NUTS-2
+ * statistical regions rather than the twelve everyone actually names.
+ * Spain: Ceuta and Melilla are autonomous cities, not communities, and too
+ * small to scratch — `null` drops them from the map entirely.
  *
- * - **The United Kingdom** has twelve. Natural Earth gives sixteen, splitting
- *   Scotland into its four NUTS-2 regions and Wales into two — divisions that
- *   exist for European statistics and are not what anybody means by "Scotland".
- * - **Spain** has seventeen autonomous communities. Ceuta and Melilla are
- *   autonomous CITIES rather than communities, constitutionally distinct, and
- *   at 12 and 19 square kilometres they are smaller than the brush that would
- *   scratch them. `null` drops a region from the map entirely, which is the
- *   only thing here that removes territory and so the only entry that has to
- *   be justified one at a time.
- *
- * Keyed by Natural Earth `admin` name, then by its `region` value. A region not
- * named here keeps the name it has.
+ * Keyed by Natural Earth `admin` name, then `region`. Unlisted regions keep their name.
  */
 export const REGION_GROUPS: Readonly<Record<string, Readonly<Record<string, string | null>>>> = {
 	'United Kingdom': {

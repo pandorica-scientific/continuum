@@ -25,11 +25,8 @@ const statement = (
  * Whether a reading that already proved can be discarded by a region that did
  * not.
  *
- * Tested here rather than end to end because the defect belongs to the PDF
- * geometry path: a delimited file never produces the second region at all, so a
- * CSV fixture cannot reproduce it however it is arranged. The predicate is the
- * whole of the new decision, and the Komerční banka statement in the acceptance
- * corpus covers the assembled case.
+ * Tested here rather than end to end: a delimited file never produces a second
+ * region at all, so a CSV fixture cannot reproduce the PDF geometry defect.
  */
 describe('accountsForWholeFile', () => {
 	it('vouches for a reading whose movements reach the printed closing balance', () => {
@@ -74,10 +71,8 @@ describe('accountsForWholeFile', () => {
 /**
  * The case the whole-reading refusal exists to prevent, which must keep working.
  *
- * The movements do not reach the printed closing balance — 150,00 is
- * unexplained — so filing what read would import part of a statement and record
- * the file's content hash, and the corrected re-upload would then be refused as
- * a duplicate.
+ * Movements do not reach the printed closing balance (150,00 unexplained), so
+ * filing what read would import part of a statement rather than refusing it.
  */
 const MOVEMENTS_DO_NOT_CLOSE = [
 	'Banco Ficticio S.A. — Extracto de cuenta',

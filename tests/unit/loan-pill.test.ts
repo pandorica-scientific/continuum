@@ -15,8 +15,7 @@ const TODAY = '2026-08-29';
 const fixed = [period('2020-01-01', '2023-01-01'), period('2023-01-01', '2029-03-01')];
 
 describe('fixationPill', () => {
-	// Nothing else is worth saying about a loan that is gone, whatever its
-	// fixation once was — so this answer comes before every other question.
+	// Paid-off status takes priority over whatever the fixation once was.
 	it('says paid off before it says anything else', () => {
 		expect(fixationPill('fixed_period', fixed, true, TODAY)).toEqual({
 			label: 'paid off',
@@ -35,9 +34,7 @@ describe('fixationPill', () => {
 		});
 	});
 
-	// Green is "settled", amber is "a decision is coming". A year is the line:
-	// re-fixing is something a household shops around for, not something it does
-	// in the week the letter arrives.
+	// Amber a year out gives time to shop around before re-fixing.
 	it('turns amber a year before the fixation ends', () => {
 		expect(fixationPill('fixed_period', fixed, false, TODAY)).toEqual({
 			label: 'fixed to Mar 2029',
@@ -49,9 +46,7 @@ describe('fixationPill', () => {
 		});
 	});
 
-	// Read in UTC, so the month on the pill is the month on the paper wherever
-	// the server happens to be: parsing the date as an instant and printing it
-	// in a timezone behind UTC named the month before for half the world.
+	// Guards against reading the date as an instant, which named the wrong month in timezones behind UTC.
 	it('names the month the fixation actually ends in', () => {
 		expect(
 			fixationPill('fixed_period', [period('2023-01-01', '2027-01-01')], false, TODAY).label

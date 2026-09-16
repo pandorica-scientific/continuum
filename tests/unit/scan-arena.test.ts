@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-// Imported from the module, not the barrel. The barrel re-exports opencv.ts,
-// and pulling a 10 MB WASM bundle through Vite's transform hangs the run — so
-// every vitest test here imports the specific pure module it exercises.
+// Imported from the module, not the barrel — the barrel re-exports opencv.ts,
+// and pulling its WASM bundle through Vite's transform hangs the run.
 import { withMats } from '$lib/scan/core/arena';
 
 function fake() {
@@ -26,9 +25,6 @@ describe('withMats', () => {
 	});
 
 	it('frees on the exception path, which is the whole reason it exists', () => {
-		// A render that throws half way through is exactly when scattered
-		// `.delete()` calls stop running, and it is also when the largest Mats
-		// are alive.
 		const a = fake();
 		expect(() =>
 			withMats((keep) => {

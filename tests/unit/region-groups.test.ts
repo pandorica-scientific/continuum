@@ -2,12 +2,10 @@
 /**
  * Which pieces a country is drawn in.
  *
- * Natural Earth's admin-1 file is not one administrative level. Germany gets
- * its sixteen Länder; France gets ninety-six départements, Italy a hundred and
- * ten province, the United Kingdom two hundred and thirty-two districts. The
- * build dissolves the local ones onto the region they belong to, and this pins
- * the two decisions in that: which regions get regrouped afterwards, and which
- * are not drawn at all.
+ * Natural Earth's admin-1 file mixes administrative levels (Länder vs.
+ * départements vs. districts); the build dissolves the local ones onto the
+ * region they belong to, and this pins which regions get regrouped and which
+ * are dropped entirely.
  */
 import { describe, expect, it } from 'vitest';
 import { REGION_ADMIN_OVERRIDES, REGION_GROUPS, regionGroupFor } from '$lib/life/geo/aliases';
@@ -20,10 +18,8 @@ describe('regionGroupFor', () => {
 		expect(regionGroupFor('Germany', 'Bayern')).toBe('Bayern');
 	});
 
-	// Natural Earth splits Scotland into the four NUTS-2 regions used for
-	// European statistics. Nobody has been to "Highlands and Islands" as
-	// distinct from Scotland, and a scratch map that asked them to would be
-	// wrong about what the country is.
+	// Natural Earth splits Scotland into four NUTS-2 statistical regions that
+	// nobody actually thinks of as distinct from Scotland.
 	it('folds the Scottish and Welsh statistical regions back into their countries', () => {
 		for (const part of ['Eastern', 'Highlands and Islands', 'North Eastern', 'South Western']) {
 			expect(regionGroupFor('United Kingdom', part)).toBe('Scotland');
@@ -66,9 +62,8 @@ describe('regionGroupFor', () => {
 		expect(drawn).toContain('Northern Ireland');
 	});
 
-	// Ceuta and Melilla are autonomous CITIES rather than communities, and at 12
-	// and 19 square kilometres they are smaller than the brush that would
-	// scratch them. Null is the only thing in this table that removes territory.
+	// Ceuta and Melilla are autonomous CITIES rather than communities; null is the
+	// only thing in this table that removes territory.
 	it('drops the two Spanish enclaves, leaving the seventeen communities', () => {
 		expect(regionGroupFor('Spain', 'Ceuta')).toBeNull();
 		expect(regionGroupFor('Spain', 'Melilla')).toBeNull();
@@ -107,9 +102,8 @@ describe('regionGroupFor', () => {
 	});
 });
 
-// Natural Earth records de facto control, so both arrive under Russia. This is
-// the table that moves them, and it is worth a test of its own because the
-// consequence of it silently lapsing is a political claim on a map.
+// Natural Earth records de facto control, so both arrive under Russia; the
+// consequence of this table silently lapsing is a political claim on a map.
 describe('sovereignty overrides', () => {
 	it('puts Crimea and Sevastopol under Ukraine', () => {
 		const rule = REGION_ADMIN_OVERRIDES.find((one) => one.from === 'Russia');

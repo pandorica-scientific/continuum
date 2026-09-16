@@ -27,8 +27,7 @@
 
 	let saveTimer: ReturnType<typeof setTimeout> | undefined;
 	let saveError = $state<string | null>(null);
-	// A loader invalidation may replace `data`, but one mounted page must retain
-	// one writer identity and the version it originally edited against.
+	// A loader invalidation may replace `data`; keep the writer identity stable.
 	// svelte-ignore state_referenced_locally
 	const autosaveWriterId = data.autosaveWriterId;
 	// svelte-ignore state_referenced_locally
@@ -89,15 +88,7 @@
 		flushForPageExit();
 	});
 
-	// Chart geometry.
-	/**
-	 * The pot against the target, as lines over the model's twenty years.
-	 *
-	 * Capital on its own, and capital with the flats' equity on top, unless the
-	 * plan already sells them into the pot; the target pot dashed, since it is
-	 * a reference and not a measurement. Equity is known every five years and
-	 * drawn straight between them.
-	 */
+	/** Equity is known every five years; interpolate linearly between them. */
 	const equityAt = (t: number) => {
 		const rows = model.rows;
 		const after = rows.find((r) => r.t >= t) ?? rows[rows.length - 1];
@@ -142,7 +133,6 @@
 		Math.max(0, Math.min(cfg.ageOne - model.rows[0].a1, cfg.ageTwo - model.rows[0].a2))
 	);
 
-	// The two people, for the pension cards. Hues as the handoff assigns them.
 	const PERSON_HUES = ['--series-health', '--series-savings'];
 	const people = $derived(
 		[0, 1].map((i) => ({
@@ -171,25 +161,17 @@
 	type Row = (typeof model.rows)[number];
 	const coverage = (row: Row) => Math.round((row.total / Math.max(cfg.spend, 1)) * 100);
 
-	/**
-	 * The gauge's arithmetic.
-	 *
-	 * `r` and the circumference are constants rather than props: the arc is a
-	 * fixed 124px drawing scaled by the viewBox, and a caller choosing a radius
-	 * would also have to choose a stroke width that suits it.
-	 */
+	// Constants rather than props: the arc is a fixed 124px drawing scaled by the viewBox.
 	const GAUGE_R = 55;
 	const GAUGE_C = 2 * Math.PI * GAUGE_R;
 
 	const coveredPct = $derived(Math.round((model.rows[0].total / Math.max(cfg.spend, 1)) * 100));
-	// The same three steps the rest of the app reads a proportion at. Above 100
-	// is still green: over-covered is not a warning.
+	// Above 100 is still green: over-covered is not a warning.
 	const coveredTone = $derived(
 		coveredPct < 50 ? '--red' : coveredPct < 100 ? '--yellow' : '--green'
 	);
-	// A floor of 2.5%, so "almost nothing" is visibly not "nothing at all" —
-	// with a round cap a zero-length dash draws no arc, and an empty ring and a
-	// 1% ring would be the same picture.
+	// Floor of 2.5% so "almost nothing" is visible — a round cap on a zero-length
+	// dash draws no arc at all.
 	const gaugeDash = $derived(
 		(Math.max(coveredPct === 0 ? 0 : 2.5, Math.min(100, coveredPct)) / 100) * GAUGE_C
 	);
@@ -237,8 +219,6 @@
 				transform="rotate(-90 62 62)"
 			/>
 		</svg>
-		<!-- One block, centred as one: two grid items were each centred in a
-		     row of their own, which put the figure high and the note low. -->
 		<span class="gauge-text">
 			<span class="gauge-figure display">{coveredPct}<span class="gauge-pct">%</span></span>
 			<span class="gauge-note">covered today</span>
@@ -259,10 +239,6 @@
 		<span class="verdict-line">{verdict}</span>
 	</div>
 
-	<!-- The one figure this screen exists to produce, drawn as well as said.
-	     A stroke arc rather than a filled wedge: the arc's own thickness is
-	     constant, so a small share still reads as a share rather than as a
-	     sliver of a pie that is mostly empty. -->
 	<div class="v-tiles">
 		<div class="v-tile">
 			<span class="v-label">Capital pays</span>
@@ -290,9 +266,8 @@
 	</div>
 </section>
 
-<!-- The assumptions beside the picture they change, not above it: every control
-     on the left moves the line and the table on the right, and a person tuning
-     one wants to watch the other rather than scroll between them. -->
+<!-- Assumptions sit beside the picture they change, not above it, so tuning one
+     lets you watch the other without scrolling. -->
 <div class="model">
 	<div class="assume">
 		<section class="card stack">
@@ -585,9 +560,8 @@
 		width: 100%;
 		height: 100%;
 	}
-	/* `tabular-nums` is for a COLUMN of figures that has to align. This is one
-	   number with a unit beside it, and the tabular advance padded a narrow "4"
-	   out to a full digit width — which read as "4    %". */
+	/* `font-variant-numeric: normal` — tabular-nums is for aligning columns; here
+	   it padded a narrow digit out and read as "4    %". */
 	.gauge-text {
 		position: relative;
 		z-index: 1;
@@ -614,8 +588,7 @@
 		color: var(--fg3);
 		margin-top: 2px;
 	}
-	/* The controls beside the picture they change. 380px is the design's: enough
-	   for a labelled number field and a segmented control, and no more. */
+	/* 380px: enough for a labelled number field and a segmented control, no more. */
 	.model {
 		display: grid;
 		grid-template-columns: 380px minmax(0, 1fr);
@@ -640,8 +613,7 @@
 		gap: var(--space-5);
 		min-width: 0;
 	}
-	/* A wash and a 30% edge rather than a full tint inside a solid blue border:
-	   at the size this panel now is, the old pair read as an alert. */
+	/* A wash + 30% edge rather than a full tint in a solid border — a solid border reads as an alert. */
 	.verdict {
 		background: var(--blue-wash);
 		border: 1px solid color-mix(in srgb, var(--blue) 30%, transparent);
@@ -652,17 +624,13 @@
 		grid-template-columns: minmax(0, 1fr);
 		gap: 22px;
 	}
-	/* The gauge moves beside the sentence only where there is room for both.
-	   Below 1100 it sits above it, which is still better than a 124px circle
-	   squeezed into a third of a phone. */
+	/* Below 1100px the gauge sits above the sentence rather than squeeze into a third of the width. */
 	@media (min-width: 1100px) {
 		.verdict {
 			grid-template-columns: auto 1.3fr minmax(360px, 1fr);
 			align-items: center;
 		}
 	}
-	/* The three figures the sentence is made of, as tiles beside it: what the
-	   capital pays, what the pension adds, what is needed. */
 	.v-tiles {
 		display: grid;
 		grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -699,8 +667,7 @@
 			grid-template-columns: minmax(0, 1fr);
 		}
 	}
-	/* The assumptions, in four groups: a heading each, so a wall of eleven
-	   controls reads as four questions. */
+	/* Four groups, each with its own heading, so a wall of eleven controls reads as four questions. */
 	.groups {
 		display: flex;
 		flex-direction: column;

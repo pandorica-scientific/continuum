@@ -254,19 +254,14 @@
 	 * `countryFill` paints that country with on the map, so a coin from Czechia
 	 * and Czechia itself are the same blue.
 	 *
-	 * The remaining 18% is paper rather than the page, and that difference is the
-	 * whole of this rule. The engraving is dark ink on transparency with no white
-	 * behind it: on the page's own dark ground it was ink on ink, and the answer
-	 * taken then was to invert the image in the dark theme. That works while the
-	 * artwork is sparse line art and fails the moment it is not — these are dense
-	 * tonal engravings, and inverted the sky goes black and the trees glow, which
-	 * is a photographic negative rather than a print. Mixing toward paper keeps
-	 * the disc bright enough to read ink on in both themes, so the drawing is the
-	 * drawing whichever theme is on.
+	 * The remaining 18% is paper rather than the page. The engraving is dark ink
+	 * on transparency with no white behind it, so on a dark ground it needs a
+	 * bright backing to read as ink rather than ink-on-ink — inverting the image
+	 * instead would turn these dense tonal engravings into photographic negatives.
 	 *
 	 * `--label-paper` for the same reason the bottle plates use it: a print is the
-	 * same colour in a dark room as a lit one, and it is the one pair of tokens
-	 * here that deliberately does not follow the theme.
+	 * same colour in a dark room as a lit one, so this pair of tokens deliberately
+	 * does not follow the theme.
 	 */
 	.disc.gone {
 		border-color: color-mix(in srgb, var(--coin) 55%, transparent);

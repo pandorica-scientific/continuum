@@ -9,14 +9,8 @@ import { getBaseCurrency } from '$lib/server/settings';
 import type { RequestHandler } from './$types';
 
 /**
- * Save how this person left the Tax screen.
- *
- * Written on discrete gestures — a mode toggle, a currency, a filer — and the
- * last write wins. Two tabs belong to the same person, so losing costs one
- * click rather than any integrity.
- *
- * The same shape as /overview/layout: a jsonb column on the person, normalised
- * on the way in because the column stores whatever it is handed.
+ * Save how this person left the Tax screen. Last write wins — two tabs
+ * belong to the same person, so a race costs one click, not integrity.
  */
 export const PUT: RequestHandler = async ({ request, locals }) => {
 	if (!locals.person) error(401, 'Sign in first.');
@@ -42,7 +36,6 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 	);
 	await db.update(person).set({ taxView: prefs }).where(eq(person.id, locals.person.id));
 
-	// Handing back what was stored lets the screen correct itself when it posted
-	// something the server refused.
+	// Return the stored value so the screen can correct itself if it posted something invalid.
 	return json(prefs);
 };

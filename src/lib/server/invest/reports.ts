@@ -1,14 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * The broker report upload becomes a document (decision D8).
+ * The broker report upload becomes a document.
  *
- * Before this, `ingestBrokerFile` was the only upload in the product that
- * retained no file: the XTB workbook was read for its rows and then
- * discarded, so a re-read after a parser fix — or simply "where did this
- * figure come from" — had nothing to go back to. This files the same bytes
- * the ingest reads, on the Statements shelf, in the same transaction as the
- * ingest itself: a report whose ingest fails leaves no orphan document, and
- * a document never exists with no successful ingest behind it.
+ * Files the same bytes the ingest reads, on the Statements shelf, in the same
+ * transaction as the ingest itself: a report whose ingest fails leaves no
+ * orphan document, and a document never exists with no successful ingest
+ * behind it.
  */
 import { extname } from 'node:path';
 import { and, eq, inArray, sql } from 'drizzle-orm';

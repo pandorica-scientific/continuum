@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * Decision D7: the record owns the deadline.
+ * The record owns the deadline.
  *
  * A lease's contract and a mortgage's re-fixation letter often carry the same
  * date as the tenancy or loan fixation period they came from — the demo seed

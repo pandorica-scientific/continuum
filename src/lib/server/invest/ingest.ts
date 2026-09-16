@@ -25,10 +25,9 @@ export interface BrokerIngestResult {
  * Detect which broker's report this is and parse it, without writing
  * anything.
  *
- * Split out of `ingestBrokerFile` so the document filer (decision D8, Task
- * 21) can read the broker's own key and `report.generatedAt` before deciding
- * what to file the upload as, without parsing the workbook a second time to
- * get at the same report `ingestReport` is about to consume.
+ * Split out of `ingestBrokerFile` so the document filer can read the
+ * broker's own key and `report.generatedAt` before deciding what to file the
+ * upload as, without parsing the workbook a second time.
  */
 export function parseBrokerReport(
 	fileName: string,

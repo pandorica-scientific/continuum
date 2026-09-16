@@ -7,13 +7,7 @@ import { person, tripIdea, tripIdeaHeart } from '$lib/server/db/schema';
 import { createTrip, ideaExists, removeIdea } from '$lib/server/life/trips';
 import type { Actions, PageServerLoad } from './$types';
 
-/**
- * A trip promoted from an idea arrives with the idea's id in the query.
- *
- * The form is then filled in with what the board already knew — its name, its
- * emoji, where it was going, who wanted to go — so "Make this a trip" is one
- * decision about dates rather than typing the whole thing again.
- */
+/** A trip promoted from an idea arrives with the idea's id in the query and pre-fills from it. */
 export const load: PageServerLoad = async ({ url }) => {
 	const ideaId = asRowId(url.searchParams.get('idea'));
 
@@ -75,10 +69,8 @@ export const actions: Actions = {
 			return fail(400, { message: 'Where is it going? Two letters, like PT.', entered });
 		}
 
-		// Optional, so `asOptionalRowId`: the required variant turns an absent
-		// field into the nil uuid, which is a real value that no idea has — and
-		// the foreign key then rejects the whole trip with a 500. An id that is
-		// present but names nothing is dropped for the same reason.
+		// `asOptionalRowId`, not the required variant — that turns an absent field into
+		// the nil uuid, a real value no idea has, and the foreign key rejects it with a 500.
 		const fromIdeaId = (await ideaExists(asOptionalRowId(form.get('fromIdeaId'))))
 			? asOptionalRowId(form.get('fromIdeaId'))!
 			: null;
@@ -93,8 +85,7 @@ export const actions: Actions = {
 			fromIdeaId
 		});
 
-		// Promoting an idea takes it off the board: it is the same plan, and
-		// leaving it in Someday asks the household to tidy up after itself.
+		// Promoting an idea takes it off the board — it's the same plan now, not a duplicate.
 		if (fromIdeaId) await removeIdea(fromIdeaId);
 
 		redirect(303, `/trips/${id}`);

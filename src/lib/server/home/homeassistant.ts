@@ -134,12 +134,8 @@ function makeHomeAssistant(rawConfig: Record<string, string>): HomeProvider {
 		if (!config.energyEntity) return null;
 		const factor = await energyFactor();
 		if (factor === null) return null;
-		// The month starts at local midnight on the 1st, not UTC midnight. Setting
-		// the UTC date on a local `now` crossed a month boundary either way: at
-		// 01:30 on 1 August in Prague the UTC date is still 31 July, so the window
-		// opened on 1 July and charged two months of energy to this one; west of
-		// UTC it opened in the wrong direction and wiped the figure to nearly zero.
-		// syncMeterBill writes this number onto a bill as money, hourly.
+		// The month starts at local midnight on the 1st, not UTC midnight —
+		// `syncMeterBill` writes this number onto a bill as money, hourly.
 		const now = new Date();
 		const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
 		const history = await energyHistorySamples(start.toISOString());

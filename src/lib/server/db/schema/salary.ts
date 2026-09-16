@@ -1,11 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * Salary, from a payslip or from the bank.
- *
- * Until now salary history was assembled entirely from documents on the
- * Payslips shelf, so a salary already sitting in the ledger — categorised as
- * such by whoever imported the statement — was invisible to it, and there was
- * nowhere to persist a correction to a figure the bank supplied.
+ * Salary, from a payslip or from the bank — so a salary already categorised
+ * in the ledger is not invisible to salary history, and a bank-supplied
+ * figure has somewhere to hold a correction.
  */
 
 import {
@@ -33,13 +30,9 @@ export const salaryEntry = pgTable(
 			.notNull()
 			.references(() => person.id, { onDelete: 'cascade' }),
 		/**
-		 * YYYY-MM. One entry per person per month PER PAYSLIP.
-		 *
-		 * It was one entry per person per month full stop, which is right for one
-		 * job and wrong for two: a second employer's slip for the same month
-		 * replaced the first rather than joining it, so a month worked twice
-		 * reported half its pay. See the indexes below for what now keeps two
-		 * statements of the same month apart.
+		 * YYYY-MM. One entry per person per month PER PAYSLIP — a second employer's
+		 * slip for the same month must join, not replace, the first, or a month
+		 * worked twice reports half its pay. See the indexes below.
 		 */
 		periodMonth: text('period_month').notNull(),
 		/**

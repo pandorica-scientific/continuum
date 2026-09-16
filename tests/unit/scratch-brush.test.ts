@@ -1,12 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-/**
- * The arithmetic behind the scratch.
- *
- * These are the handoff prototype's numbers, pulled out of the canvas engine so
- * they can be checked without a DOM. The one that matters most is the brush
- * size: without it, scratching Luxembourg takes as many strokes as scratching
- * the United States.
- */
+// These numbers are pulled out of the canvas engine so they can be checked
+// without a DOM.
 import { describe, expect, it } from 'vitest';
 import {
 	BRUSH_MAX,

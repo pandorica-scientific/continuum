@@ -1,14 +1,7 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
-	// What a year's row opens into: the statements filed that year, and the
-	// paperwork each of them brought.
-	//
-	// Deleting a filed STATEMENT sits behind a ⋯ menu: twenty-six always-visible
-	// Edit and Delete buttons for records touched once a year was the old
-	// screen's worst density problem, and that should not be one misclick away.
-	// Its attachments are a different concern — Task 17 moves them onto the
-	// same `DocumentsCard` every other screen files paper through, which draws
-	// its own unfile control per row rather than a second menu here.
+	// Deleting a filed statement sits behind a ⋯ menu — an always-visible
+	// Delete for records touched once a year was too easy to misclick.
 	import { enhance } from '$app/forms';
 	import DocumentsCard from '$lib/components/DocumentsCard.svelte';
 	import PersonTag from '$lib/components/PersonTag.svelte';
@@ -43,12 +36,8 @@
 	}: {
 		statements: Statement[];
 		countries: { code: string; name: string; token: string }[];
-		/**
-		 * The filer's colour, assigned over the whole household rather than over
-		 * the statements on screen — see `personHues` in $lib/people. A colour
-		 * that meant one person here and another on Salary would be worse than
-		 * no colour.
-		 */
+		/** The filer's colour, assigned over the whole household — see
+		 *  `personHues` in $lib/people — so it stays consistent with Salary. */
 		personHue: (personId: string) => string;
 		onedit: (statement: Statement) => void;
 	} = $props();
@@ -56,12 +45,10 @@
 	const tokenOf = $derived(new Map(countries.map((c) => [c.code, c.token])));
 	const nameOf = $derived(new Map(countries.map((c) => [c.code, c.name])));
 
-	// One open menu at a time across every statement on the row — keyed by
-	// statement id, which is the only thing left that opens one here.
+	// One open menu at a time, keyed by statement id.
 	let menuOpen = $state<string | null>(null);
 
 	$effect(() => {
-		// A delete reloads the page data; nothing should still be open after it.
 		void statements;
 		menuOpen = null;
 	});
@@ -88,10 +75,8 @@
 				<span class="filed">filed in {s.currency}</span>
 
 				<div class="attachments">
-					<!-- `bare`: the statement's own `.card` above would double the border
-					     and padding if this card drew its own. `detachAction="detach"` is
-					     link only — a tax attachment detached stays filed on the Finance
-					     shelf, so one tap is enough and `confirmDetach` stays off. -->
+					<!-- `detachAction="detach"` only unlinks — the file stays filed on
+					     the Finance shelf, so `confirmDetach` stays off. -->
 					<DocumentsCard
 						bare
 						heading="Attachments"

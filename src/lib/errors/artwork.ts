@@ -2,10 +2,8 @@
 // The easter egg: clicking the mark on an error screen replaces the Continuum
 // rings with a drawing made for that status.
 //
-// The drawings are white line art on transparency, drawn once at 1024 and
-// shared with the design file rather than re-exported per theme. They are used
-// as a luminance mask over `currentColor`, so one file serves both themes and
-// every hue — the ink takes the colour of the state it belongs to.
+// The drawings are white line art on transparency, used as a luminance mask
+// over `currentColor`, so one file serves both themes and every hue.
 
 /** Where the drawings live under `static/`, without a code or an extension. */
 export const ARTWORK_DIR = '/error-pages';

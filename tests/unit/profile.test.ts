@@ -72,8 +72,7 @@ describe('matching', () => {
 
 describe('applying a profile', () => {
 	it('resolves roles by NAME, so a reordered export still maps correctly', () => {
-		// Firefly III maps by column index; a bank inserting a column silently
-		// shifts every role one to the right and the import still "succeeds".
+		// Mapping by column index would silently shift every role when a bank inserts a column.
 		const reordered = ['Saldo', 'Fecha', 'Importe', 'Concepto'];
 		expect(rolesFromProfile(profile(), reordered)).toEqual([
 			'balance',
@@ -107,8 +106,7 @@ describe('applying a profile', () => {
 		// Every date here is 12 or lower, so unaided the reader would have to ask.
 		expect(readTabular(choice, region).questions.map((q) => q.dimension)).toContain('dateOrder');
 
-		// With the confirmed layout it reads without asking — the profile answers
-		// the question a person already answered once.
+		// With the confirmed layout it reads without asking.
 		const guided = readTabular(choice, region, {
 			roles: rolesFromProfile(saved, headersOf(region)),
 			dateOrder: saved.mapping.dateOrder,

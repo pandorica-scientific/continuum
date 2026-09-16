@@ -1,12 +1,8 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	/**
-	 * At most two bottles worth opening, each saying why.
-	 *
-	 * The reason is derived, never written: a household can disagree with the
-	 * reasoning rather than with the taste. A cellar with nothing to suggest
-	 * draws no card at all — a suggestion box with nothing to suggest is worse
-	 * than no box.
+	 * At most two bottles worth opening, each saying why (reason is derived,
+	 * never written). A cellar with nothing to suggest draws no card at all.
 	 */
 	import Icon from '$lib/components/Icon.svelte';
 	import type { Suggestion } from '$lib/life/collections/open-tonight';

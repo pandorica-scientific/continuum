@@ -34,8 +34,7 @@ describe('detectBonus', () => {
 	});
 
 	it('sums several bonus lines on one slip', () => {
-		// A slip can carry a monthly premium and a one-off award separately, and
-		// reporting only the first would understate the month.
+		// A slip can carry a monthly premium and a one-off award separately.
 		const lines = ['Hrubá mzda 62 000,00', 'Prémie 8 000,00', 'Mimořádná odměna 12 000,00'];
 		expect(detectBonus(extractCandidates(lines, 'CZK'))).toBe(2000000n);
 	});
@@ -93,8 +92,7 @@ describe('salaryStats with bonuses', () => {
 	});
 
 	it('marks a year that does not have twelve net months', () => {
-		// An annual total over three months is not a small year, it is a partial
-		// one — and it looks like a 75% pay cut beside a complete year.
+		// A partial year must not read as a pay cut beside a complete one.
 		const rows = salaryStats([month('2025-01', 7000000n, 5000000n)], null);
 		expect(rows[0].netMonths).toBe(1);
 		expect(rows[0].netComplete).toBe(false);
@@ -108,8 +106,7 @@ describe('salaryStats with bonuses', () => {
 	});
 
 	it('reports base change apart from total change, so a bonus is not a raise', () => {
-		// Base flat, one bonus year. Total says +14% then −12%; base says neither
-		// happened, which is the truth about the salary.
+		// Base is flat across years; only the bonus year's total should move.
 		const rows = salaryStats(
 			[
 				month('2024-01', 7000000n, 5000000n),
@@ -130,8 +127,7 @@ describe('salaryStats with bonuses', () => {
 	});
 
 	it('never reports a negative base when a bonus exceeds the stated gross', () => {
-		// A misread line, or a slip whose gross excludes the award. Clamped rather
-		// than drawn upside down.
+		// Clamped to zero rather than going negative.
 		const rows = salaryStats([month('2025-01', 500000n, 400000n, 900000n)], null);
 		expect(rows[0].baseTotalMinor).toBe(0n);
 	});
@@ -144,8 +140,7 @@ describe('bonusLabelSubset', () => {
 	);
 
 	it('finds the two labels behind a summed total', () => {
-		// 8 000 + 12 000 = 20 000. Before v0.4.6 this returned nothing, so the
-		// screen's promise to "remember the wording" silently did not happen.
+		// Regression: subset-sum label matching used to return nothing here.
 		expect(bonusLabelSubset(twoLines, 2000000n)?.sort()).toEqual(
 			['mimořádná odměna', 'prémie'].sort()
 		);
@@ -160,8 +155,7 @@ describe('bonusLabelSubset', () => {
 	});
 
 	it('never reaches outside the bonus lines to reach the total', () => {
-		// 62 000 is gross, not a bonus. A subset search over every candidate
-		// would happily use it.
+		// 62 000 is gross, not a bonus, so it must stay out of the subset search.
 		expect(bonusLabelSubset(twoLines, 6200000n)).toBeNull();
 	});
 });
@@ -179,9 +173,7 @@ describe('detectBonus with learned labels', () => {
 });
 
 describe('detectBonus on tabular slips', () => {
-	// One row, cells joined: the bonus, then the tax columns after it. Every
-	// amount to the right carries a label that still contains "bonus", so summing
-	// every match added the tax to the award — 65 251 + 65 251 + 202 441 + 34 823.
+	// Regression: summing every match on the row added the tax columns to the bonus.
 	const row = 'AIP bonus 65 251 65 251 Calculated advance tax 202 441 34 823';
 
 	it('reports the award once, not the whole row', () => {

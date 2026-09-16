@@ -18,8 +18,7 @@ const periods: FixationPeriod[] = [
 const payoff = () => project(terms, periods).summary.debtFreeMonth!;
 
 describe('deriving the other half of a re-fixation offer', () => {
-	// The point is that neither field has to be typed blind: name a rate and the
-	// payment that holds the current term follows, and the other way round.
+	// Neither field has to be typed blind: name a rate and the payment follows, or vice versa.
 	it('finds a payment that keeps the loan on its present term', () => {
 		const target = payoff();
 		const derived = paymentForRate(terms, periods, '2027-03-01', 5.5, target);
@@ -52,8 +51,7 @@ describe('deriving the other half of a re-fixation offer', () => {
 		const derived = rateForPayment(terms, periods, '2027-03-01', payment, target);
 
 		expect(derived).not.toBeNull();
-		// Round trip: the rate that produces this payment is the one we started
-		// from, to the precision the field offers.
+		// Round trip: the rate that produces this payment is the one we started from.
 		expect(derived!).toBeCloseTo(5.5, 1);
 	});
 

@@ -102,8 +102,7 @@ describe('createTenancy', () => {
 			name: 'Martin Dvořák'
 		});
 
-		// Typed in a hurry, without the diacritics. A second "Martin Dvorak" in
-		// the address book is exactly what was reported as missing dedup.
+		// Typed without diacritics — must still dedup to the same contact.
 		await addTenancy('tenancy-a', 'martin dvorak');
 
 		expect(await testDb.select().from(schema.contact)).toHaveLength(1);

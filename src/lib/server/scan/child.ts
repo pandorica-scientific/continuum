@@ -38,9 +38,7 @@ export const IDLE_EXIT_MS = 2 * 60 * 1000;
  * thirty seconds to start and reports failure properly. This catches the case
  * that reporting cannot — a child stuck inside a native call, which answers
  * nothing and exits never. Without it the caller waits on a promise that will
- * not settle, which on a phone is the reading screen staying up for ever. That
- * was the v0.8.5 failure, and moving the work to a server would otherwise have
- * moved the silence rather than removed it.
+ * not settle, which on a phone is the reading screen staying up for ever.
  *
  * Generous: a 12 MP page on a slow box is seconds, not minutes.
  */
@@ -68,10 +66,9 @@ export function scanChildAlive(): boolean {
  * In development, rebuild the bundle when its sources have moved on.
  *
  * The child is a BUILT artefact, so editing `worker/pipeline.ts` and reloading
- * changes nothing — the fork still runs the last build. That failure is silent
- * and looks exactly like the code being wrong: during this feature's own
- * development it presented as HEIC support that had just been written and did
- * not work. `npm run predev` builds it once; this keeps it honest afterwards.
+ * changes nothing — the fork still runs the last build, and that failure is
+ * silent and looks exactly like the code being wrong. `npm run predev` builds
+ * it once; this keeps it honest afterwards.
  *
  * Never in production, where the image ships a bundle built at image-build time
  * and has no esbuild to rebuild it with.
@@ -114,13 +111,9 @@ function touchIdle(): void {
 /**
  * Take the idle clock away for the duration of a request.
  *
- * The timer used to be touched only on the way OUT of a request, which left the
- * window open on the way in: a request arriving at 119 seconds of a 120-second
- * idle window is still running when the timer fires, and `shutdownScanChild`
- * SIGKILLs the child underneath it. The caller then gets "the scanner stopped
- * unexpectedly" for a perfectly good photograph, at a rate of about one scan in
- * however many happen to land in that last second. Idle means nothing is
- * running, so nothing running means no idle clock.
+ * Must be held on the way IN, not just the way out: a request arriving near
+ * the end of the idle window is still running when the timer fires, and
+ * `shutdownScanChild` would SIGKILL the child underneath it.
  */
 function holdIdle(): void {
 	if (idleTimer) clearTimeout(idleTimer);

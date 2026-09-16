@@ -39,9 +39,8 @@ export const load: PageServerLoad = async () => {
 			db.select().from(portfolioSnapshot).orderBy(asc(portfolioSnapshot.day)),
 			db.select().from(brokerPosition),
 			loadRateTable(),
-			// How this household is taxed on what it sells. Configured rather than
-			// assumed: the rate differs by country, and the holding-period exemption
-			// below is a Czech rule that would produce wrong figures anywhere else.
+			// Configured, not assumed: the rate differs by country, and the exemption
+			// below is a Czech rule that would be wrong elsewhere.
 			getSetting<GainsPolicy>('investTax', DEFAULT_GAINS_POLICY),
 			db
 				.select({ id: account.id, name: account.name })
@@ -49,11 +48,8 @@ export const load: PageServerLoad = async () => {
 				.where(eq(account.kind, 'brokerage'))
 		]);
 
-	// Reports: filed against the one brokerage account when there is exactly
-	// one — the ordinary case, and the same account the accounts screen shows
-	// them on too — and read by type otherwise, since there is no single
-	// account to key a `documentsAbout` lookup off when none has been added
-	// yet or more than one exists.
+	// Filed against the one brokerage account when there is exactly one; read by
+	// type otherwise, since there's no single account to key the lookup off.
 	const soleBrokerageAccount = brokerageAccounts.length === 1 ? brokerageAccounts[0] : null;
 	const reportsTarget = soleBrokerageAccount
 		? { id: soleBrokerageAccount.id, kind: 'account' as const, label: soleBrokerageAccount.name }
@@ -64,10 +60,8 @@ export const load: PageServerLoad = async () => {
 
 	const latestSnapshot = snapshots[snapshots.length - 1] ?? null;
 
-	// Realised this calendar year. Deliberately NOT converted: a disposal's gain
-	// is a fact in the currency it was realised in, and the tax on it is charged
-	// there too, so converting would produce a figure no tax office would
-	// recognise. Positions in another currency are counted separately below.
+	// Deliberately NOT converted: a disposal's gain and its tax are both facts in
+	// the currency it was realised in.
 	const thisYear = new Date().getUTCFullYear();
 	const gains = realisedGains(positions, thisYear, taxPolicy);
 	const accountCurrency =
@@ -189,8 +183,7 @@ export const load: PageServerLoad = async () => {
 		}
 	}
 
-	// Grants live beside the holdings: a ticker held in both places shares a
-	// swatch, and the same fetched closes value both.
+	// A ticker held in both grants and holdings shares a swatch and the same fetched close.
 	const [grantRows, priceSettings, people, employers] = await Promise.all([
 		grantsWithTranches(),
 		getPriceSettings(),
@@ -227,11 +220,9 @@ export const load: PageServerLoad = async () => {
 		today
 	);
 
-	// Everything invested: the broker's portfolio plus vested shares held
-	// elsewhere, in the account currency. A second figure beside Portfolio
-	// rather than inside it — money in, gain and the annualised return are
-	// measured against what was paid into the broker, and granted shares were
-	// not paid for.
+	// A second figure beside Portfolio, not inside it: money in, gain and the
+	// annualised return are measured against what was paid into the broker, and
+	// granted shares were not paid for.
 	const heldEquity = heldEquityValues(grantRows, grantPrices, today);
 	let equityInAccount = 0n;
 	let equityUnconverted = 0;
@@ -248,8 +239,7 @@ export const load: PageServerLoad = async () => {
 				}
 			: null;
 
-	// One colour per holding, assigned by size and shared by the pie and the
-	// table: the swatch on a row IS its wedge, so the two must agree.
+	// Shared by the pie and the table: the swatch on a row IS its wedge.
 	const colorFor = seriesFor([
 		...holdings.map((h) => h.ticker),
 		...grantRows.map((g) => g.grant.ticker)
@@ -325,10 +315,8 @@ export const load: PageServerLoad = async () => {
 			annualised:
 				annualised !== null ? `${annualised >= 0 ? '+' : ''}${annualised.toFixed(1)}%` : null
 		},
-		// The tax on what was sold this year. Shown beside the portfolio figures
-		// because that is where it is asked about, and marked an estimate on its
-		// face: it knows nothing about losses carried forward from earlier years,
-		// other income, allowances, or anything held outside this instance.
+		// An estimate: knows nothing about losses carried forward, other income,
+		// allowances, or anything held outside this instance.
 		tax: {
 			year: thisYear,
 			configured: taxPolicy.ratePct > 0,
@@ -353,7 +341,6 @@ export const load: PageServerLoad = async () => {
 };
 
 export const actions: Actions = {
-	/** How this household is taxed on what it sells. Configured, never assumed. */
 	upload: async ({ request }) => {
 		const form = await request.formData();
 		const file = form.get('report');

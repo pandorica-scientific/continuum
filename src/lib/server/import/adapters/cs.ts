@@ -103,14 +103,10 @@ export function parseCsLines(lines: PdfLine[]): ParsedStatement {
 		}
 
 		// A card row prints the compressed transaction date ("30052026" for
-		// d.tran.30.05.2026) exactly where a transfer prints its variable
-		// symbol, so a positional guess fabricates a symbol on most card
-		// payments. That is not cosmetic: rules match on variableSymbol, so a
-		// rule keyed to a genuine symbol that happens to look like a date would
-		// silently file unrelated card payments, and the register would show a
-		// payment symbol the bank never printed. Cards are excluded by type,
-		// and any candidate equal to this row's own transaction date is a date
-		// whatever the type says.
+		// d.tran.30.05.2026) exactly where a transfer prints its variable symbol,
+		// so a positional guess would fabricate a symbol on most card payments —
+		// and rules match on variableSymbol. Cards are excluded by type, and any
+		// candidate equal to this row's own transaction date is a date regardless.
 		const isCardRow = /\bkart/i.test(type ?? '');
 		const compactValueDate = valueDate
 			? `${valueDate.slice(8, 10)}${valueDate.slice(5, 7)}${valueDate.slice(0, 4)}`

@@ -7,21 +7,12 @@
 	 * Lines over slots, optionally with stacked bars above them, drawn at real
 	 * pixel sizes.
 	 *
-	 * It measures its own box rather than scaling a fixed viewBox, which is what
-	 * the charts it replaces did. The difference matters: a scaled viewBox
-	 * stretches the stroke and the type with the width, so the same chart came
-	 * out with a 2px line on a monitor and a 5px line on a phone — and its axis
-	 * labels had to be positioned as HTML in percentages on top of the SVG,
-	 * because text inside it scaled too.
+	 * Measures its own box rather than scaling a fixed viewBox — a scaled
+	 * viewBox stretches stroke and type with width, so the same chart would
+	 * render a 2px line on a monitor and a 5px line on a phone.
 	 *
-	 * The bars are here rather than in a second component because the salary and
-	 * tax charts have always drawn both at once: money on top at its own scale,
-	 * a percentage line beneath at its own. Splitting them would mean two
-	 * components that have to agree on a slot pitch, a hover target and a
-	 * readout position, which is the drift this codebase keeps paying for.
-	 *
-	 * Every decision about WHERE something goes is in `line.ts`, which has no
-	 * DOM in it and a test beside it. This file is the markup over that.
+	 * All layout decisions live in `line.ts` (no DOM, tested); this file is
+	 * just the markup over that.
 	 */
 	interface Props {
 		series: LineSeries[];
@@ -46,13 +37,7 @@
 		description?: string;
 		/** Gradients and patterns the bars' `fill` refers to by `url(#id)`. */
 		defs?: Snippet;
-		/**
-		 * The figures for the slot under the pointer.
-		 *
-		 * A snippet rather than a prop shape: what a salary year and a tax year
-		 * have to say are different lists, and an engine that tried to describe
-		 * both would end up describing neither.
-		 */
+		/** The figures for the slot under the pointer. A snippet since callers' figures differ. */
 		readout?: Snippet<[number]>;
 		/** Keys and a footnote, under the chart. */
 		legend?: Snippet;
@@ -86,9 +71,9 @@
 	$effect(() => {
 		const element = box;
 		if (!element) return;
-		// Measured synchronously first: a ResizeObserver never fires in a hidden
+		// Measured synchronously first: ResizeObserver never fires in a hidden
 		// document, so an observer-only version renders at zero width in a
-		// background tab — the same trap `Sankey.svelte` documents.
+		// background tab.
 		width = element.getBoundingClientRect().width;
 		const observer = new ResizeObserver(([entry]) => {
 			width = entry.contentRect.width;
@@ -107,8 +92,7 @@
 		})
 	);
 
-	// Flipped to the left of the guide for the later half, so the readout for
-	// the last slot is not drawn off the edge of the card.
+	// Flipped left of the guide past the midpoint so the readout stays on-card.
 	const flip = $derived(hover !== null && hover >= g.slots.length / 2);
 </script>
 
@@ -119,7 +103,7 @@
 				{#if description}<desc>{description}</desc>{/if}
 				{#if defs}<defs>{@render defs()}</defs>{/if}
 
-				<!-- The bars' band first, so its gridlines sit under everything. -->
+				<!-- Bars' band first, so its gridlines sit under everything. -->
 				{#each g.barTicks as tick (tick.value)}
 					<line
 						x1={g.plot.x}
@@ -148,9 +132,7 @@
 					</text>
 				{/each}
 
-				<!-- Only where the data crosses it, and heavier than a gridline: on a
-				     chart that goes negative, zero is the only line that means something
-				     other than "a round number". -->
+				<!-- Heavier than a gridline: zero is the only line that isn't just a round number. -->
 				{#if g.zeroY !== null}
 					<line
 						x1={g.plot.x}
@@ -189,8 +171,7 @@
 					{/if}
 				{/each}
 
-				<!-- The guide, drawn between the bars and the lines so it reads as
-				     belonging to the whole column rather than to either band. -->
+				<!-- Drawn between bars and lines so it reads as belonging to the whole column. -->
 				{#if hover !== null && g.slots[hover] !== undefined}
 					<line
 						x1={g.slots[hover]}
@@ -214,8 +195,7 @@
 							stroke-dasharray={s.dashed ? '5 5' : undefined}
 						/>
 					{/each}
-					<!-- The ring is the page's own ground, so a point stays legible where
-					     two series cross. -->
+					<!-- Ring matches the page ground so a point stays legible where series cross. -->
 					{#each s.points as point, i (i)}
 						<circle
 							cx={point.x}
@@ -247,8 +227,7 @@
 				{/each}
 			</svg>
 
-			<!-- Axis titles as HTML: rotated SVG text cannot be selected, and these
-			     are the two words that say what the numbers on the left ARE. -->
+			<!-- Axis titles as HTML: rotated SVG text cannot be selected. -->
 			{#if barAxisTitle && g.barTicks.length}
 				<span
 					class="axis-title"
@@ -264,9 +243,7 @@
 				>
 			{/if}
 
-			<!-- One target per slot, the width of the pitch. Buttons, not a single
-			     mousemove handler: a keyboard reaches the figures by tabbing, and a
-			     div with a pointer listener is nothing at all to a screen reader. -->
+			<!-- Buttons, not a mousemove handler: reachable by tab, and readable by a screen reader. -->
 			{#if readout}
 				{#each g.hits as hit, i (i)}
 					<button
@@ -307,8 +284,7 @@
 		gap: var(--space-6);
 		min-width: 0;
 	}
-	/* Ruled off from the plot, the way the design draws it: the keys are a
-	   caption on the picture above them, not another row of the panel. */
+	/* The keys are a caption on the picture above, not another row of the panel. */
 	.legend {
 		display: flex;
 		flex-wrap: wrap;
@@ -335,14 +311,11 @@
 		font-size: var(--text-xs);
 		fill: var(--fg3);
 	}
-	/* Beside the line rather than in a legend: matching a colour to a name in a
-	   key is work the reader should not have to do twice per chart. */
 	.end {
 		font-size: var(--text-xs);
 		font-weight: 600;
 	}
-	/* Everything but the column being read steps back, which is what makes a
-	   twelve-year chart answerable by pointing at one year. */
+	/* Everything but the hovered column steps back. */
 	.bar {
 		transition: opacity var(--dur) var(--ease);
 	}
@@ -372,8 +345,7 @@
 		outline: 2px solid var(--blue);
 		outline-offset: -2px;
 	}
-	/* Opaque, because it floats over the chart it describes — the rule
-	   `design/opaque-floating-surface` enforces product-wide. */
+	/* Opaque: floats over the chart it describes. */
 	.readout {
 		position: absolute;
 		top: var(--space-6);

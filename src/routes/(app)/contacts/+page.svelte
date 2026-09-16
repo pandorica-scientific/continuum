@@ -8,15 +8,11 @@
 
 	let { data, form } = $props();
 
-	// Which contact the editor was opened on by a click; undefined means nobody
-	// has clicked anything yet on this render.
+	// undefined: nobody has clicked anything yet on this render.
 	let opened = $state<string | null | undefined>(undefined);
 
-	// Which contact the editor is open on: an id, 'new', or null for closed.
-	//
 	// Falls back to whichever editor was just rejected, so a failed save reopens
-	// the form it came from rather than closing and stranding the typed values.
-	// The form is a plain POST, so a rejection is a fresh render of this page.
+	// the form it came from instead of closing and stranding the typed values.
 	const editing = $derived(
 		opened === undefined ? (form?.values ? (form.valuesFor ?? 'new') : null) : opened
 	);
@@ -24,11 +20,9 @@
 	const options = $derived(data.options);
 
 	/**
-	 * The echoed values, but ONLY for the editor they came from.
-	 *
-	 * ContactForm prefers an echoed value over the stored row — which is right for
-	 * the form that was rejected and catastrophic for any other, because the
-	 * fields it pre-fills are then saved onto a different person's row.
+	 * The echoed values, but only for the editor they came from — ContactForm
+	 * prefers an echoed value over the stored row, so leaking it to another
+	 * editor would save those fields onto the wrong person's row.
 	 */
 	function echoFor(id: string | null): NonNullable<typeof form>['values'] | undefined {
 		if (!form?.values) return undefined;
@@ -165,12 +159,8 @@
 		flex: 1 1 240px;
 	}
 
-	/* Cards in a grid, not rows in a column. A contact is a person, not a line
-	   item, and at four columns the phone number ended up further from the name
-	   than the Edit button was. */
-	/* No `align-items: start`: two cards side by side at different heights read
-	   as a broken grid, and a contact with an email had 60px more card than one
-	   without. They stretch, so a row of cards has one bottom edge. */
+	/* Stretches (no align-items: start) so a row of cards shares one bottom edge
+	   despite differing heights. */
 	.cards {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -182,9 +172,7 @@
 	.cards > .empty {
 		grid-column: 1 / -1;
 	}
-	/* A column. Edit sits in the head beside the name, which is where the design
-	   puts it and what makes the button land in the same place on every card
-	   whatever else the card happens to hold. */
+	/* Edit sits in the head beside the name, so it lands in the same place on every card. */
 	.contact-row {
 		display: flex;
 		flex-direction: column;
@@ -210,9 +198,7 @@
 		flex: none;
 	}
 
-	/* The initial in the contact's own series colour, the way a person's tag is
-	   drawn everywhere else. Derived from the name so it is stable without a
-	   stored preference. */
+	/* Initial in the contact's own series colour, derived from the name so it's stable without a stored preference. */
 	.avatar-blank {
 		display: grid;
 		place-items: center;

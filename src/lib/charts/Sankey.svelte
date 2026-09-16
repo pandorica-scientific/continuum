@@ -14,10 +14,8 @@
 
 	let { flow, currency }: { flow: FlowGraphInput; currency: string } = $props();
 
-	// The diagram's own name and description are referenced by id, and a screen
-	// can hold two of these — the overview panel and the cash-flow page — so the
-	// ids cannot be written out. Svelte's own is consistent across hydration,
-	// which a counter of ours would not be.
+	// Referenced by id, and a screen can hold two of these — ids can't be
+	// hardcoded. Svelte's own id is consistent across hydration.
 	const uid = $props.id();
 
 	/** Room for four columns of labels without them touching. */
@@ -26,13 +24,8 @@
 
 	/**
 	 * How solid a ribbon is drawn: on its own, when it touches the band being
-	 * read, and when it does not.
-	 *
-	 * The question a Sankey answers is "where did THIS go", and a dozen bands at
-	 * one weight cannot answer it — the eye loses a band the moment it crosses
-	 * another. Lighting the flows that touch one block and pushing the rest back
-	 * is what makes the answer a matter of looking. The dim is deep enough to
-	 * recede and not so deep that the shape of the whole diagram goes with it.
+	 * read, and when it does not. Dimming the rest is what lets a reader follow
+	 * one flow through a dozen crossing bands.
 	 */
 	const RIBBON_OPACITY = 0.45;
 	const RIBBON_LIT = 0.7;
@@ -45,9 +38,9 @@
 		const element = box;
 		if (!element) return;
 
-		// Measured synchronously as soon as the ref attaches: ResizeObserver
-		// never fires in a hidden document, so an observer-only version renders
-		// at zero width in a background tab.
+		// Measured synchronously first: ResizeObserver never fires in a hidden
+		// document, so an observer-only version renders at zero width in a
+		// background tab.
 		width = element.getBoundingClientRect().width;
 
 		const observer = new ResizeObserver((entries) => {
@@ -57,14 +50,7 @@
 		return () => observer.disconnect();
 	});
 
-	/**
-	 * Text measured in the faces it will actually be drawn in.
-	 *
-	 * A canvas measures the same string the same way the page lays it out, which
-	 * is what makes a label's box agree with its label on every machine. The
-	 * families come from the tokens rather than being written out here, so a
-	 * change to either is followed rather than copied.
-	 */
+	/** Text measured in the faces it will actually be drawn in, so a label's box agrees with it on every machine. */
 	function canvasMeasure(element: HTMLElement): MeasureText {
 		const context = document.createElement('canvas').getContext('2d');
 		if (!context) return estimateText;
@@ -72,21 +58,16 @@
 		const sans = style.getPropertyValue('--font-sans');
 		const mono = style.getPropertyValue('--font-mono');
 		return (text, font, kind) => {
-			// 500 is `.name`'s weight and 400 the value's; a variable face is
-			// genuinely wider at the heavier one.
+			// 500 is `.name`'s weight, 400 the value's — a variable face is wider at the heavier one.
 			context.font = kind === 'value' ? `400 ${font}px ${mono}` : `500 ${font}px ${sans}`;
 			return context.measureText(text).width;
 		};
 	}
 
 	/**
-	 * Replaced once the real faces are in, which lays the diagram out again.
-	 *
-	 * Until a webfont arrives the browser draws in a fallback that is WIDER than
-	 * Inter, and which fallback it is depends on the operating system. A layout
-	 * measured then is right for what is on screen at that moment and wrong a
-	 * moment later — so it is measured again when the swap happens. Nothing else
-	 * would trigger that: the panel is still exactly as wide as it was.
+	 * Replaced once the real faces are in, which lays the diagram out again —
+	 * the fallback face before a webfont arrives is wider than the real one, so
+	 * the earlier layout is measured wrong and needs redoing on the swap.
 	 */
 	let measure = $state<MeasureText>(estimateText);
 	$effect(() => {
@@ -102,9 +83,7 @@
 		};
 	});
 
-	// The diagram is laid out in the box's own pixels, so labels stay the size
-	// they were designed at however wide the panel is. Height follows width so
-	// the ribbons keep a readable slope rather than flattening.
+	// Height follows width so ribbons keep a readable slope rather than flattening.
 	const height = $derived(Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, width * 0.46)));
 	const layout = $derived(
 		width > 0
@@ -114,11 +93,7 @@
 
 	const amount = (value: number) => formatMinor(fromMajor(value, currency), currency);
 
-	/**
-	 * The joins between a name and its band, for the names that could not stay
-	 * level with one. Drawn inside the SVG so they sit under the ribbons' own
-	 * edges rather than over the labels.
-	 */
+	/** The joins between a name and its band, for names that couldn't stay level with one. */
 	const leaders = $derived(
 		layout.labels
 			.filter((l) => l.fits && l.leader)
@@ -126,33 +101,17 @@
 	);
 
 	/**
-	 * What the reader is on, and where to say it.
-	 *
-	 * A label is drawn permanently only where the band has room for one. The rest
-	 * are reachable by hovering — and, since every band that leads to rows is a
-	 * link, by tabbing — which is what lets a crowded diagram stay readable
-	 * without hiding what it holds. The breakdown strip beneath the chart stays
-	 * for touch, where there is no hover at all.
+	 * What the reader is on, and where to say it. Labels not drawn permanently
+	 * are reachable by hovering/tabbing; the breakdown strip below covers touch.
 	 */
 	let hovered = $state<{ label: string; value: number; x: number; y: number } | null>(null);
 
-	/**
-	 * Which block the reader is on, or null for none.
-	 *
-	 * Every ribbon that touches it is drawn solid and the rest recede, so a flow
-	 * can be followed across four columns by looking rather than by tracing.
-	 */
+	/** Which block the reader is on, or null. Every ribbon touching it lights; the rest recede. */
 	let hoveredKey = $state<string | null>(null);
 
 	/**
-	 * Or which single band, when the reader is on the flow itself rather than on
-	 * a block it joins.
-	 *
-	 * Held apart from `hoveredKey` because the two answer different questions —
-	 * "everything touching this block" and "this one band" — and only one of them
-	 * can be being asked at a time. Whichever is set decides; a band under the
-	 * pointer lights itself alone, which is the finer of the two answers and the
-	 * one a reader is asking for by pointing at the flow rather than at its end.
+	 * Or which single band, when the reader is on the flow itself. Held apart
+	 * from `hoveredKey` since only one of the two questions applies at a time.
 	 */
 	let hoveredRibbon = $state<number | null>(null);
 
@@ -160,12 +119,9 @@
 	const labelOf = $derived(new Map(layout.nodes.map((node) => [node.key, node.label])));
 
 	/**
-	 * Placed from the layout rather than from the element under the pointer.
-	 *
-	 * The geometry already knows where everything is, and a measured rect would
-	 * have to be turned back into this box's coordinates by measuring the box as
-	 * well. It is also what lets the keyboard and the mouse reach the same code:
-	 * a focused band has no pointer event to take a rect from.
+	 * Placed from the layout rather than the element under the pointer, so
+	 * keyboard focus and pointer hover reach the same code — a focused band has
+	 * no pointer event to take a rect from.
 	 */
 	function show(label: string, value: number, x: number, y: number) {
 		hovered = { label, value, x, y };
@@ -194,13 +150,7 @@
 		hoveredRibbon = null;
 	}
 
-	/**
-	 * The whole route through the block being read, not only what touches it.
-	 *
-	 * Lighting the adjacent bands answered half the question — standing on
-	 * "Bills" it showed the money arriving and the money leaving, but not which
-	 * salary two columns left it came from. See `pathRibbons`.
-	 */
+	/** The whole route through the block being read, not only what touches it. See `pathRibbons`. */
 	const litPath = $derived(
 		hoveredRibbon !== null
 			? ribbonRoute(layout.ribbons, hoveredRibbon)
@@ -215,21 +165,12 @@
 
 	const isLit = (index: number) => reading && litPath.has(index);
 
-	/**
-	 * One gradient per colour, not per band.
-	 *
-	 * A ribbon is filled with its series colour ramping from 22% to 62% along
-	 * its run, so a band reads as flowing rather than as a static shape. Bands
-	 * of the same colour share a definition: a household with forty links would
-	 * otherwise put forty identical gradients in the document.
-	 */
+	/** One gradient per colour, not per band — bands sharing a colour share a definition. */
 	const gradients = $derived([...new Set(layout.ribbons.map((r) => r.colorVar))]);
 	const gradientId = (colorVar: string) => `${uid}-flow-${colorVar.replace(/[^a-z0-9]/gi, '')}`;
 </script>
 
-<!-- The block itself, without the wrapper that gives it its meaning: a link
-     where there are rows behind it, and a plain labelled figure where there are
-     not. Drawing it once keeps the two wrappers to what actually differs. -->
+<!-- The block itself; the wrapper (link vs. labelled figure) is what differs. -->
 {#snippet block(node: SankeyNode)}
 	<rect
 		x={node.x}
@@ -244,19 +185,13 @@
 
 <div class="sankey" bind:this={box} style:height="{height}px">
 	{#if layout.nodes.length}
-		<!-- Named and described rather than announced as one image: "Where the
-		     money goes" alone tells a reader the picture exists and nothing about
-		     what is in it, and the blocks below each carry their own figure. -->
 		<svg width={layout.width} height={layout.height} aria-labelledby="{uid}-title {uid}-desc">
 			<title id="{uid}-title">Where the money goes</title>
 			<desc id="{uid}-desc">
 				What came in on the left, splitting across the groups it went to and whatever was left.
 				Every band is listed with its own figure in the breakdown beneath the chart.
 			</desc>
-			<!-- The bands carry no name of their own: what one says is said by the
-			     two blocks it joins, and both are in the reading order already. So
-			     they are skipped rather than read out as a run of unnamed shapes,
-			     and the figure along one is on hover. -->
+			<!-- Bands carry no name of their own — the two blocks they join say it — so they're aria-hidden. -->
 			<defs>
 				{#each gradients as colorVar (colorVar)}
 					<linearGradient id={gradientId(colorVar)} x1="0" y1="0" x2="1" y2="0">
@@ -278,17 +213,9 @@
 					onpointerleave={leave}
 				/>
 			{/each}
-			<!-- A band stands for rows the register can list, so where there are rows
-			     the block is a link to them. The wrapper carries the name and the
-			     figure, because that is what a reader is following; the rect inside
-			     it says nothing, or a screen reader would read the band twice. The
-			     handlers sit on the wrapper for the same reason — the tooltip
-			     follows whatever the reader is actually on.
-
-			     Only the links take focus. A residual — cash kept, money drawn from
-			     reserves — is arithmetic on the rest and leads nowhere, and its
-			     figure is in the totals row under the chart, so tabbing through it
-			     would be a stop that offers nothing. -->
+			<!-- The wrapper (not the rect) carries the name/figure so a screen reader
+			     doesn't read the band twice. Only links take focus — a residual
+			     (cash kept, reserves drawn) leads nowhere and isn't worth a tab stop. -->
 			{#each layout.nodes as node (node.key)}
 				{#if node.href}
 					<a
@@ -324,10 +251,7 @@
 				/>
 			{/each}
 		</svg>
-		<!-- Each in the channel its column reserved, centred on the band it names.
-		     A column shrinks its type to fit every name before it drops any; what
-		     a very crowded one still cannot fit is on hover and in the breakdown
-		     strip beneath the chart, which is what a touch device reads instead. -->
+		<!-- What a crowded column still can't fit is on hover and in the breakdown strip. -->
 		{#each layout.labels.filter((l) => l.fits) as label (label.key)}
 			<div
 				class="label {label.anchor}"
@@ -352,15 +276,11 @@
 </div>
 
 <style>
-	/* The band settles into and out of the lit state rather than snapping, which
-	   is what makes following a route across four columns feel continuous. */
 	.ribbon {
 		transition: opacity var(--dur) var(--ease);
 	}
-	/* The flame. A lit band breathes very slightly, on two offset cycles so a
-	   run of bands does not pulse in lockstep — that reads as a loading state
-	   rather than as something alive. Amplitude is deliberately small: this is
-	   texture on an answer, not an animation competing with it. */
+	/* The flame: a lit band breathes slightly, on two offset cycles so a run of
+	   bands doesn't pulse in lockstep (which would read as a loading state). */
 	.ribbon.lit {
 		animation: v2-flame-a 2.4s var(--ease) infinite;
 	}
@@ -386,9 +306,7 @@
 			opacity: 1;
 		}
 	}
-	/* app.css collapses every animation to 1ms, which would leave a lit band
-	   frozen at whatever frame it stopped on. Stated here so the band simply
-	   stays lit instead. */
+	/* app.css collapses animations to 1ms; without this a lit band would freeze mid-frame. */
 	@media (prefers-reduced-motion: reduce) {
 		.ribbon.lit,
 		.ribbon.lit.alt {
@@ -406,14 +324,9 @@
 	.node {
 		cursor: default;
 	}
-	/* Only the bands that lead somewhere say so. A residual — cash kept, money
-	   taken from reserves — is arithmetic on the rest and has no rows behind it,
-	   so it stays as it was rather than inviting a click that goes nowhere. */
 	a .node {
 		cursor: pointer;
 	}
-	/* Above the plate a label uses, because it is answering a question somebody
-	   is asking right now. */
 	.tip {
 		position: absolute;
 		z-index: 2;
@@ -428,11 +341,7 @@
 		border-radius: var(--radius-sm);
 		padding: var(--space-2) var(--space-4);
 	}
-	/* Labels sit in the channel their column reserved, beside the band they name.
-	   Absolutely positioned in the same pixel space as the diagram, and given the
-	   type size that column settled on — so a crowded column reads smaller rather
-	   than losing its names. No plate: nothing is drawn in a channel, so there is
-	   nothing to lift the text off. */
+	/* Absolutely positioned in the diagram's pixel space, at the column's settled type size. */
 	.label {
 		position: absolute;
 		display: flex;
@@ -449,10 +358,7 @@
 	.label.start {
 		align-items: flex-start;
 	}
-	/* A middle column has ribbons on both sides of every band — its own leaving,
-	   its parents' arriving — so there is no free space beside one to write in.
-	   Those names are drawn over the flow, and the plate is what lifts them off
-	   a saturated band; a text-shadow alone is not enough. */
+	/* Middle-column names are drawn over the flow; the plate lifts them off a saturated band. */
 	.label.plate {
 		background: var(--plate);
 		border-radius: var(--radius-sm);
@@ -462,10 +368,7 @@
 		stroke-width: 1;
 		opacity: 0.5;
 	}
-	/* The engine measures every name in the face it is drawn in and drops one it
-	   cannot fit whole, so this is a backstop rather than the mechanism: it keeps
-	   a name inside its box in the one frame between a webfont arriving and the
-	   relayout that follows it. */
+	/* Backstop, not the mechanism: covers the one frame between a webfont arriving and relayout. */
 	.name,
 	.value {
 		max-width: 100%;

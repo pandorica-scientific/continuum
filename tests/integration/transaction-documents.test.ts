@@ -17,14 +17,10 @@ vi.mock('$env/dynamic/private', () => ({
 }));
 
 /**
- * Task 16: receipts through the same `DocumentsCard` every other screen uses.
- *
- * `attachDocumentToTransaction`/`detachDocumentFromTransaction` are gone —
- * `targets.ts`'s `attachDocument`/`detachDocument` replace them, existence
- * checked in a way the transaction-only versions were not. What is left here
- * to unit-test directly is `loadTransactionDocuments`, the one batched read
- * the register still owns; attach and detach are exercised the way every
- * other documents-card suite exercises them, through the page's own actions.
+ * Receipts go through the same `DocumentsCard` every other screen uses, via
+ * `targets.ts`'s `attachDocument`/`detachDocument`. `loadTransactionDocuments`
+ * is the one batched read the register still owns and is unit-tested
+ * directly; attach and detach are exercised through the page's own actions.
  */
 let harness: Harness;
 let testDb: TestDb;
@@ -191,12 +187,8 @@ describe('attaching and detaching a receipt through the actions', () => {
 
 	/**
 	 * The upload half of the same action: a file becomes a new receipt
-	 * document rather than linking one that already exists.
-	 *
-	 * `newSubjectName: 'Receipts'` used to run alongside this so the file
-	 * would appear somewhere on the Documents screen — the about-filter now
-	 * shows transactions as a group there, so the workaround is gone. This is
-	 * the test that would catch it coming back.
+	 * document rather than linking one that already exists, and must create
+	 * no "Receipts" subject — the about-filter groups transactions on its own.
 	 */
 	it('uploads a file as a receipt document, tagged and shelved in the inbox, with no Receipts subject', async () => {
 		const { actions } = await import('../../src/routes/(app)/transactions/+page.server');

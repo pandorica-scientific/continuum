@@ -53,24 +53,17 @@ export const load: PageServerLoad = async ({ url }) => {
 	const categoryName = new Map(categories.map((c) => [c.id, c.name]));
 	const tagName = new Map(tags.map((t) => [t.id, t.name]));
 
-	// A rule's colour comes from its category's GROUP, which is where the
-	// palette token lives — see `categoryGroup.colorToken`. The screen groups on
-	// the same axis, so the swatch beside a group header and the swatch beside
-	// the same category in the register are the one colour.
+	// A rule's colour comes from its category's GROUP (`categoryGroup.colorToken`),
+	// so the swatch matches whichever screen groups on the same axis.
 	const groups = await loadCategoryGroups();
 	const groupByKey = new Map(groups.map((g) => [g.key, g]));
 	const groupOfCategory = new Map(categories.map((c) => [c.id, groupByKey.get(c.groupKey)]));
 
 	return {
 		/**
-		 * What a rule should be about, when the register sent you here.
-		 *
-		 * A transaction's "Make a rule" carries its counterparty and what it is
-		 * filed as, so the editor opens already describing the row you were
-		 * looking at rather than asking you to retype it. Both are read straight
-		 * from the URL and both are only ever put into a form field — the save
-		 * action validates whatever is actually submitted, as it does for a rule
-		 * typed by hand.
+		 * Prefill from a transaction's "Make a rule" link (counterparty + category
+		 * from the URL) so the editor opens describing the row you came from.
+		 * These are only form defaults — save still validates what is submitted.
 		 */
 		prefill:
 			url.searchParams.has('counterparty') || url.searchParams.has('category')
@@ -84,10 +77,8 @@ export const load: PageServerLoad = async ({ url }) => {
 		rules: rows
 			.map((r) => {
 				const score = confidence(r.acceptedCount, r.correctedCount);
-				// Seeded and learned rules carry a starter prior inside acceptedCount
-				// so they file from day one. Confidence uses the raw counts; the
-				// numbers *shown* are only what a human actually did — presenting
-				// the prior as "6 kept" would claim a history nobody has.
+				// Seeded/learned rules carry a starter prior inside acceptedCount so they
+				// file from day one, but the numbers *shown* are only what a human did.
 				const priorShare = r.provenance === 'manual' ? 0 : DEFAULT_RULE_PRIOR;
 				return {
 					id: r.id,
@@ -155,9 +146,8 @@ async function conditionsFromForm(form: FormData): Promise<Condition[] | null> {
 		const value = values[i]?.trim();
 		if (!value) continue;
 		if (field === 'counterparty' || field === 'description') {
-			// Store the folded form, the same one the matcher compares against.
-			// `.toLowerCase()` alone left accents and punctuation in a needle that
-			// is tested against diacritic-stripped, punctuation-collapsed text.
+			// Store the folded form: the matcher compares against diacritic-stripped,
+			// punctuation-collapsed text, so `.toLowerCase()` alone would not match.
 			out.push({ field, op: 'contains', value: normalise(value) });
 		} else if (field === 'counterAccount' || field === 'variableSymbol') {
 			out.push({ field, op: 'equals', value: value.replace(/\s/g, '') });
@@ -168,14 +158,9 @@ async function conditionsFromForm(form: FormData): Promise<Condition[] | null> {
 
 export const actions: Actions = {
 	/**
-	 * Move the confidence floor.
-	 *
-	 * The threshold has been a stored setting since rules existed, with nothing
-	 * in the product able to change it — so every household ran on the default
-	 * and the number printed at the top of this screen was a fact nobody could
-	 * act on. Clamped rather than validated into an error: a slider cannot
-	 * produce anything else, and a hand-posted 900 should land at the ceiling
-	 * rather than fail.
+	 * Move the confidence floor. Clamped rather than validated into an error: a
+	 * slider cannot produce out-of-range values, and a hand-posted 900 should
+	 * land at the ceiling rather than fail.
 	 */
 	threshold: async ({ request }) => {
 		const form = await request.formData();

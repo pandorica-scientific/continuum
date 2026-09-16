@@ -40,15 +40,8 @@ export const load: PageServerLoad = async ({ url }) => {
 		db.select({ id: account.id, name: account.name }).from(account).orderBy(account.name)
 	]);
 
-	// Every contact's own card, not just the one whose panel happens to be
-	// open: the list is already loaded whole (there is no pagination here).
-	// `documentsAbout` stays one query per contact (it is narrow), run
-	// concurrently for every contact up front. `candidateDocumentsFor` is the
-	// other half: ONE query for the whole visible library plus ONE for
-	// `document_link` across every contact, not the whole library fetched
-	// again for each contact's picker — sixty contacts times an
-	// eight-hundred-document archive is not a picker that renders for one
-	// contact at a time.
+	// `documentsAbout` is one query per contact, run concurrently. `candidateDocumentsFor`
+	// is one query for the whole library plus one for links, not refetched per contact's picker.
 	const contactIds = contacts.map((c) => c.id);
 	const [documentsByContactId, candidatesByContactId] = await Promise.all([
 		Promise.all(contactIds.map(async (id) => [id, await documentsAbout(id)] as const)).then(
@@ -70,7 +63,6 @@ export const load: PageServerLoad = async ({ url }) => {
 	};
 };
 
-/** The submitted text fields, as ContactInput minus the photo. */
 function readFields(form: FormData): Omit<ContactInput, 'photo'> {
 	const text = (key: string) => {
 		const value = form.get(key);
@@ -128,13 +120,8 @@ export const actions: Actions = {
 			typeof form.get('id') === 'string' && form.get('id') ? asRowId(form.get('id')) : null;
 		const fields = readFields(form);
 
-		// Echo the submitted values back on every failure path. A rejected form
-		// that clears itself makes the reader retype work they already did.
-		//
-		// WHICH contact they belong to travels with them. Without it the page hands
-		// one rejected submission's values to every editor on the screen, so the
-		// next contact opened is pre-filled with somebody else's phone and email —
-		// and saving that writes them onto the wrong row.
+		// Values (and which contact they belong to) are echoed back on failure, so a
+		// rejected form neither loses what was typed nor pre-fills the wrong editor.
 		const photo = await readPhoto(form);
 		if (!photo.ok) return fail(400, { values: fields, valuesFor: id, message: photo.message });
 
@@ -143,11 +130,8 @@ export const actions: Actions = {
 		const result = id ? await updateContact(id, input) : await createContact(contactId, input);
 
 		if (!result.ok) {
-			// The upload landed on the volume before the row was validated, and no
-			// row will now point at it — nothing else tracks avatars, so a rejected
-			// save left a file unreachable and permanent. Only a file THIS
-			// submission wrote is removed; one carried through unchanged still
-			// belongs to the stored row.
+			// Removes only a file this submission wrote — an unvalidated row would
+			// leave it permanently unreachable otherwise. A carried-through photo stays.
 			if (photo.photo && photo.photo !== form.get('existingPhoto')) {
 				await removeUpload(photo.photo);
 			}
@@ -169,9 +153,8 @@ export const actions: Actions = {
 	},
 
 	/**
-	 * File an existing document against a contact — the "Attach" picker on the
-	 * `DocumentsCard` inside its edit panel. Every contact's panel posts here
-	 * with its own `targetId`, so one action serves all of them.
+	 * File an existing document against a contact. Every contact's panel posts
+	 * here with its own `targetId`, so one action serves all of them.
 	 */
 	attachDocument: async ({ request }) => {
 		const form = await request.formData();

@@ -1,8 +1,7 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
-	// What is still owed, loan by loan, with the fixation pill the Loans screen
-	// draws — from the same function, so the two cannot disagree about when a
-	// rate stops being settled.
+	// The fixation pill comes from the same function the Loans screen uses, so
+	// the two cannot disagree about when a rate stops being settled.
 	import Pill from '$lib/components/Pill.svelte';
 	import type { Hue } from '$lib/ui/hue';
 
@@ -36,8 +35,6 @@
 	{:else}
 		<span class="quiet">Nothing is owed.</span>
 	{/each}
-	<!-- A total of nothing under a line saying nothing is owed is the same fact
-	     twice, and the rule above it draws a section with no rows in it. -->
 	{#if data.rows.length}
 		<div class="total">
 			<span class="name">Total owed</span>

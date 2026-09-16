@@ -6,12 +6,6 @@
  * CHECK constraint that enforces it in PostgreSQL, and to build whatever the
  * screens offer. They cannot drift, because there is one of them.
  *
- * They drifted before this existed. `REVIEW_STATES` in `transactions/filter.ts`
- * described itself as "the review states the schema allows" and listed three of
- * the four — so a transaction in the `filed` state, which `ingest.ts` treats as
- * terminal, could not be selected by any filter on the register. It was not
- * caught, because nothing compared the two.
- *
  * PostgreSQL `ENUM` types are deliberately NOT used. A value cannot be dropped
  * or reordered without recreating the type and every column that depends on it,
  * which is hostile to a schema meant to grow by addition. A CHECK is one DROP
@@ -70,16 +64,12 @@ export const ENTITY_KINDS = [
 	'organisation',
 	// The three Life records a household files paper against or attaches a
 	// contact to: the booking confirmations and tickets for a trip, the receipt
-	// for a bottle, the page a recipe was torn out of. They are here rather than
-	// reached through a column of their own for exactly the reason this table
-	// exists — a direct `document_id` on one table answers "this flight's
-	// confirmation" and nothing else, so the Documents screen could not say what
-	// a PDF was filed against, and tagging or naming a contact would each have
-	// wanted another table.
+	// for a bottle, the page a recipe was torn out of. A direct `document_id` on
+	// each table would answer only one question ("this flight's confirmation")
+	// and give tagging and contacts each their own table too.
 	//
-	// `trip_idea` is deliberately absent. An idea is removed with an undo bar and
-	// is not something anybody files a receipt against; a trigger on a table that
-	// never needed one is a write on every insert forever.
+	// `trip_idea` is deliberately absent: an idea is removed with an undo bar and
+	// is not something anybody files a receipt against.
 	'trip',
 	'bottle',
 	'recipe'
@@ -166,7 +156,7 @@ export const ENUMS = {
 	'loan_event.kind': ['payment', 'extra_payment', 'refix', 'fee', 'balance'],
 
 	// Four, not three. `filed` is written by the demo seed and treated as
-	// terminal beside `confirmed` by ingest — see the note above.
+	// terminal beside `confirmed` by ingest.
 	'transaction.review_state': ['auto', 'needs_review', 'confirmed', 'filed'],
 	'transfer_pair.state': ['auto', 'proposed', 'confirmed', 'rejected'],
 
@@ -178,8 +168,7 @@ export const ENUMS = {
 	'import_profile.source': ['delimited', 'xlsx'],
 	'import_profile.origin': ['builtin', 'user', 'imported'],
 
-	// 'seeded' existed while a fresh install shipped 42 starter rules; it was
-	// retired before the v0.3.10 squash and nothing writes it now.
+	// 'seeded' is no longer written and is not a valid value here.
 	'rule.provenance': ['learned', 'manual'],
 
 	// What KIND of paper this is — orthogonal to where it is filed. Behaviour
@@ -197,8 +186,6 @@ export const ENUMS = {
 		'payslip',
 		'bank_statement',
 		// A broker's yearly report is the paper the investments tab is built on.
-		// Filed as 'other' it was the one financial document the type filter could
-		// not name.
 		'broker_report',
 		'insurance_policy',
 		'claim',

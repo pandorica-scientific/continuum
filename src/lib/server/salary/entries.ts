@@ -108,9 +108,8 @@ export async function recordSalary(
 		/**
 		 * Which statement of this month this recording is about.
 		 *
-		 * A month held exactly one row until v0.5.5, so a second employer's slip
-		 * simply overwrote the first and a month worked twice reported half its
-		 * pay. The evidence is what tells two statements apart:
+		 * A month can hold more than one row — two employers, two slips — so the
+		 * evidence is what tells two statements apart:
 		 *
 		 * - a payslip finds ITS OWN document's row, so re-uploading the same slip
 		 *   still corrects rather than duplicates;
@@ -323,10 +322,10 @@ export async function salaryEntryPeople(
 /**
  * The stored document one statement was read from.
  *
- * By document id, which is the only unambiguous key since v0.5.5: the old
- * by-month lookup took the first payslip of the month with `.limit(1)`, and a
- * month may now hold two. The id always comes from `salaryEntry.documentId`, so
- * it is already the payslip of that statement and needs no shelf guard.
+ * By document id, the only unambiguous key: a by-month lookup would take the
+ * first payslip of the month, and a month may hold two. The id always comes
+ * from `salaryEntry.documentId`, so it is already the payslip of that
+ * statement and needs no shelf guard.
  */
 export async function slipDocument(
 	documentId: string,
@@ -377,8 +376,8 @@ const monthOf = (periodOn: string | null) => (periodOn ? periodOn.slice(0, 7) : 
 /**
  * The payslip already on this person's shelf that IS this file.
  *
- * A month has held more than one payslip since v0.5.5 — two jobs are two slips
- * — and an upload only ever adds. That is right for two employers and wrong for
+ * A month can hold more than one payslip — two jobs are two slips — and an
+ * upload only ever adds. That is right for two employers and wrong for
  * the same slip dropped in twice: a second upload mints a second document id,
  * which is a second row by definition, and the month then reports double pay.
  *
@@ -505,10 +504,9 @@ export async function filePayslipDocument(
 		// The two are orthogonal on purpose — a household may move this document
 		// to a shelf of its own and the month still counts.
 		//
-		// Routed through the shared aggregate rather than a hand-written insert:
-		// the name format, the shelf, `ext`, the first-of-month `periodOn` and
-		// `content_hash` used to be written by hand in three places and had
-		// already drifted. This is now the one place a payslip document is built.
+		// Routed through the shared aggregate rather than a hand-written insert,
+		// so the name format, the shelf, `ext`, the first-of-month `periodOn`
+		// and `content_hash` stay in one place instead of drifting across it.
 		await insertDocumentAggregate(
 			{
 				id: documentId,

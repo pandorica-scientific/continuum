@@ -49,12 +49,8 @@ const flow: FlowGraphInput = {
 	]
 };
 
-/**
- * The same household in a month it could not pay for out of what it earned.
- *
- * Income 471 000 against 496 000 of stages: the 25 000 difference came from
- * money it already had.
- */
+// Income 471 000 against 496 000 of stages; the 25 000 difference came from
+// money already held.
 const shortfall: FlowGraphInput = {
 	...flow,
 	stages: [
@@ -71,12 +67,8 @@ const shortfall: FlowGraphInput = {
 	breakdown: []
 };
 
-/**
- * A household that keeps two places to put money aside.
- *
- * Income 471 000, one expense stage of 356 000 and two savings stages worth
- * 55 000 between them, so 60 000 is left as cash.
- */
+// Income 471 000, one expense stage of 356 000, two savings stages worth
+// 55 000 between them, leaving 60 000 as cash.
 const twoSavings: FlowGraphInput = {
 	...flow,
 	stages: [
@@ -97,13 +89,8 @@ const twoSavings: FlowGraphInput = {
 	]
 };
 
-/**
- * A period that took money back OUT of savings.
- *
- * The loader hands the drawdown over as a source rather than as a stage worth
- * minus something, so the adapter has nothing special to do with it — except
- * leave it the colour it arrived in, because it is not income.
- */
+// A drawdown arrives as a source, not a negative stage; the adapter only
+// keeps its colour, since it is not income.
 const drawdown: FlowGraphInput = {
 	...flow,
 	sources: [
@@ -117,15 +104,8 @@ const drawdown: FlowGraphInput = {
 	breakdown: []
 };
 
-/**
- * The same household with the links the loader hangs on its figures.
- *
- * The adapter builds none of them and must not: only the loader knows which
- * period the figures came from. What it has to do is carry every one through to
- * the node a reader can actually click — and leave the nodes it invents for
- * itself with nowhere to go, because "kept in cash" and "from reserves" are
- * residuals rather than anything the register holds rows for.
- */
+// The adapter only carries links through from the loader to clickable nodes;
+// residual nodes it invents itself (kept/reserves) get none.
 const linked: FlowGraphInput = {
 	...flow,
 	incomeHref: '/transactions?dir=in&from=2026-03-01&to=2026-03-31&month=2026-03',
@@ -187,9 +167,7 @@ describe('flowGraph', () => {
 		expect(labels).not.toContain('Transport');
 	});
 
-	// The defect this replaced: the remainder node was keyed `kept` and coloured
-	// as savings, while the savings leaves were keyed by the savings group. They
-	// hung off a node that did not exist, so they never drew at all.
+	// Guards against savings leaves being keyed to a group node that doesn't exist.
 	it('hangs the savings leaves off the savings stage', () => {
 		const graph = flowGraph(flow);
 		const leaves = linksFrom(graph, 'grp:savings');
@@ -251,9 +229,8 @@ describe('flowGraph', () => {
 			expect(sum(column(graph, 2))).toBe(496_000);
 		});
 
-		// The trunk holds income plus the drawdown, so a fixture reading
-		// "Income 496 000" under a tile reading "In 471 000" was the chart
-		// contradicting the totals row above it.
+		// Guards against the trunk label reading "Income" while its value includes
+		// the drawdown, contradicting the totals row above it.
 		it('says on the trunk that it is no longer only income', () => {
 			const trunk = column(flowGraph(shortfall), 1)[0];
 			expect(trunk).toMatchObject({
@@ -326,9 +303,7 @@ describe('flowGraph', () => {
 		});
 	});
 
-	// Float dust is not a shortfall. A break-even month accumulates rounding
-	// error through a dozen conversions, and `tone.ts` states the policy: at
-	// exactly nothing kept there is nothing to report either way.
+	// Rounding-error dust is not a shortfall; near-zero kept must report nothing.
 	describe('a residual of dust', () => {
 		it('draws neither cash kept nor reserves', () => {
 			for (const kept of [0.004, -0.004]) {
@@ -339,10 +314,7 @@ describe('flowGraph', () => {
 		});
 	});
 
-	// The chart is the household's index into its own ledger: every band on it
-	// stands for rows the register can list. The adapter is the only thing
-	// between the loader that knows the period and the renderer that draws the
-	// anchor, so a link dropped here is a band that reads as clickable and is not.
+	// A link dropped here is a band that reads as clickable but is not.
 	describe('links through to the register', () => {
 		const nodeFor = (graph: ReturnType<typeof flowGraph>, key: string) =>
 			graph.nodes.find((n) => n.key === key);

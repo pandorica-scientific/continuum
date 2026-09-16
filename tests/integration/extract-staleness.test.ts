@@ -25,12 +25,9 @@ vi.mock('$env/dynamic/private', () => ({
 }));
 
 /**
- * A file replaced while it was being read.
- *
- * Both ends of the race are closed on purpose. Cancelling the queued job cannot
- * reach a run already in flight; the commit guard alone would let a pointless
- * run hold the only CPU slot to the end. Together, the document ends up
- * searchable by what it says NOW and never by what it used to say.
+ * A file replaced while it was being read. Cancelling the queued job cannot
+ * reach a run already in flight, so a commit guard is also needed to keep the
+ * document searchable by what it says NOW, never by what it used to say.
  */
 let harness: Harness;
 let testDb: TestDb;
@@ -106,19 +103,9 @@ const fakeOcr = {
 describe('a file replaced underneath an extraction', () => {
 	it("yields B's text, never A's", async () => {
 		const id = await seedDocument(A);
-		// The run reads A's bytes, and the replacement lands before it commits —
-		// which is the window cancelling a queued job cannot cover.
-		//
-		// The staleness check itself is state-based, not time-based (it compares
-		// storedName/contentHash inside a transaction, not a clock reading), so
-		// there is no tolerance to widen here. What IS timing-dependent is this
-		// TEST: `reading` is started but not yet awaited, and whether its OCR
-		// pipeline reaches the staleness check before or after
-		// `replaceDocumentFile` commits depends on which finishes first — usually
-		// the replace, since it does far less work, but under full-suite CPU
-		// contention that is no longer guaranteed. Seen flaking once under load;
-		// left as is rather than adding a synchronisation point a real caller
-		// does not have, since that would test the harness more than the guard.
+		// The replacement must land before `reading` commits, which is the window
+		// cancelling a queued job cannot cover. No synchronisation point is added
+		// here, since a real caller has none either.
 		const reading = extractDocumentText(id, testDb, { provider: fakeOcr });
 		const replacement = await store(B);
 		await replaceDocumentFile(id, { ...replacement, ext: 'pdf' }, testDb);

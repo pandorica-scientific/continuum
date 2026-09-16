@@ -29,18 +29,12 @@ async function enrollableePerson(token: string): Promise<{ id: string; name: str
 		.from(person)
 		.where(eq(person.id, personId));
 	const row = rows[0];
-	// Deactivation revokes outstanding links, so this is a backstop for one
-	// minted and deactivated in the same breath. Without it the visitor sets a
-	// password, is handed a session, and is bounced straight back out at
-	// /overview by validateSession with nothing explaining why.
+	// Backstop for a link minted and deactivated in the same breath — without this
+	// the visitor sets a password and is bounced back out with nothing explaining why.
 	if (!row || row.deactivatedAt) return null;
-	// A link must never be spendable against an account that already has a
-	// password, because spending it overwrites that password and signs the
-	// visitor in. reissueEnrollment refuses to mint one for somebody enrolled,
-	// but it reads and then writes in two round trips: a person who enrols inside
-	// that window would be left with a fresh, unused link pointing at their live
-	// account. Checking again here means a link that should never have existed is
-	// refused rather than honoured, whatever the mint side did.
+	// A link must never be spendable against an account that already has a password
+	// (spending it would overwrite that password). reissueEnrollment guards this on
+	// mint, but its check-then-write isn't atomic, so it's rechecked here too.
 	if (row.passwordHash !== null) return null;
 	return { id: row.id, name: row.name };
 }

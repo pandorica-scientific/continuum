@@ -115,12 +115,9 @@ describe('backupDirProblem', () => {
 
 describe('running a backup', () => {
 	it('joins the run already under way instead of starting a second', async () => {
-		// Two backups must never overlap. Both dump the whole database to the same
-		// temporary file and rename it into place, so a second run started while
-		// the first is mid-write races it for that name — and the loser leaves a
-		// truncated file as the only backup. This was reachable without anyone
-		// doing anything unusual: the hourly scheduler and someone pressing the
-		// button are independent of each other.
+		// Two backups must never overlap: both dump to the same temp file and
+		// rename it into place, so a concurrent run would leave a truncated file
+		// as the only backup.
 		expect(backupInProgress()).toBe(false);
 
 		const first = runBackup();

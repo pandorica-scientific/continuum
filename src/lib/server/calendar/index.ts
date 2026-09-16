@@ -94,11 +94,9 @@ interface LedgerEvent {
 /**
  * The UID this event carries in the published feed.
  *
- * Derived from the event's key rather than its index in the generated array.
- * The old form, `${day}-${i}@continuum-ledger`, changed for every later event on
- * a day as soon as one was inserted before it, so subscribers saw a delete and a
- * create. Harmless churn in a read-only feed; under two-way sync the remote side
- * keys on this value, and a shifting UID means duplicates and lost edits.
+ * Derived from the event's key rather than its index in the generated array —
+ * an index-based UID shifts whenever an earlier event is inserted, which under
+ * two-way sync means duplicates and lost edits.
  */
 export function icsUid(key: string): string {
 	// The UID occupies its own folded line; a CR or LF inside it would terminate
@@ -144,15 +142,13 @@ export async function generateEvents(
 		handle.select().from(loanFixationPeriod),
 		handle.select().from(tenancy),
 		handle.select().from(property),
-		// Archive scope applies here and nothing else does: a generated event
-		// syncs to iCloud and to a published feed, where there is no session to
-		// filter by anyway. A document whose only subject is archived (a sold
-		// car's insurance) is stale, and nobody's calendar should carry a
-		// renewal for something that is no longer theirs.
+		// Archive scope applies here and nothing else does: a generated event syncs
+		// to iCloud and to a published feed with no session to filter by, so an
+		// archived document's events must not surface either.
 		handle.select().from(document).where(archiveScopePredicate(false)),
-		// D7: which record, if any, a document is filed against — so a lease's
-		// contract or a re-fix letter dated the same as its tenancy or loan's own
-		// deadline (below) can be told apart from one that is not.
+		// Which record, if any, a document is filed against — so a lease's contract
+		// or a re-fix letter dated the same as its tenancy or loan's own deadline
+		// (below) can be told apart from one that is not.
 		handle
 			.select({
 				documentId: documentLink.documentId,
@@ -167,12 +163,9 @@ export async function generateEvents(
 	const events: LedgerEvent[] = [];
 	const inRange = (d: string) => d >= startIso && d <= endIso;
 
-	// Which of the two record-side events this generation will actually produce,
-	// for D7 below. No horizon on either: a record's event and its document's
-	// carry the same date, so the window this run was asked for either holds
-	// both or neither, and `inRange` has already answered that. The loan's own
-	// remaining condition — a paid-off loan emits no fixation event — is
-	// answered by `loadRecordDates`, which leaves such a loan out of the map.
+	// A record's event and its document's carry the same date, so `inRange` above
+	// already decides whether both or neither are in the window. A paid-off loan
+	// emits no fixation event because `loadRecordDates` leaves it out of the map.
 	const ownersOnTheCalendar = {
 		tenancy: { emits: rules.propertyDates, remindsThrough: null },
 		loan: { emits: rules.expiry, remindsThrough: null }
@@ -269,17 +262,11 @@ export async function generateEvents(
 
 	if (rules.expiry) {
 		for (const d of docs) {
-			// D7: the record owns the deadline. A lease's contract dated the same
-			// as its tenancy's `endsOn` (below), or a re-fix letter dated the same
-			// as its loan's current fixation `endsOn`, is the same date the
-			// `propertyDates` and this same `expiry` rule already emit — skip the
-			// document's copy so it does not sync as a second event for one date.
-			//
-			// Only where the rule behind that other event is actually on. A
-			// household that switched property dates off emits no lease event, so
-			// suppressing the lease's paper too would take the date out of the
-			// calendar altogether — a rule they turned off would be silently
-			// removing events from a rule they left on.
+			// The record owns the deadline: a lease's contract or re-fix letter dated
+			// the same as its tenancy/loan deadline duplicates an event
+			// `propertyDates`/`expiry` already emit, so skip the document's copy —
+			// but only when that other rule is actually on, or the date disappears
+			// entirely instead of just losing its duplicate.
 			if (
 				d.expiresOn &&
 				inRange(d.expiresOn) &&
@@ -353,12 +340,8 @@ export async function icsToken(): Promise<string> {
 /**
  * The published feed: a year back, a year ahead, all-day events.
  *
- * Serialised by the SAME code that writes what the sync engine pushes, rather
- * than by a second hand-rolled builder living here. Each generated event is
- * described in exactly the shape the engine's localItems gives it — all-day,
- * anchored to UTC midnight through end of day — so a household that subscribes
- * to this feed and a household that connects a calendar account see the same
- * events, at the same times, escaped and folded the same way.
+ * Serialised by the same code the sync engine uses to push events, so
+ * subscribers via feed and via connected account see identical output.
  */
 export async function buildIcs(): Promise<string> {
 	const start = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10);

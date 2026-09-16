@@ -5,24 +5,13 @@
 	import type { IconName } from '$lib/icons';
 
 	/**
-	 * The head of a section: a mark, a name, and a quiet line beside it.
+	 * The head of a section: an icon tile, a name, and a quiet line beside it.
 	 *
-	 * Named `Eyebrow` for what it used to be — tracked-out capitals above a
-	 * card, on every card, on every screen. v0.8.1 keeps the component and its
-	 * call sites and changes what it draws: sentence case at panel-title
-	 * weight, behind a 26px tile carrying a stroke icon in the section's hue.
-	 * Uppercase survives only where it is genuinely a label rather than a
-	 * title — a table column head, the hero's "Net worth" — which is what
-	 * `.eyebrow` in app.css is still for.
+	 * An icon, never an emoji — emoji survive only where the household chose
+	 * them (a shelf, an account); a code-picked emoji renders inconsistently
+	 * across platforms and ignores `color`. `design/no-emoji-eyebrow` enforces it.
 	 *
-	 * An icon, never an emoji: the handoff's rule is that emoji survive only
-	 * where the household chose them — a shelf, an account — and a 📊 the code
-	 * picked for a chart is drawn by the platform, differs per device and
-	 * ignores `color`. `design/no-emoji-eyebrow` holds the line.
-	 *
-	 * A tile rather than a bare glyph so the mark has the same footprint on
-	 * every section, including the ones with no icon at all: without it, the
-	 * titles on one screen sit at two different left edges.
+	 * Always a tile, even with no icon, so section titles share one left edge.
 	 */
 	let {
 		icon,

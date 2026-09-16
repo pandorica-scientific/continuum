@@ -2,13 +2,12 @@
 /**
  * One close a day for every ticker the household owns.
  *
- * Two owners of tickers: the broker holdings table (replaced by each report)
- * and equity grants (which outlive reports). The set is read fresh on every
- * run so a new grant is priced on the next pass without registering anywhere.
+ * Two owners of tickers: broker holdings (replaced by each report) and equity
+ * grants (which outlive reports). Read fresh each run so a new grant is
+ * priced without registering anywhere.
  *
- * Failures are per ticker. A feed that cannot price one symbol must not stop
- * the other nine, and a feed that is down must not stop the app: the screens
- * say how old the price they show is.
+ * Failures are per ticker — one bad symbol or a down feed must not stop the
+ * others; screens show how old the price they display is.
  */
 import { and, desc, eq, gte, inArray, isNull, lte } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
@@ -87,8 +86,7 @@ export async function refreshPrices(
 				if (!got) continue;
 				const usable = inMajorCurrency(inOwnerCurrency(got, currency));
 				if (!isCurrencyCode(usable.currency)) {
-					// A currency the rate table cannot convert is no close at all;
-					// the next feed may quote the same market in one it can.
+					// Unconvertible currency is no close at all; try the next feed.
 					console.warn(`prices: ${provider.id} quoted ${ticker} in ${usable.currency}`);
 					continue;
 				}

@@ -6,12 +6,9 @@ import { makePerson, makeProperty } from './fixtures';
 import { person } from '$lib/server/db/schema';
 import { listProperties } from '$lib/server/property/queries';
 
-// Rows created in one statement share a created_at to the microsecond, and
-// `ORDER BY created_at` alone is then not a total order: PostgreSQL may return
-// tied rows in any order, and an UPDATE moves a row in the heap, which changes
-// it. Every screen that picks by position — the selected property, "person one"
-// and "person two" in the retirement projection — silently changed subject
-// after any edit. Saving a floor plan swapped the flat under the user.
+// Rows sharing a created_at tie under `ORDER BY created_at`, and an UPDATE
+// can reorder tied rows in the heap — silently swapping the selected
+// property or "person one"/"person two" after an edit.
 
 let harness: Harness;
 let db: TestDb;

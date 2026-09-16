@@ -1,20 +1,11 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	//
-	// The archive's left rail: the shelves, the subjects, and the five dialogs
-	// that edit them.
+	// The archive's left rail: the shelves and the dialogs that edit them.
 	//
-	// Its own component because it is its own thing, and because the documents
-	// screen was three thousand lines with a style block two and a half times the
-	// size of any other in the repository. Nothing here is shared with the list or
-	// the inspector: every class it draws with is a `rail-`, `subject-` or
-	// `shelf-dialog-` one, which is what made it the piece that could leave
-	// without duplicating a single style.
-	//
-	// It owns its edit-mode state rather than taking it as props. Edit mode is not
-	// a fact about the archive — it is a fact about this control, it does not
-	// survive a navigation, and hoisting it would have put ten `$state` lines and
-	// two `$effect`s on the page for the rail's benefit alone.
+	// Owns its own edit-mode state rather than taking it as props: edit mode is
+	// a fact about this control, not about the archive, and does not survive a
+	// navigation.
 	import { enhance } from '$app/forms';
 	import { page } from '$app/state';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
@@ -70,13 +61,7 @@
 		count: number;
 	}
 
-	/**
-	 * Exactly what the rail reads, rather than the page's whole payload.
-	 *
-	 * Narrow on purpose: a component in `$lib` that takes `PageData` is coupled
-	 * to every field that screen happens to load, and the next field added to the
-	 * page silently becomes part of this component's contract.
-	 */
+	/** Exactly what the rail reads, rather than the page's whole payload. */
 	interface RailData {
 		shelves: RailShelf[];
 		subjects: RailSubject[];
@@ -98,8 +83,7 @@
 	} = $props();
 
 	/** A row's address: the current query with shelf and view changed and the
-	 *  open document dropped, so a search, a filter or the archived toggle
-	 *  survive a change of shelf — what the page's `navigate()` preserves too. */
+	 *  open document dropped, so other filters survive a change of shelf. */
 	function hrefFor(next: Record<string, string | null>): string {
 		const params = new SvelteURLSearchParams(page.url.searchParams);
 		params.delete('doc');
@@ -152,22 +136,6 @@
 		addingShelf = false;
 	});
 
-	// The SUBJECTS section keeps its own pencil rather than sharing the shelves'.
-	// One toggle driving two heads would mean pressing the pencil beside SHELVES
-	// put drag handles on subjects that cannot be dragged, and vice versa; what
-	// is shared is the mechanism, not the state.
-
-	/**
-	 * Archived subjects revealed for editing, which is not the same question as
-	 * the list's archive scope.
-	 *
-	 * This used to write `?archived=1` — the parameter that also unhides archived
-	 * paper in the centre column — so bringing a sold car's row back to rename it
-	 * changed what the whole screen was showing, and pressing Done did not undo
-	 * it because a URL is not edit-mode state. `Include archived subjects` above
-	 * the list is still the control for the list.
-	 */
-	// The third section's own pencil, for the same reason SUBJECTS keeps one
 	function moveOver(id: string) {
 		if (!dragging || dragging === id) return;
 		const ids = railShelves.map((s) => s.id);
@@ -183,14 +151,11 @@
 	let removingType = $state<string | null>(null);
 </script>
 
-<!-- Inbox, the shelves, Everything. Nothing else since v0.8.0: a subject and
-     an organisation are CARDS on their own shelf, which is where they are made,
-     renamed and archived. The rail listing them too was the same records in two
-     places, and the second place had no room to say anything about them. -->
+<!-- Inbox, the shelves, Everything. A subject and an organisation are CARDS on
+     their own shelf, made, renamed and archived there rather than in the rail. -->
 <nav class="rail" aria-label="Shelves">
 	{#each data.shelves.filter((s) => s.key === 'inbox') as s (s.key)}
-		<!-- A link, not a button: a shelf is a place with an address, so it can
-		     be opened in a new tab, bookmarked, and reached with the back button. -->
+		<!-- A link, not a button: a shelf is a place with an address. -->
 		<a
 			class="rail-item inbox"
 			class:active={data.view !== 'tags' && data.shelf === s.key}
@@ -209,7 +174,7 @@
 	<div class="rail-divider"></div>
 
 	<!-- The pencil turns the rail into its own settings: drag to reorder,
-		     click a name to rename, ⋯ to remove. Done puts it back. -->
+	     click a name to rename, ⋯ to remove. Done puts it back. -->
 	<div class="rail-head">
 		<span class="eyebrow">Shelves</span>
 		<button
@@ -285,9 +250,7 @@
 
 	<div class="rail-divider"></div>
 
-	<!-- Everything is the archive as one list, and it is the last thing rather
-	     than the first: a shelf answers a question, and "all of it" is what you
-	     ask for when none of the questions is yours. -->
+	<!-- "All of it" is last, not first: a shelf answers a question. -->
 	{#each data.shelves.filter((s) => s.key === 'all') as s (s.key)}
 		<a
 			class="rail-item"
@@ -324,9 +287,8 @@
 			</div>
 			<EmojiPicker name="emoji" bind:value={newEmoji} inline />
 
-			<!-- A shelf is one question, one unit, one template. Asked here because
-			     all three are what a shelf IS: before v0.8.0 a shelf somebody made
-			     got the generic list and no question, which made it a folder. -->
+			<!-- A shelf is one question, one unit, one template — all three define
+			     what a shelf IS, not optional extras. -->
 			<label class="shelf-field">
 				<span class="eyebrow">How it draws</span>
 				<select name="template" bind:value={newTemplate}>
@@ -389,11 +351,8 @@
 							<span>{t.label}</span>
 						</label>
 						{#if !t.builtin}
-							<!-- Only on a type this household added, and only the ✕: the
-							     seventeen the app ships are read by name by the salary
-							     tracker, the importer and the wallet, so there is nothing
-							     here to press for them. A type that is on a document is
-							     refused with the reason rather than hidden. -->
+							<!-- Only on a type this household added: the seventeen the app
+							     ships are read by name elsewhere and cannot be removed. -->
 							<button
 								type="button"
 								class="chip-x"
@@ -433,10 +392,8 @@
 			</form>
 		{/if}
 
-		<!-- Its own form, because it posts to a different action and must not
-		     carry the checkboxes above with it. A type added here is added to the
-		     household, not to this shelf: tick it afterwards to put it on the
-		     shelf, which is the same two steps a new tag takes. -->
+		<!-- Its own form: a type added here is added to the household, not to
+		     this shelf. Tick it above to put it on the shelf. -->
 		<form
 			class="new-type"
 			method="POST"
@@ -489,7 +446,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-3);
-		/* A1: the shelf list uses the viewport it has rather than a fixed height
+		/* The shelf list uses the viewport it has rather than a fixed height
 		   that scrolls while the page still has room. */
 		max-height: calc(100vh - 120px);
 		min-height: 0;
@@ -500,10 +457,8 @@
 		gap: var(--space-3);
 		min-height: 0;
 		overflow-y: auto;
-		/* Scrolling stops at this panel's own end. Without it the wheel is handed
-		   on to whatever scrolls behind, so reaching the bottom here quietly
-		   starts scrolling the page — and scrolling back moves the wrong one
-		   first. See docs/ui-guidelines.md. */
+		/* Scrolling stops at this panel's own end instead of bleeding into the
+		   page behind it. */
 		overscroll-behavior: contain;
 	}
 	.rail-item {
@@ -538,8 +493,6 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	/* The shelf's own emoji, at the row level where emoji are allowed to live.
-	   The design pass resolved this off; the household asked for it on. */
 	.rail-emoji {
 		display: inline-block;
 		width: 22px;
@@ -680,10 +633,8 @@
 		gap: var(--space-4);
 		max-height: 40vh;
 		overflow-y: auto;
-		/* Scrolling stops at this panel's own end. Without it the wheel is handed
-		   on to whatever scrolls behind, so reaching the bottom here quietly
-		   starts scrolling the page — and scrolling back moves the wrong one
-		   first. See docs/ui-guidelines.md. */
+		/* Scrolling stops at this panel's own end instead of bleeding into the
+		   page behind it. */
 		overscroll-behavior: contain;
 	}
 	/* The chip and its ✕ travel together, so the ✕ never wraps onto its own

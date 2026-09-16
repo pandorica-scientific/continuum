@@ -1,14 +1,5 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
-	/**
-	 * One recipe, laid out the way the handoff draws it.
-	 *
-	 * The photograph takes the left half at 16:9 and the facts the right, with the
-	 * servings stepper as one compact control rather than a row of labelled
-	 * fields. Ingredients and steps are two cards below, side by side on a desktop
-	 * and stacked on a phone — which is how a recipe is actually read: the whole
-	 * shopping list, then the whole method.
-	 */
 	import { enhance } from '$app/forms';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Icon from '$lib/components/Icon.svelte';
@@ -29,12 +20,9 @@
 	const recipe = $derived(data.recipe);
 
 	/**
-	 * What the household is cooking for right now.
-	 *
-	 * Held apart from `recipe.servings`, which is what the quantities below are
-	 * WRITTEN for and never changes here. Every quantity is computed from the
-	 * stored one against this — never from what is currently on screen, or
-	 * stepping up and back would not return to where it started.
+	 * What the household is cooking for right now — held apart from
+	 * `recipe.servings` (what quantities are written for) so scaling always
+	 * computes from the stored value, not the current display.
 	 */
 	let servings = $state(0);
 	let seeded = false;
@@ -66,8 +54,6 @@
 		<button class="btn" type="button" onclick={() => (editing = true)}>
 			<Icon name="pencil" size={15} /> Edit
 		</button>
-		<!-- Top right, beside Edit: the two things done TO a recipe sit together,
-		     and the heavier of them is not buried under the steps. -->
 		<form
 			method="POST"
 			action="?/delete"
@@ -106,8 +92,6 @@
 				</div>
 			</form>
 		{:else}
-			<!-- The whole empty slot is the target, not a small link under the
-			     drawing: it is the one thing this half of the screen is for. -->
 			<button class="slot" type="button" onclick={() => (changingPhoto = true)}>
 				<span class="art">
 					{#if recipe.art}
@@ -129,8 +113,6 @@
 	<div class="facts card">
 		<TagChips tags={recipe.tags} limit={99} />
 
-		<!-- One control, not a row of labelled fields: "− 4 serves +", with the
-		     time beside it, is what a person glances at before starting. -->
 		<div class="line">
 			<div class="stepper">
 				<button
@@ -190,9 +172,6 @@
 		<ul class="ingredients">
 			{#each recipe.ingredients as line (line.id)}
 				<li>
-					<!-- Quantity and unit as ONE measure, tight together: a person
-					     reads "500 g", not a number in one column and a unit in the
-					     next. The names then all start at the same edge. -->
 					<span class="measure">
 						<span class="mono">{scaleQuantity(line.quantity, recipe.servings, current)}</span>
 						{#if line.unit}<span class="unit">{line.unit}</span>{/if}
@@ -242,16 +221,13 @@
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 		gap: var(--card-gap, 16px);
-		/* Not stretched: the facts card is as tall as what it holds, rather than
-		   growing a lake of empty card to match the photograph beside it. */
+		/* Not stretched: the facts card stays as tall as its content. */
 		align-items: start;
 	}
 	.photo {
 		position: relative;
 		display: grid;
 		place-items: center;
-		/* 16:9, as the handoff draws it, so a landscape photograph of a table
-		   fills the slot rather than being letterboxed into a square. */
 		aspect-ratio: 16 / 9;
 		overflow: hidden;
 	}
@@ -458,11 +434,8 @@
 		letter-spacing: 0.1em;
 		color: var(--fg3);
 	}
-	/* One grid over the whole list, not a grid per row: `max-content` then sizes
-	   the measure column to the widest measure there actually is, so "500 g" sits
-	   against its ingredient instead of across a gutter wide enough for "250 ml"
-	   whether or not anything is that wide. The rows are `display: contents` to
-	   get their cells into that grid. */
+	/* One grid over the whole list (rows are `display: contents`), so max-content
+	   sizes the measure column to the widest actual measure, not a fixed gutter. */
 	.ingredients {
 		display: grid;
 		grid-template-columns: max-content minmax(0, 1fr);
@@ -474,9 +447,7 @@
 	.ingredients li {
 		display: contents;
 	}
-	/* A rule between rows, as the handoff draws it: a long list of quantities is
-	   read across, and a line is what carries the eye. The row has no box of its
-	   own now, so the rule goes on both of its cells. */
+	/* Rule on both cells, not the row — the row itself has no box. */
 	.ingredients :is(.measure, .ingredient-name) {
 		padding: var(--space-5) 0;
 		border-top: 1px solid var(--bd);

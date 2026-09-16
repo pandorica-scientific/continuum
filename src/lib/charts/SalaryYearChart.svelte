@@ -1,13 +1,7 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
-	// Salary by year, drawn by the shared LineChart.
-	//
-	// It used to own a letterboxed viewBox of its own, with HTML axis labels
-	// positioned in percentages on top of it because text inside a scaled SVG
-	// scales too. TaxYearChart owned a second copy of the same arrangement, and
-	// the two had already drifted on bar width and readout placement. Both now
-	// hand LineChart their values; what is left in this file is what a salary
-	// bar MEANS — base, bonus, net, and the change line over the top.
+	// Salary by year, drawn by the shared LineChart. What's left in this file is
+	// what a salary bar MEANS — base, bonus, net, and the change line over the top.
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import Segmented from '$lib/components/Segmented.svelte';
 	import LineChart from './LineChart.svelte';
@@ -38,21 +32,15 @@
 
 	/**
 	 * Bars in minor units, which is what the ledger stores and what the readout
-	 * formats. The axis divides them down to thousands or millions for its own
-	 * labels; nothing else here needs to know about that.
-	 *
-	 * Bonus at the foot, base above it — the order `bars()` used to place them
-	 * in, and for the reason it recorded: the other way round, a bonus that
-	 * changed size every year moved the base's boundary for a reason that had
-	 * nothing to do with the base.
+	 * formats. Bonus at the foot, base above it, so a bonus that changes size
+	 * doesn't move the base's boundary.
 	 */
 	const barSlots = $derived<BarSlot[]>(
 		mode === 'change'
 			? []
 			: years.map((row) => ({
 					segments: salaryBarSegments(row, mode),
-					// Net is not a segment: it is what was LEFT of the same gross
-					// rather than a further amount stacked on it, so it crosses.
+					// Net is not a segment: it's what was LEFT of the same gross, so it crosses as a tick.
 					tick: (() => {
 						const net = barValues(row, mode).net;
 						return net === null ? null : Number(net);
@@ -60,8 +48,7 @@
 				}))
 	);
 
-	// The base line is the one that answers "did my salary go up". The total
-	// moves with a one-off bonus and reads as a raise.
+	// Base answers "did my salary go up"; total moves with a one-off bonus and misreads as a raise.
 	const series = $derived<LineSeries[]>([
 		{
 			key: 'total',
@@ -82,13 +69,7 @@
 			: [])
 	]);
 
-	/**
-	 * What the money axis counts in.
-	 *
-	 * Six-figure koruna printed against every gridline is a wall of digits, so
-	 * the unit moves into the axis title and the labels shrink to two or three
-	 * characters — the job `compactAxis` did for the old fixed grid.
-	 */
+	/** What the money axis counts in — the unit moves into the axis title so labels stay short. */
 	const ceiling = $derived(ceilingFor(years, mode));
 	const unitStep = $derived.by(() => {
 		const top = Number(ceiling) / 100;
@@ -193,10 +174,7 @@
 						<strong class="mono">{formatMinor(v.bonus, currency)}</strong>
 					</div>
 				{/if}
-				<!-- The sum the bar actually draws. base + bonus IS gross, and with the
-				     two stacked it is worth stating rather than leaving to be added up
-				     by eye — especially beside net, which is what was left of this same
-				     figure rather than a further amount. -->
+				<!-- base + bonus IS gross; stated rather than left to be added up by eye. -->
 				<div class="r-row total">
 					<span class="swatch gross"></span>
 					<span>gross</span>
@@ -224,8 +202,7 @@
 			{/snippet}
 
 			{#snippet legend()}
-				<!-- The bar keys only where there are bars. In Change mode they named
-				     three fills that are not on screen. -->
+				<!-- Bar keys only where there are bars — Change mode has none. -->
 				{#if mode !== 'change'}
 					<span class="key"><span class="swatch base"></span> base salary</span>
 					{#if anyBonus}
@@ -266,8 +243,7 @@
 		line-height: 1.55;
 	}
 
-	/* The readout's and legend's own rows. `:global` because that markup is
-	   rendered inside LineChart, which scopes its own styles and not these. */
+	/* `:global` because this markup renders inside LineChart, which scopes its own styles. */
 	.chart :global(.r-year) {
 		display: block;
 		font-size: var(--text-xs);
@@ -331,8 +307,7 @@
 		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
-	/* At the end of the keys' own row where it fits, on its own line where it
-	   does not — `margin-left: auto` against a wrapping flex row does both. */
+	/* `margin-left: auto` in a wrapping flex row puts this at the row's end, or its own line. */
 	.chart :global(.footnote) {
 		margin-left: auto;
 		font-size: var(--text-xs);

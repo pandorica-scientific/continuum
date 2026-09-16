@@ -13,11 +13,9 @@
 	} = $props();
 
 	/**
-	 * A table with an entry for EVERY state, not a lookup with three cases and a
-	 * fourth that falls through. The prototype had exactly that, and reading a
-	 * property off the missing entry threw out of the render function — which
-	 * took the whole component down, so all four screens rendered nothing rather
-	 * than one degrading.
+	 * An entry for EVERY state: a lookup missing a case throws out of the
+	 * render function and takes the whole component down instead of just that
+	 * one screen.
 	 */
 	const SCREENS = {
 		asking: {

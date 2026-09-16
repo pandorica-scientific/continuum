@@ -8,9 +8,7 @@
 	<title>{page.status} · Continuum</title>
 </svelte:head>
 
-<!-- One boundary at the root, so it catches errors from every route including
-     the ones thrown before a layout has loaded — a failure in the app layout's
-     own load cannot be rendered inside that layout. -->
+<!-- One boundary at the root — catches errors thrown before a layout has loaded too. -->
 <ErrorScreen
 	status={page.status}
 	message={page.error?.message}

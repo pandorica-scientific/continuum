@@ -3,19 +3,12 @@
  * The household, the car, the dog — and the one action that demotes a whole
  * shelf's worth of paper without deleting any of it.
  *
- * The READ half of archiving has existed since v0.7.0: `archiveScopePredicate`
- * is applied by the Documents load, `documentsAbout`, the briefing and the
- * calendar, and `tests/integration/archive-scope` holds its truth table. What
- * was missing was a writer — nothing in the application ever set `archived_at`,
- * so a subsystem with a test suite had no way to be switched on. This module is
- * that writer, and it is the only one: a second place that sets `archived_at`
- * would be a second opinion about what closing a subject's period means.
+ * This is the only writer of `archived_at`; a second place that set it would
+ * be a second opinion about what closing a subject's period means.
  *
  * Subjects are NOT shelves and this module deliberately does not mirror
- * `shelves.ts` everywhere. There is no `key`, because no code refers to a
- * subject by name; there is no order, because the rail sorts them; and there is
- * no delete, because a subject that once held paper is history and archiving is
- * how history is put away.
+ * `shelves.ts` everywhere: no `key` (nothing refers to a subject by name), no
+ * order (the rail sorts them), no delete (archiving is how history is put away).
  */
 import { count, eq, sql } from 'drizzle-orm';
 import postgres from 'postgres';
@@ -26,10 +19,8 @@ import { document, documentLink, subject } from '$lib/server/db/schema';
 /**
  * What a new subject gets when nobody picked an emoji.
  *
- * A folder rather than the house: 🏠 is the seeded household's, and a car that
- * arrived looking like the household is a row nobody can tell apart at a
- * glance. Exported so the subject minted by typing a name into capture and the
- * subject added from the rail start out looking the same.
+ * A folder rather than the house: 🏠 is the seeded household's, and a car
+ * that looked the same would be indistinguishable at a glance.
  */
 const DEFAULT_SUBJECT_EMOJI = '📁';
 
@@ -51,11 +42,9 @@ export interface SubjectRow {
 /**
  * True only for a unique violation on a subject's name.
  *
- * There are two indexes to trip — `subject_name_unique` on the name itself and
- * `subject_name_ci_idx` on `lower(name)` — and only the second is the one that
- * matters in practice, because "Car" and "car" are the same thing. Both are
- * matched by name rather than by error code alone, so an unrelated unique
- * violation is never reported to a person as "that name is taken".
+ * Two indexes can trip this — `subject_name_unique` and the case-insensitive
+ * `subject_name_ci_idx` — matched by constraint name so an unrelated unique
+ * violation is never reported as "that name is taken".
  *
  * Drizzle wraps the driver's `PostgresError` in a `DrizzleQueryError` with the
  * original as `.cause`, which is where the code and constraint are read from.
@@ -82,9 +71,9 @@ async function refusingDuplicates<T>(write: () => Promise<T>): Promise<T> {
 /**
  * Every subject, with how much paper is filed under it.
  *
- * The ARCHIVE scope is deliberately NOT applied. This count is how much paper
- * the subject holds, and an archived subject reporting zero because its own
- * archiving hid its own documents would be a number that means nothing.
+ * The archive scope is deliberately NOT applied: an archived subject
+ * reporting zero because its own archiving hid its own documents would be a
+ * number that means nothing.
  */
 export async function listSubjects(handle: Queryable = db): Promise<SubjectRow[]> {
 	const [rows, counted] = await Promise.all([
@@ -99,9 +88,8 @@ export async function listSubjects(handle: Queryable = db): Promise<SubjectRow[]
 			})
 			.from(subject)
 			.orderBy(subject.name),
-		// Grouped over every target rather than narrowed to subjects:
-		// `document_link` points at `entity`, so a narrowing would mean this
-		// module deciding which kinds exist, which is the registry's job.
+		// Grouped over every target rather than narrowed to subjects: narrowing
+		// would mean this module deciding which kinds exist, the registry's job.
 		handle
 			.select({ targetId: documentLink.targetId, n: count() })
 			.from(documentLink)
@@ -142,10 +130,8 @@ export async function addSubject(
 /**
  * The subject with this name, minting it if the household has not got one.
  *
- * What capture's "or type a new one" field does, and what it has always done —
- * lifted here so the rail's stricter `addSubject` and capture's forgiving
- * upsert are two readings of ONE case-insensitive uniqueness rule rather than
- * two hand-written lowercase comparisons that agree today.
+ * Case-insensitive, matching the rail's stricter `addSubject`, so the two
+ * read one uniqueness rule rather than two comparisons that happen to agree.
  */
 export async function upsertSubjectByName(
 	name: string,
@@ -196,22 +182,13 @@ const todayIso = (): string => new Date().toISOString().slice(0, 10);
 /**
  * Archive a subject: its paper leaves the default view, and nothing is deleted.
  *
- * Two columns, two different jobs. `archived_at` is the switch the read rule
- * reads — one timestamp, and every screen carrying `archiveScopePredicate`
- * demotes the paper at once. `active_to` is the day the subject stopped being
- * real, which is what lets an old document read as history rather than as an
- * expiry somebody forgot, and it is only filled if nobody had said when the
- * period ended; a household that recorded the sale date keeps it.
+ * Two columns, two jobs. `archived_at` is the switch every screen carrying
+ * `archiveScopePredicate` reads. `active_to` is the day the subject stopped
+ * being real, filled only if nobody already recorded one.
  *
- * The household cannot be archived. It is the one subject every document may
- * belong to, and archiving it would hide the household's own paper from the
- * household — refused here rather than hidden in the rail, so the refusal
- * holds for a second caller too.
- *
- * `greatest` rather than the plain date is what keeps this from ever being
- * refused by `subject_active_period_check`: a subject whose period has not
- * started yet would otherwise end before it began. Postgres's `greatest`
- * ignores NULLs, so an empty `active_from` leaves the day as it was given.
+ * `greatest` rather than the plain date keeps this from ever tripping
+ * `subject_active_period_check` (a period that hasn't started yet would
+ * otherwise end before it began); Postgres's `greatest` ignores NULLs.
  */
 export async function archiveSubject(
 	id: string,
@@ -230,10 +207,8 @@ export async function archiveSubject(
 /**
  * Put a subject back: its paper returns to the default view.
  *
- * `active_to` is left exactly as it was, on purpose. Un-archiving says the
- * paper is current again; it does not say the period never ended, and rewriting
- * a recorded date as a side effect of an undo would destroy the one fact the
- * period columns exist to keep.
+ * `active_to` is left exactly as it was: un-archiving says the paper is
+ * current again, not that the period never ended.
  */
 export async function unarchiveSubject(id: string, handle: Queryable = db): Promise<void> {
 	await handle.update(subject).set({ archivedAt: null }).where(eq(subject.id, id));

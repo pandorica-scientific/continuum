@@ -35,10 +35,8 @@ describe('generated event keys', () => {
 		expect(generatedKey('expiry', tenancyEnd)).not.toBe(generatedKey('expiry', docExpiry));
 	});
 
-	// Found in the live feed: 52 events, 51 distinct UIDs. One tenancy emits both a
-	// lease-end and a renewal-notice event under the SAME rule and the SAME row,
-	// so a key built from rule + table + row alone collides and the feed publishes
-	// two events under one UID.
+	// A tenancy emits both a lease-end and a renewal-notice event under the same
+	// rule and row, so a key built from rule + table + row alone collides.
 	it('distinguishes two fields of the same row under the same rule', () => {
 		const end: OriginBinding = { table: 'tenancy', rowId: 't1', field: 'endsOn' };
 		const notice: OriginBinding = { table: 'tenancy', rowId: 't1', field: 'renewalNoticeOn' };
@@ -52,10 +50,7 @@ describe('generated event keys', () => {
 
 describe('remote ids', () => {
 	// Google accepts a client-supplied event id, but only in base32hex (RFC 4648
-	// lowercase, characters a-v and 0-9) and at least 5 characters. Supplying our
-	// own is what makes calendar_sync_link a cache rather than the source of
-	// truth: lose it and a reconcile recomputes the same ids instead of
-	// duplicating every event on someone's phone.
+	// lowercase, a-v and 0-9) and at least 5 characters.
 	it('produces only Google-legal characters', () => {
 		for (const key of [
 			'gen:loanPayments:loan:abc:2026-09',

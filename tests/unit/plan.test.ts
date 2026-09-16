@@ -81,8 +81,7 @@ describe('areas and validation', () => {
 	});
 
 	it('legacy rectangles are bounded by the grid, not just checked for integerness', () => {
-		// Unbounded, this allocates w × h tuples straight from the request body:
-		// a 60-byte payload was enough to exhaust the heap and kill the server.
+		// Regression: unbounded w × h allocation let a tiny payload exhaust the heap.
 		expect(
 			validateDrawing({ rooms: [{ x: 0, y: 0, w: 200000, h: 200000, name: 'x' }] })
 		).toBeNull();

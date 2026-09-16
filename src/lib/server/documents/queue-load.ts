@@ -1,13 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * The Inbox, as the queue it always was.
- *
- * v0.7.x had this on a screen of its own at `/documents/review`, reached by a
- * link. That made the Inbox two things: a shelf listing unfiled paper, and a
- * separate page for doing something about it — and the shelf could only ever
- * show you the problem. The Inbox IS the queue now, which is what "one
- * question, one unit, one template" means for a shelf whose unit is the
- * document itself.
+ * The Inbox, as the queue it always was: a shelf whose unit is the document
+ * itself.
  *
  * Filing takes three steps, and they are three because each narrows the next:
  * the shelf decides which cards exist, the card decides which lanes exist, and
@@ -70,14 +64,9 @@ export interface QueueShelf {
 /**
  * What the current document already says about itself as an identity document.
  *
- * Sent so the filing form can SHOW those answers rather than posting over them.
- * Filing writes the identity fields the same way the inspector does — the whole
- * form is the intended state, and a blank box means "cleared" — so a form that
- * started blank on a document somebody had already filled in would silently
- * empty every field and delete every extra number on the way past.
- *
- * Only for the document being decided. The queue can hold a folder's worth of
- * scans, and the other twenty are not being edited.
+ * Sent so the filing form can SHOW those answers rather than posting over
+ * them — a blank box means "cleared", so a form that started blank would
+ * silently wipe fields already filled in.
  */
 export interface QueueIdentity {
 	fields: IdentityFields;
@@ -149,8 +138,7 @@ export async function loadQueue(
 		.from(document)
 		.innerJoin(shelf, eq(shelf.id, document.shelfId))
 		.where(eq(shelf.id, inbox.id))
-		// Oldest first. A queue that offered the newest would leave the one that
-		// has waited longest waiting longer.
+		// Oldest first, so nothing waits longer than it already has.
 		.orderBy(asc(document.addedOn), asc(document.id));
 
 	const waiting: QueueDocument[] = rows.map((row) => ({
@@ -200,13 +188,7 @@ export async function loadQueue(
 		}
 	}
 
-	// What a lane rule thinks, for the document in front of you only. Proposed
-	// and never applied: a wrong guess looks exactly like a right one once it is
-	// filed, so it stays a suggestion until somebody agrees with it.
-	// What the document already says about itself, when it says anything. A row
-	// exists only for paper somebody has typed identity fields into — most of
-	// the queue has none, and asking costs one indexed lookup for the one
-	// document on screen.
+	// A row exists only for paper somebody has typed identity fields into.
 	const identityRow = current
 		? (
 				await handle

@@ -27,10 +27,8 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-	// Back to exactly the nine seeded groups and no leaves. Deleting the extras
-	// is not enough on its own: a test that removes a seeded group would leave it
-	// missing for every test after it, which made two of these pass or fail
-	// depending on the order they ran in.
+	// Truncate and reseed rather than delete extras: a removed seeded group
+	// would stay missing for tests after it, causing order-dependent failures.
 	await harness.sql`truncate category cascade`;
 	await harness.sql`truncate category_group cascade`;
 	await testDb.insert(schema.categoryGroup).values(CATEGORY_GROUP_SEED);

@@ -12,19 +12,8 @@ import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harn
 import { makeAccount, makeLoan, makeTransaction } from './fixtures';
 import { rowId } from '../row-id';
 
-/**
- * W2.1: money put aside is a stage, and the residual is cash.
- *
- * The waterfall used to end in a node labelled "Saved & invested" holding
- * income minus expenses — the money nobody had spent, whether or not any of it
- * had been invested. The savings group's own leaves were keyed by that group
- * and hung off a node keyed `kept`, so they drew nowhere at all. This is the
- * whole pipeline: transactions in, four totals out.
- *
- * `flowData` reads the module-level `db` singleton rather than taking a
- * handle, so it has to be pointed at this harness the way `deadlines.test.ts`
- * and `archive-scope.test.ts` do it.
- */
+/** `flowData` reads the module-level `db` singleton rather than taking a
+ *  handle, so it must be pointed at this harness. */
 vi.mock('$env/dynamic/private', () => ({
 	env: new Proxy({} as Record<string, string | undefined>, {
 		get: (_target, key: string) => process.env[key]
@@ -69,10 +58,8 @@ beforeEach(async () => {
 		kind: 'current',
 		currency: 'CZK'
 	});
-	// Three of the roles the baseline seeds: income, expense and savings. The
-	// fourth is the seeded category the principal half of a loan payment is
-	// filed under — both the chart and the register gate the split on it
-	// existing, so a fixture that truncated it away would leave nothing to split.
+	// The fourth category is what the principal half of a loan payment is filed
+	// under; both the chart and register gate the split on it existing.
 	await testDb.insert(category).values([
 		{ id: 'salary', groupKey: 'income', name: 'Salary' },
 		{ id: 'rent', groupKey: 'housing', name: 'Rent' },
@@ -102,23 +89,16 @@ async function record(
 	return id;
 }
 
-/**
- * The register link a node of this period carries.
- *
- * Written out here rather than by calling `registerHref` a second time: a test
- * that builds its expectation with the code under test asserts only that the
- * function is deterministic. The period is the one `flowData` anchors on — the
- * newest month holding data, which is the only month the fixture seeds.
- */
+/** Written out rather than via `registerHref`, so the test does not assert
+ *  only that the function agrees with itself. */
 const link = (query: string) =>
 	`/transactions?${query}&from=${MONTH}-01&to=${MONTH}-31&month=${MONTH}`;
 
 /**
  * What the register makes of a link the chart drew.
  *
- * The href is parsed rather than rebuilt by hand: the question is whether the
- * two screens agree about the rows a band stands for, and a filter written out
- * here would let the link say one thing and the assertion another.
+ * Parsed rather than rebuilt by hand, so a filter written out here cannot let
+ * the link and the assertion silently diverge.
  */
 const behind = (href: string | null | undefined) => {
 	if (!href) throw new Error('that figure carried no link to follow');
@@ -270,12 +250,11 @@ describe('flowData', () => {
 });
 
 /**
- * W2.2: every figure on the chart is a question the register can answer.
+ * Every figure on the chart is a question the register can answer.
  *
- * The whole point of the waterfall is that it is an index into the ledger, so a
- * band that names 45 000 crowns of housing has to be able to show the rows that
- * came to 45 000 crowns. Each link carries the period the chart was drawn for,
- * and opens the anchor month — the one the figures are actually about.
+ * A band that names 45 000 crowns of housing has to show the rows that came
+ * to 45 000 crowns. Each link carries the period the chart was drawn for,
+ * and opens the anchor month.
  */
 describe('flowData click-through', () => {
 	it('sends an income source to its own category, scoped to the period', async () => {
@@ -353,7 +332,7 @@ describe('flowData click-through', () => {
 });
 
 /**
- * W3.2: a figure on its own is not a fact about a household.
+ * A figure on its own is not a fact about a household.
  *
  * 35 000 crowns of housing is only news beside what housing cost last month, so
  * every window carries the one before it — the same window, moved — and the
@@ -383,14 +362,12 @@ describe('flowData against the window before', () => {
 		expect(flow.previous).toBeNull();
 	});
 
-	// Half a window is not a smaller window. A trailing year anchored on the
-	// newest month is compared against the twelve months before it, and here the
-	// record starts part-way through those — so the months before the first
-	// import would be counted as months the household earned nothing.
+	// A trailing year anchored on the newest month is compared against the
+	// twelve months before it; if the record starts partway through those,
+	// those earlier months must not be counted as zero.
 	//
-	// The January movement is what makes this case bite: without it the window
-	// before would simply be empty, and the answer would be null for the other
-	// reason.
+	// The January movement is what makes this case bite: without it, the
+	// window before would simply be empty, and null for the other reason.
 	it('has nothing to compare when the record does not cover the whole window before', async () => {
 		await seedMonth(-30_000);
 		await record('salary-older', 60_000, 'salary', '2025-01');
@@ -402,12 +379,11 @@ describe('flowData against the window before', () => {
 });
 
 /**
- * W4: a mortgage instalment is two different things wearing one amount.
+ * A mortgage instalment is two different things wearing one amount.
  *
- * The interest is money the household will never see again; the principal is
- * its own money, moved out of an account and into a flat. Drawn as one band of
- * housing, the chart reported a household that saves nothing while it repays
- * the larger half of every instalment to itself.
+ * The interest is money the household will never see again; the principal
+ * is its own money, moved into a flat. Drawn as one band of housing, the
+ * chart reported a household saving nothing while repaying itself.
  */
 describe('flowData with a loan payment linked to it', () => {
 	const loanId = rowId('cashflow-flow-loan');
@@ -440,9 +416,7 @@ describe('flowData with a loan payment linked to it', () => {
 
 		const flow = await flowData('month');
 
-		// The whole instalment used to be housing: 55 000 out and 20 000 saved.
-		// Only the 5 000 of interest is a cost; the 15 000 of principal moved to
-		// the savings stage, and the identity holds either way.
+		// Only the 5 000 of interest is a cost; the 15 000 of principal counts as saved.
 		expect(flow.totals).toEqual({ in: 100_000, out: 40_000, saved: 35_000, kept: 25_000 });
 		expect(flow.totals.in - flow.totals.out - flow.totals.saved).toBe(flow.totals.kept);
 		// Each half is a leaf naming the loan, and each leads to the line it
@@ -468,10 +442,8 @@ describe('flowData with a loan payment linked to it', () => {
 		]);
 	});
 
-	// The assertion the whole thing is for. A band is only an index into the
-	// ledger if the rows it opens come to what the band says: the chart used to
-	// draw 35 000 of housing and hand the register a link listing 50 000, because
-	// the split existed on one side of that link and not the other.
+	// Regression: the chart drew 35 000 of housing but handed the register a
+	// link listing 50 000, because the split existed on one side only.
 	it('agrees with the register the stage links to, on both stages', async () => {
 		await seedInstalment();
 

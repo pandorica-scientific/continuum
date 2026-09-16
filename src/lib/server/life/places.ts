@@ -21,7 +21,7 @@ import type { EnumValue } from '$lib/enums';
 const GEODATA_DIR = process.env.GEODATA_DIR ?? 'geodata';
 
 /** Where the committed engravings live, on the same terms. */
-const ICONS_DIR = process.env.PLACE_ICONS_DIR ?? 'place-icons';
+const ICONS_DIR = process.env.PLACE_ICONS_DIR ?? 'assets/place-icons';
 
 /**
  * How many places go into one insert.
@@ -245,10 +245,9 @@ export async function sightArt(id: string): Promise<Uint8Array | null> {
  * Which build of the engravings this is, for the URL a coin asks for.
  *
  * The served bytes are `immutable` for a year, which is right for artwork that
- * does not change and a trap the moment it does — v0.9.1 learned exactly this
- * about the map outlines, where a corrected file was invisible for a year to
- * everyone who had already opened that country. A stamp in the URL makes a
- * corrected engraving a new address instead.
+ * does not change and a trap the moment it does: a corrected file would stay
+ * invisible for a year to everyone who had already opened that country. A
+ * stamp in the URL makes a corrected engraving a new address instead.
  *
  * The app's own version is the honest stamp: the engravings are committed and
  * ship with the image, so they change when it does and at no other time.

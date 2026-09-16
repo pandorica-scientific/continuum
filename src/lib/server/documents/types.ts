@@ -2,12 +2,10 @@
 /**
  * What kinds of paper this household files.
  *
- * Seventeen ship with the app and the household adds its own. The difference
- * between the two is not cosmetic: a built-in key is read by name somewhere in
- * the code — the salary tracker looks for `payslip`, an accepted import writes
- * `bank_statement`, the wallet puts its identity fields on `id_document` — so
- * a built-in may be relabelled and never removed. A household's own type has
- * no behaviour behind it at all, which is exactly what makes it safe to invent.
+ * A built-in key is read by name in code (the salary tracker looks for
+ * `payslip`, an accepted import writes `bank_statement`, the wallet keys off
+ * `id_document`), so it may be relabelled but never removed. A household's
+ * own type has no behaviour behind it, which is what makes it safe to invent.
  */
 import { asc, eq } from 'drizzle-orm';
 import postgres from 'postgres';
@@ -38,9 +36,8 @@ export async function listDocumentTypes(handle: Queryable = db): Promise<Documen
 /**
  * Just the keys, which is all validating a posted type needs.
  *
- * Read fresh inside each action rather than carried down from the load: a type
- * added in another tab a second ago is a key this one has never seen, and the
- * only question `asDocumentType` asks is whether the key exists now.
+ * Read fresh inside each action rather than carried down from the load: a
+ * type added in another tab a second ago is a key this one has never seen.
  */
 export async function documentTypeKeys(handle: Queryable = db): Promise<string[]> {
 	return (await listDocumentTypes(handle)).map((row) => row.key);
@@ -61,8 +58,7 @@ export function typeKeyFor(label: string): string {
  * Add a type, or return the one that already answers to that name.
  *
  * Idempotent rather than an error: two people adding "Vaccination book" on two
- * devices have agreed, not collided. A label that slugs to nothing — punctuation
- * only — is the one refusal, because the key is what documents store.
+ * devices have agreed, not collided.
  */
 export async function addDocumentType(
 	label: string,
@@ -84,11 +80,8 @@ export async function addDocumentType(
 		.limit(1);
 	if (existing) return existing;
 
-	// After every built-in, so the shipped order stays the shipped order and a
-	// household's own types gather at the end of every picker.
+	// After every built-in, so a household's own types gather at the end of every picker.
 	await handle.insert(documentType).values({ key, label: name, builtin: false, sortOrder: 1000 });
-	// No window: a type somebody invented carries no behaviour at all, and the
-	// sixty-day default is what "nobody has said otherwise" means.
 	return { key, label: name, builtin: false, reminderDays: null };
 }
 
@@ -99,9 +92,9 @@ export const TYPE_IS_BUILTIN = 'That type comes with the app and cannot be remov
 /**
  * Remove a type the household added, if nothing is filed as it.
  *
- * The foreign key from `document.type` is what actually refuses, so this reads
- * its violation rather than counting first: a document filed a moment ago
- * between the count and the delete would slip through a check that asked.
+ * The foreign key from `document.type` is what actually refuses, so this
+ * reads its violation rather than counting first: a document filed between
+ * the count and the delete would slip through a check that asked.
  */
 export async function removeDocumentType(key: string, handle: Queryable = db): Promise<void> {
 	const [row] = await handle
@@ -122,10 +115,8 @@ export async function removeDocumentType(key: string, handle: Queryable = db): P
 /**
  * True only for the foreign key from `document.type`.
  *
- * `NO ACTION` reports 23503 and the `ON DELETE RESTRICT` this column declares
- * reports the more specific 23001; both are matched, with the constraint name,
- * so the cascade from `shelf_type` — which is not a refusal at all — could
- * never be reported as one.
+ * Matched by constraint name as well as code (23503 or 23001), so the cascade
+ * from `shelf_type` — not a refusal at all — is never reported as one.
  *
  * Drizzle wraps the driver's `PostgresError` in a `DrizzleQueryError` with the
  * original as `.cause`, which is where the code is read from.
@@ -142,9 +133,8 @@ function isTypeInUse(error: unknown): boolean {
 /**
  * A posted type, or `other`.
  *
- * The list replaces `asEnumValue` for this column: the values are rows now, so
- * what is valid is what the household has, and a stale option posted from a tab
- * open since before a type was removed lands on `other` rather than on a
+ * What is valid is what the household has now, so a stale option posted from
+ * a tab open since before a type was removed lands on `other` rather than a
  * foreign key violation.
  */
 export function asDocumentType(value: unknown, known: readonly string[]): string {

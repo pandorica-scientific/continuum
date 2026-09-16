@@ -1,19 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// The only file that knows a salary from a mortgage.
-//
-// Turns the cash-flow figures into the plain graph the Sankey engine draws, so
-// adding a level, splitting a group or introducing a node kind that does not
-// exist yet is a change here and nowhere else. The engine stays geometry.
+// Turns cash-flow figures into the plain graph the Sankey engine draws; the
+// engine itself stays pure geometry.
 
 import type { SankeyGraph } from './sankey';
 
 /** The figures the chart is built from, as the cash-flow loader returns them. */
 export interface FlowFigures {
 	/**
-	 * Everything entering on the left. `colorVar` is the green of income unless
-	 * a source says otherwise — a period that took money back OUT of a savings
-	 * group enters here wearing that group's own colour, because it is a
-	 * drawdown and not something the household earned.
+	 * Everything entering on the left. `colorVar` defaults to income green; a
+	 * period that drew money OUT of a savings group enters wearing that
+	 * group's own colour, since it's a drawdown, not new income.
 	 */
 	sources: {
 		key: string;
@@ -24,9 +20,9 @@ export interface FlowFigures {
 		href?: string | null;
 	}[];
 	/**
-	 * Every group the money passes through, savings included: putting money in a
-	 * brokerage account empties the current account exactly as rent does, and a
-	 * stage is what left. `role` is what tells the two apart afterwards.
+	 * Every group the money passes through, savings included — putting money
+	 * into a brokerage account empties the current account exactly as rent
+	 * does. `role` distinguishes the two afterwards.
 	 */
 	stages: {
 		key: string;
@@ -41,13 +37,7 @@ export interface FlowFigures {
 	keptLabel: string;
 	/** And what the shortfall is called when they did not. */
 	reservesLabel: string;
-	/**
-	 * Where the trunk leads: everything that came in over the period.
-	 *
-	 * Supplied here rather than built below, alongside the two labels, because
-	 * the trunk is a node this file invents and only the loader knows which
-	 * period the figures are from.
-	 */
+	/** Where the trunk leads: everything that came in over the period. */
 	incomeHref?: string | null;
 }
 

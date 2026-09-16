@@ -34,9 +34,7 @@ describe('parseAmountToMinor', () => {
 	});
 
 	it('round-trips its own formatted output', () => {
-		// formatMinor emits U+2212, the typographic minus. The parser accepting
-		// only ASCII "-" meant a formatted amount could not be read back, so any
-		// pre-filled input threw the moment it was submitted unchanged.
+		// formatMinor emits U+2212, the typographic minus, so the parser must accept it too.
 		for (const [minor, currency] of [
 			[-5391n, 'CZK'],
 			[1298438n, 'CZK'],
@@ -58,9 +56,7 @@ describe('parseAmountToMinor', () => {
 
 describe('minor units per currency', () => {
 	it('follows ISO 4217, not a four-entry table', () => {
-		// availableCurrencies() offers every code the CNB quotes, and several of
-		// them have no minor unit. Assuming 2 stored these 100x too large and
-		// fed the same factor to the register's amount filter and the API.
+		// Several currencies quoted here have no minor unit at all.
 		expect(minorDigits('CZK')).toBe(2);
 		expect(minorDigits('EUR')).toBe(2);
 		expect(minorDigits('JPY')).toBe(0);

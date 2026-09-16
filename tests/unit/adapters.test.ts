@@ -41,9 +41,8 @@ describe('Fio adapter', () => {
 });
 
 describe('Revolut adapter', () => {
-	// One pocket in this fixture, so one statement. The adapter returns a list
-	// now, because Revolut writes every pocket into the same file and each keeps
-	// its own running balance — see revolut-pockets.test.ts.
+	// The adapter returns a list because Revolut writes every pocket into one
+	// file, each with its own running balance — see revolut-pockets.test.ts.
 	const [statement] = parseRevolut(readFileSync(fixture('revolut.csv'), 'utf-8'));
 
 	it('keeps only completed rows and reads amounts', () => {
@@ -130,10 +129,8 @@ describe('Raiffeisenbank PDF adapter', () => {
 	});
 
 	it('finds the reference and merchant however many detail lines precede them', () => {
-		// The Apple Pay row pushes its "PK:" marker onto a line of its own, so
-		// the transaction code lands at i+3 and the merchant line at i+4. Read
-		// at a fixed stride (code at i+2, merchant within i+3) this row lost
-		// both: no reference, and no counterparty for any rule to match.
+		// The Apple Pay row pushes its "PK:" marker onto its own line, shifting the
+		// code to i+3 and merchant to i+4 — a fixed stride would lose both.
 		const applePay = statement.rows.find((r) => r.amountMinor === -4444n);
 		expect(applePay?.bankRef).toBe('9198541942');
 		expect(applePay?.counterparty).toBe('ALBERT VAM DEKUJE');
@@ -193,13 +190,8 @@ describe('Česká spořitelna PDF adapter', () => {
 });
 
 describe('Raiffeisenbank PDF adapter — January 2025 template', () => {
-	// RB shipped two incompatible layouts within three months. January writes
-	// dates unspaced ("3.1.2025") and heads the page "poř. č. 1 za období
-	// 1.1.2025 - 31.1.2025" with no colon; March onwards writes "1. 3. 2025" and
-	// "za období:". Requiring the March form read ZERO movements out of a real
-	// January statement — while still reporting success, because the balances
-	// parsed. The file imported empty, recorded its content hash, and the
-	// corrected re-import would then have been refused as a duplicate.
+	// RB's January layout uses unspaced dates and no colon in the header, unlike March.
+	// Regression: a March-only parser silently read zero movements from this statement.
 	const lines = JSON.parse(readFileSync(fixture('rb-lines-jan2025.json'), 'utf-8')) as PdfLine[];
 	const statement = parseRbLines(lines);
 
@@ -238,8 +230,7 @@ describe('Raiffeisenbank PDF adapter — January 2025 template', () => {
 
 describe('stated totals are captured wherever a bank prints them', () => {
 	// Two omitted movements that offset each other leave opening + sum = closing
-	// intact, but cannot also leave both stated totals intact. Every bank sampled
-	// prints these; none of them were read before v0.3.8.
+	// intact, but cannot also leave both stated totals intact.
 	it('Raiffeisenbank: Příjmy/Výdaje celkem', () => {
 		const s = parseRbLines(
 			JSON.parse(readFileSync(fixture('rb-lines.json'), 'utf-8')) as PdfLine[]

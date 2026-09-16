@@ -41,21 +41,16 @@ export interface NetWorth {
 }
 
 /**
- * A true statement: gross assets (flats at value, portfolio, cash) minus
- * liabilities (mortgages, other loans) = net worth.
- *
- * Read-only. The daily snapshot is written by `recordNetWorthSnapshot` on the
- * scheduler, not here: this function runs from the (app) layout on every page,
- * again on /overview, and from `GET /api/v1/networth` — so an upsert inside it
- * meant the documented read-only API wrote on every poll.
+ * Read-only — this runs on every page load and from `GET /api/v1/networth`,
+ * so writing here would make the documented read-only API mutate on every poll.
+ * Snapshots are written separately by `recordNetWorthSnapshot`.
  */
 export async function computeNetWorth(handle: Queryable = db): Promise<NetWorth> {
 	const baseCurrency = await getBaseCurrency(handle);
 	const [rates, components, links, snapshots] = await Promise.all([
-		// One table load, not a query per holding: this ran on every page view.
+		// One table load, not per-holding.
 		loadRateTable(handle),
-		// One read of the view, not a query per asset table. A new asset type is a
-		// UNION branch in the migration; nothing here has to be told about it.
+		// One read of the view; a new asset type is a UNION branch in the migration.
 		handle.select().from(netWorthComponent),
 		handle.select({ loanId: loanProperty.loanId }).from(loanProperty),
 		handle.select().from(portfolioSnapshot).orderBy(desc(portfolioSnapshot.day)).limit(1)
@@ -79,9 +74,7 @@ export async function computeNetWorth(handle: Queryable = db): Promise<NetWorth>
 	const unnamedKinds = new Set<string>();
 
 	for (const c of components) {
-		// The view's columns are nullable because a view carries no constraints;
-		// every row that reaches here has both, and a row that somehow does not is
-		// worth nothing rather than worth guessing at.
+		// View columns are nullable (views carry no constraints); missing values count as zero.
 		const value = toBase(c.valueMinor ?? 0n, c.currency ?? baseCurrency);
 		switch (c.kind) {
 			case 'property':
@@ -89,34 +82,28 @@ export async function computeNetWorth(handle: Queryable = db): Promise<NetWorth>
 				properties += 1;
 				break;
 			case 'account':
-				// A brokerage balance is cash sitting at the broker, and the broker
-				// already reports it inside the portfolio value below. Counting it here
-				// too is the same money twice.
+				// Brokerage cash is already inside the portfolio snapshot below.
 				if (c.subkind === 'brokerage') break;
 				cash += value;
 				cashAccounts += 1;
 				break;
 			case 'loan':
-				// Already negative in the view; the groups carry what is owed as a
-				// positive liability beside the asset it is secured on.
+				// Already negative in the view; carried here as a positive liability
+				// beside the asset it is secured on.
 				if (c.id !== null && securedLoanIds.has(c.id)) mortgagesOwed -= value;
 				else otherLoans -= value;
 				break;
 			case 'holding':
-				// The portfolio snapshot is the investments figure: it is the broker's
-				// own total for the day, including cash and fees the holdings do not
-				// show. Summing positions as well would count the portfolio twice.
+				// Portfolio snapshot below is the broker's own daily total; summing
+				// positions too would double-count.
 				break;
 			case 'equity':
-				// Vested shares still held, at the latest close: the view has already
-				// left out what is pending or forfeited, so every row here is owned.
+				// Vested shares only — the view already excludes pending/forfeited.
 				equity += value;
 				equityTranches += 1;
 				break;
 			default:
-				// An asset type added to the view but not yet named here. It counts —
-				// which is the point of the view — and says so, rather than being
-				// silently dropped into a total nobody can reconcile.
+				// Unnamed asset kind: still counted rather than silently dropped.
 				if (value < 0n) unnamedLiabilities -= value;
 				else unnamedAssets += value;
 				if (c.kind) unnamedKinds.add(c.kind);
@@ -192,11 +179,8 @@ export async function computeNetWorth(handle: Queryable = db): Promise<NetWorth>
 	const liabilitiesMinor = groups.reduce((s, g) => s + g.liabilityMinor, 0n);
 	const totalMinor = assetsMinor - liabilitiesMinor;
 
-	// The month opened at the close of the previous one, so read the last
-	// snapshot before it began, plus the oldest on record for an install whose
-	// history does not reach back that far. Today's figure is persisted by the
-	// scheduler and is not its own comparison baseline. Two single indexed reads
-	// rather than loading the month.
+	// Baseline is the last snapshot before this month, or the oldest on record
+	// if history doesn't reach back that far.
 	const monthStart = today.slice(0, 8) + '01';
 	const [priorMonth, oldest, monthEnds] = await Promise.all([
 		handle
@@ -211,10 +195,7 @@ export async function computeNetWorth(handle: Queryable = db): Promise<NetWorth>
 			.where(lt(netWorthSnapshot.day, today))
 			.orderBy(asc(netWorthSnapshot.day))
 			.limit(1),
-		// One row per month — the last snapshot in each — for the thirteen months
-		// behind us. Thirteen because twelve deltas need thirteen ends. It is a
-		// grouped read of an indexed column and returns at most thirteen rows,
-		// which is what makes it affordable on a layout that runs everywhere.
+		// Last snapshot per month, 13 months back (12 deltas need 13 ends).
 		handle
 			// `to_char`, not `substring`: `day` is a date column, and substring on a
 			// date needs an explicit cast that Postgres will not infer.

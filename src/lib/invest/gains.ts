@@ -2,16 +2,14 @@
 /**
  * What was realised this year, and an estimate of the tax on it.
  *
- * Pure arithmetic over closed positions. It knows nothing about jurisdictions:
- * the rate is configured, and the holding-period exemption is a switch that is
- * off unless a household turns it on. Continuum is used from the Czech Republic,
- * where disposals of securities held over three years are exempt — but that is a
- * fact about one country, not about investing, and baking it in would quietly
- * produce wrong figures for everybody else.
+ * Pure arithmetic over closed positions. Knows nothing about jurisdictions:
+ * the rate is configured, and the holding-period exemption is a switch off
+ * unless a household turns it on — that exemption is a fact about one
+ * country, not about investing, so it is never baked in.
  *
- * It is an ESTIMATE and says so on screen. It does not know about losses carried
- * forward from earlier years, other income, allowances, or anything held outside
- * this instance.
+ * It is an ESTIMATE and says so on screen. It does not know about losses
+ * carried forward from earlier years, other income, allowances, or anything
+ * held outside this instance.
  */
 
 /** A position that has been closed, as the broker reported it. */

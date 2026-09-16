@@ -10,9 +10,7 @@
 
 	let { data }: { data: { months: Month[]; peak: string; averagePct: number | null } } = $props();
 
-	// Which bar the pointer is over, or null. Focus sets it too, so the readout
-	// is reachable without a mouse — and on a touch screen, where the native
-	// `title` tooltip this replaces never appeared at all.
+	// Which bar the pointer is over, or null. Focus sets it too, for keyboard/touch reachability.
 	let active = $state<Month | null>(null);
 </script>
 
@@ -29,10 +27,7 @@
 			</div>
 			<div class="bars">
 				{#each data.months as m (m.month)}
-					<!-- The value lives in aria-label, so assistive tech reads it from the
-					     bar itself and needs no hover. The readout below is the pointer
-					     affordance; making the bar focusable to drive it would put a dozen
-					     tab stops in a small panel for a value already announced here. -->
+					<!-- aria-label carries the value; not made focusable, to avoid a dozen tab stops. -->
 					<div
 						class="col"
 						role="img"
@@ -87,8 +82,7 @@
 		flex: 1;
 		min-height: 56px;
 	}
-	/* The height is reserved so the chart does not jump as the pointer crosses
-	   it, which is worse than the missing readout this replaces. */
+	/* Height reserved so the chart doesn't jump as the pointer crosses it. */
 	.readout {
 		font-size: var(--text-xs);
 		color: var(--fg2);

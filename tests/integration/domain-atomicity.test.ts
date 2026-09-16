@@ -215,8 +215,7 @@ describe('home meter sync freshness', () => {
 			await testDb
 				.select({ id: schema.propertyBill.id, amountMinor: schema.propertyBill.amountMinor })
 				.from(schema.propertyBill)
-				// Ordered by amount, not by id: ids are uuids since 0053 and sort by
-				// nothing the fixture names would predict.
+				// Ordered by amount, not by id: ids are uuids and sort unpredictably.
 				.orderBy(schema.propertyBill.amountMinor)
 		).toEqual([
 			{ id: rowId('old-meter-bill'), amountMinor: 111n },
@@ -674,7 +673,7 @@ describe('domain replacement writes', () => {
 			await testDb
 				.select({ id: schema.propertyBill.id, amountMinor: schema.propertyBill.amountMinor })
 				.from(schema.propertyBill)
-				// Ordered by amount, not by id: ids are uuids since 0053.
+				// Ordered by amount, not by id: ids are uuids and sort unpredictably.
 				.orderBy(schema.propertyBill.amountMinor)
 		).toEqual([
 			{ id: rowId('bill-old-meter'), amountMinor: 100n },
@@ -682,17 +681,8 @@ describe('domain replacement writes', () => {
 		]);
 	});
 
-	/*
-	 * RETIRED: two cases that replayed migrations 0030 and 0032 against data
-	 * arranged to be ambiguous, proving each picked deterministically rather than
-	 * by whatever order the planner returned.
-	 *
-	 * They went with the migrations themselves in the squash to a single
-	 * baseline. The invariants they were protecting survive as schema: the
-	 * partial unique index on property_bill(property_id) where source = 'meter'
-	 * is asserted by tests/integration/baseline-migration.test.ts, and the
-	 * settings key it bound is written only through setHome() now.
-	 */
+	// The partial unique index on property_bill(property_id) where source =
+	// 'meter' is asserted by tests/integration/baseline-migration.test.ts.
 
 	it('reports every historically unconvertible salary and broker currency', async () => {
 		await testDb.insert(schema.currencyRate).values([
@@ -705,11 +695,9 @@ describe('domain replacement writes', () => {
 			name: 'Historical Tax Person',
 			initials: 'HT'
 		});
-		// The salary ENTRY, not the payslip document. A payslip's currency lives
-		// on the entry, and the document is the file — so a month paid in a
-		// currency this instance cannot convert has to be found here or nowhere.
-		// The month it covers is the day the rate is wanted for, which is what
-		// makes this a carry-back rather than a missing rate.
+		// The salary ENTRY, not the payslip document — a payslip's currency lives
+		// on the entry. The month it covers is the day the rate is wanted for,
+		// making this a carry-back rather than a missing rate.
 		await testDb.insert(schema.salaryEntry).values({
 			id: rowId('historical-salary-entry'),
 			personId: rowId('historical-tax-person'),
@@ -744,10 +732,8 @@ describe('domain replacement writes', () => {
 			taxPaidMinor: 10n
 		});
 
-		// Reported by REASON now. Everything here is dated before this instance's
-		// first stored fixing, so it is a historical carry-back rather than a
-		// missing rate — which is the distinction the banner needs in order to give
-		// advice that is any use.
+		// Everything here is dated before this instance's first stored fixing, so
+		// it is a historical carry-back rather than a missing rate.
 		const approximate = await missingRateCurrencies('CZK', testDb);
 		expect([...approximate.carried, ...approximate.none].sort()).toEqual([
 			'CHF',
@@ -763,11 +749,9 @@ describe('domain replacement writes', () => {
 			name: 'Malformed Period Person',
 			initials: 'MP'
 		});
-		// The column has no CHECK constraint (application code validates the
-		// 'YYYY-MM' shape before writing), so a stray row — a bug elsewhere, an
-		// old fixture, a manual repair — can still reach the table. The scan casts
-		// period_month to a date; without a format guard that cast throws and
-		// takes the whole missing-rate banner down with it.
+		// The column has no CHECK constraint, so a stray row can still reach the
+		// table. The scan casts period_month to a date; without a format guard
+		// that cast throws and takes the whole missing-rate banner down with it.
 		await testDb.insert(schema.salaryEntry).values({
 			id: rowId('malformed-period-entry'),
 			personId: rowId('malformed-period-person'),
@@ -1095,9 +1079,8 @@ describe('domain replacement writes', () => {
 	});
 
 	// portfolio_snapshot is keyed by day, so an archived report describes a row
-	// the current one cannot occupy. Skipping it left the investments chart with
-	// exactly the gap the backfill was uploaded to close, while the action still
-	// reported the day as recorded.
+	// the current one cannot occupy — skipping it would leave a gap the backfill
+	// was meant to close while still reporting the day as recorded.
 	it('records a value point when an older report backfills a different day', async () => {
 		activeReport = {
 			...REPORT,
@@ -1239,10 +1222,4 @@ describe('domain replacement writes', () => {
 			}
 		]);
 	});
-
-	// RETIRED: this replayed migration 0029 against a CURRENT schema to check
-	// its one-time backfill. v0.3.10 collapses every migration into one baseline,
-	// so 0029 will not exist to replay — and since the rename it names a column
-	// (holding.as_of) that no longer exists. The freshness rule it covered is
-	// exercised live by the broker ingest tests.
 });

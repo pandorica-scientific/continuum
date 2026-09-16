@@ -2,12 +2,6 @@
 import { describe, expect, it } from 'vitest';
 import { gridTemplate, visibleColumns, type Column } from '$lib/components/data-table';
 
-/**
- * The geometry a DataTable computes for itself — which columns fit and what
- * grid they make. Kept out of the component so the rule "a column hides
- * below its own breakpoint and nothing else moves" is a line of arithmetic
- * with a test, not a media query per screen.
- */
 const cols: Column[] = [
 	{ key: 'name', label: 'Name', width: 'minmax(0,1.6fr)' },
 	{ key: 'trust', label: 'Trust', width: '170px', hideBelow: 900 },

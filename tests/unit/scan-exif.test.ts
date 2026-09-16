@@ -268,10 +268,8 @@ function jpegWithXmpFirst(orientation: number): Uint8Array {
 
 describe('an APP1 that is not Exif', () => {
 	it('is skipped rather than parsed as a TIFF header', () => {
-		// An iPhone writes TWO APP1 segments, Exif and XMP. Reading the XMP's
-		// opening text as a TIFF header yields a plausible-looking number — it
-		// produced 6 where the truth was 1 — and a photo needing no rotation was
-		// turned ninety degrees.
+		// An iPhone writes TWO APP1 segments, Exif and XMP; reading the XMP text
+		// as a TIFF header yields a plausible but wrong orientation.
 		expect(readOrientation(jpegWithXmpFirst(6))).toBe(6);
 		expect(readOrientation(jpegWithXmpFirst(1))).toBe(1);
 	});
@@ -312,8 +310,7 @@ describe('needsRotation', () => {
 	const stored = { width: 8064, height: 6048 };
 
 	it('says no when the decoder already turned it — Chrome', () => {
-		// Chrome applies EXIF whatever `imageOrientation` asks. Measured: 'none',
-		// 'from-image' and the default all return the same rotated bitmap.
+		// Chrome applies EXIF regardless of what `imageOrientation` asks.
 		expect(needsRotation(6, { width: 6048, height: 8064 }, stored)).toBe(false);
 	});
 
@@ -322,11 +319,8 @@ describe('needsRotation', () => {
 	});
 
 	it('is unaffected by the frame having been scaled down first', () => {
-		// THE bug. Frames are capped at 3200px before this runs, so no dimension
-		// matches anything stored. Comparing sizes concluded "not turned" every
-		// time and rotated twice — right on Safari, wrong on Chrome, which is
-		// exactly the split that showed up: upright on the phone, on its side in
-		// the browser.
+		// Regression: frames are capped at 3200px before this runs, so no dimension
+		// matches the stored size — comparing sizes wrongly concluded "not turned".
 		expect(needsRotation(6, { width: 3200, height: 4267 }, stored)).toBe(false);
 		expect(needsRotation(6, { width: 3200, height: 2400 }, stored)).toBe(true);
 	});

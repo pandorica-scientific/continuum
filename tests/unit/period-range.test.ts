@@ -13,8 +13,7 @@ describe('periodRange', () => {
 	});
 
 	it('anchors the year-to-date window on the same month', () => {
-		// Otherwise the caption claims a window running to August while the
-		// figures stop in July, which is the same lie in a different place.
+		// Otherwise the caption claims a window running to August while the figures stop in July.
 		const range = periodRange('ytd', '2026-07', TODAY);
 		expect(range.start).toBe('2026-01-01');
 		expect(range.end).toBe('2026-07-31');
@@ -40,9 +39,8 @@ describe('periodRange', () => {
 	});
 
 	it('runs the trailing year to the anchor, the anchor month included', () => {
-		// Twelve months, not thirteen: a window that started in July 2025 and ran
-		// to July 2026 would compare a month against itself a year later and call
-		// the difference a trend.
+		// Twelve months, not thirteen: including both July endpoints would compare a
+		// month against itself a year later and call the difference a trend.
 		const range = periodRange('12m', '2026-07', TODAY);
 		expect(range.start).toBe('2025-08-01');
 		expect(range.end).toBe('2026-07-31');

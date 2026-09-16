@@ -291,10 +291,9 @@ describe('removing a payslip', () => {
 	});
 
 	it('does not collide with the row of the same month that no payslip claimed', async () => {
-		// The failure this exists to stop: `salary_entry.document_id` is SET NULL,
-		// so deleting the document turned the slip's row into a SECOND unclaimed
-		// row for the month — which `salary_entry_person_month_key` refuses, and
-		// the screen showed a 500.
+		// Guards against `salary_entry.document_id` being SET NULL on delete and
+		// turning the slip's row into a SECOND unclaimed row for the month,
+		// which `salary_entry_person_month_key` refuses.
 		await seedHousehold();
 		const slip = await payslip('2026-05', 6_840_000n);
 		expect(
@@ -344,9 +343,8 @@ describe('removing a payslip', () => {
 /**
  * The two inspector edits that would orphan a salary entry without saying so.
  *
- * Through the page's own action rather than a hand-written update: the guard
- * has to sit in front of the save the household actually performs, and a test
- * that wrote the columns itself would pass with no guard at all.
+ * Through the page's own action rather than a hand-written update, since the
+ * guard has to sit in front of the save the household actually performs.
  */
 describe('editing a payslip that carries a salary entry', () => {
 	const asAdmin = {
@@ -420,13 +418,10 @@ describe('editing a payslip that carries a salary entry', () => {
 /**
  * The same guard, reached from the selection bar rather than the inspector.
  *
- * The bulk bar sets one type over everything ticked, and it went straight to
- * the UPDATE — so the retype the inspector refuses could be performed on the
- * same payslip by ticking it in the list, and the salary entry was orphaned
- * with nothing said. A bulk edit is a convenience, though, and refusing the
- * whole thing because one of forty documents is a payslip would be a poor
- * trade: the payslip's type is left alone, everything else is applied, and the
- * result says how many were left as they were.
+ * A bulk edit is a convenience, so refusing the whole thing because one of
+ * forty documents is a payslip would be a poor trade: the payslip's type is
+ * left alone, everything else is applied, and the result says how many were
+ * left as they were.
  */
 describe('a bulk edit that would retype a payslip', () => {
 	const asAdmin = {

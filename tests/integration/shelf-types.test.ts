@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * What each shelf offers first, and who owns it.
- *
- * The registry seeds these lists and the household edits them, which is two
- * places holding the same kind of fact — so the first test here holds them to
- * the same values on a fresh install, and the rest hold the edit.
+ * What each shelf offers first, and who owns it. The registry seeds these lists and
+ * the household edits them — the first test here holds the seed, the rest the edit.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
@@ -45,8 +42,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
 	// Back to the lists a fresh install ships, so one test's edit is not the
-	// next test's starting point. The seed itself is asserted against the
-	// baseline in `baseline-migration`, which is where the baseline is read.
+	// next test's starting point.
 	await harness.sql`truncate shelf_type`;
 	await harness.sql`delete from shelf where key = 'boat'`;
 	await harness.sql`delete from document_type where builtin = false`;
@@ -104,9 +100,8 @@ describe('editing a shelf’s list', () => {
 
 describe('a type the household added', () => {
 	it('can be put on a shelf like any other', async () => {
-		// The action filtered the posted list against the types the app SHIPS,
-		// which silently dropped every one a household had added: the checkbox
-		// ticked, the form posted it, and the shelf came back without it.
+		// Regression: filtering the posted list against built-in types only
+		// silently dropped any type the household had added.
 		await addDocumentType('Vaccination book', testDb);
 		const id = await shelfIdByKey('health', testDb);
 		await setShelfTypes(id, ['medical_record', 'vaccination_book'], testDb);

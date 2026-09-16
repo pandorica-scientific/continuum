@@ -3,21 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-/**
- * There are two kinds of file control in this product, and they are not the
- * same control wearing different labels.
- *
- * A DOCUMENT UPLOAD takes whatever paper the household has — a receipt, a bill,
- * a contract, a statement — in whichever of several formats it arrived in. It
- * goes through UploadDropzone, so that drag, click and (once the scan engine
- * lands) the camera are offered in one place rather than at whichever site
- * someone remembered to update.
- *
- * A FORMAT-SPECIFIC IMPORTER reads one named file that Continuum itself, or one
- * named service, produced: the settings JSON, a broker's .xlsx. There is nothing
- * to photograph and no format to choose between, so the plain button it already
- * has is the right control and this rule does not reach it.
- */
+// A DOCUMENT UPLOAD (any paper the household has, in several formats) must go
+// through UploadDropzone, so drag/click/camera are offered in one place. A
+// FORMAT-SPECIFIC IMPORTER reads one named file a service produced, with
+// nothing to photograph and no format to choose, so a plain button is correct
+// and this rule does not reach it.
 const EXEMPT = new Map([
 	[
 		join('src', 'lib', 'components', 'UploadDropzone.svelte'),

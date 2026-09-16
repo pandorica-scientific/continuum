@@ -4,9 +4,7 @@ import { normaliseSearch, SQL_FOLD_FROM, SQL_FOLD_TO } from '$lib/contacts/searc
 import { isAllowedAvatar, previousPhotoToRemove } from '$lib/server/contacts';
 
 describe('contact search normalisation', () => {
-	// The reason this exists. A household with Czech and Polish contacts cannot be
-	// asked to type the háček to find someone: an address book that only answers
-	// to "Řehoř" and never to "rehor" is broken on arrival.
+	// Search must match without diacritics, e.g. "rehor" must find "Řehoř".
 	it('folds Czech diacritics', () => {
 		expect(normaliseSearch('Řehoř')).toBe('rehor');
 		expect(normaliseSearch('Škoda')).toBe('skoda');
@@ -41,10 +39,8 @@ describe('contact search normalisation', () => {
 	});
 });
 
-// The TypeScript fold normalises what the user typed; the SQL fold normalises
-// what is stored. They must agree exactly. If they drift, the query stops
-// matching and reports NO RESULTS — never an error — so nothing surfaces until
-// someone notices a contact they know exists cannot be found.
+// The TypeScript fold and the SQL fold must agree exactly, or matching
+// silently fails with no results rather than an error.
 describe('the SQL fold matches the TypeScript fold', () => {
 	const migration = readFileSync('drizzle/0000_baseline.sql', 'utf8');
 
@@ -61,17 +57,12 @@ describe('the SQL fold matches the TypeScript fold', () => {
 		expect(SQL_FOLD_FROM.length).toBe(SQL_FOLD_TO.length);
 	});
 
-	// Both are load-bearing and both were found by the migration failing. See the
-	// comments in the migration for what each one costs when omitted.
 	it('schema-qualifies unaccent so the index build can resolve it', () => {
 		expect(migration).toContain("public.unaccent('public.unaccent'::regdictionary");
 	});
 
-	// The extension, the function and the index have to arrive as three separate
-	// statements, in that order. Sent as one batch, CREATE FUNCTION is parsed
-	// before CREATE EXTENSION has taken effect and the whole thing fails with
-	// "text search dictionary unaccent does not exist" — on a fresh database
-	// only, which is the one place nobody tests before shipping.
+	// Must arrive as three separate statements, in order — batched, CREATE
+	// FUNCTION runs before CREATE EXTENSION takes effect on a fresh database.
 	it('separates its statements so a fresh database can apply it', () => {
 		const statements = migration
 			.split('--> statement-breakpoint')
@@ -101,9 +92,8 @@ describe('photo lifecycle', () => {
 		expect(previousPhotoToRemove('old.jpg', null)).toBe('old.jpg');
 	});
 
-	// The case that matters: an edit that changes only the phone number still
-	// carries the same photo through the form. Treating that as a replacement
-	// would delete the file the row still points at.
+	// An unrelated edit still carries the same photo through the form; treating
+	// that as a replacement would delete the file the row still points at.
 	it('reports nothing when the photo is unchanged', () => {
 		expect(previousPhotoToRemove('same.jpg', 'same.jpg')).toBeNull();
 	});

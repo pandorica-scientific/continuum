@@ -2,12 +2,8 @@
 // The shape a bottle's tasting notes make.
 //
 // One axis per distinct flavour word; distance from the centre is how many
-// tastings mentioned it, normalised to the most-mentioned. So the outer ring is
-// always reached by something and the web is about THIS bottle rather than
-// about some absolute scale of plumminess.
-//
-// Geometry only, no DOM — the product's rule for every chart, and the reason
-// this can be tested without a browser.
+// tastings mentioned it, normalised to the most-mentioned, so the outer ring
+// is always reached by something. Geometry only, no DOM.
 
 /** Below this many distinct notes there is no shape to draw, only a line. */
 export const LEAST_AXES = 3;
@@ -48,17 +44,13 @@ export interface Radar {
 }
 
 /**
- * Lay out the web.
- *
- * `size` is the SVG's square side; the label pills are positioned by the
- * component in HTML over the top, which is why their coordinates come back
- * separately — a rounded pill drawn in SVG text cannot have a background.
+ * Lay out the web. `size` is the SVG's square side; label pills are
+ * positioned by the component in HTML over the top (SVG text can't have a
+ * background), so their coordinates come back separately.
  */
 export function tastingRadar(mentions: Mention[], size = 240, labelGap = 18): Radar {
 	const centre = size / 2;
-	// Room for the pills outside the web, so a long word does not run off the
-	// square. The pills themselves are laid out in HTML and can overhang; the
-	// web must not.
+	// Room for the pills outside the web; the web itself must not overhang the square.
 	const radius = centre * 0.62;
 	const rings = Array.from({ length: RINGS }, (_, at) => (radius * (at + 1)) / RINGS);
 
@@ -66,14 +58,11 @@ export function tastingRadar(mentions: Mention[], size = 240, labelGap = 18): Ra
 		return { size, centre, radius, axes: [], rings, points: '', spokes: [] };
 	}
 
-	// Normalised to the most-mentioned note, so something always reaches the
-	// outer ring. A note mentioned once among ones mentioned five times sits at
-	// a fifth of the way out, which is the comparison worth seeing.
+	// Normalised to the most-mentioned note, so something always reaches the outer ring.
 	const most = Math.max(...mentions.map((one) => one.count));
 
 	const axes = mentions.map((one, at): RadarAxis => {
-		// Straight up first, then clockwise: a web that starts at three o'clock
-		// reads as rotated by everybody who has seen one before.
+		// Straight up first, then clockwise — the familiar web orientation.
 		const angle = (at / mentions.length) * Math.PI * 2 - Math.PI / 2;
 		const reach = most > 0 ? one.count / most : 0;
 		return {
@@ -97,8 +86,7 @@ export function tastingRadar(mentions: Mention[], size = 240, labelGap = 18): Ra
 		radius,
 		axes,
 		rings,
-		// SVG closes a `polygon` itself, but the string is written closed so a
-		// reader of the markup can see that it does.
+		// SVG closes `polygon` itself; written closed anyway for markup readers.
 		points: [...axes, axes[0]].map((axis) => `${round(axis.x)},${round(axis.y)}`).join(' '),
 		spokes
 	};

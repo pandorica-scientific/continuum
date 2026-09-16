@@ -29,8 +29,7 @@ describe('compactMinor', () => {
 	});
 
 	it('does not round a figure up across its own threshold', () => {
-		// 999 999.99 is not "1000k" and not "1.00M" — it is still in the hundreds
-		// of thousands, and a column that says otherwise is lying by one order.
+		// 999 999.99 rounds up to "1000k", not "1.00M" — it is still in the hundreds of thousands.
 		expect(compactMinor(99_999_999n, 'EUR')).toBe('1000k');
 	});
 
@@ -41,9 +40,7 @@ describe('compactMinor', () => {
 
 describe('compactAxis', () => {
 	it('raises precision until adjacent labels differ', () => {
-		// At this magnitude whole thousands collapse: 3396 and 2547 both round to
-		// "3k", and an axis whose ticks read 3k, 3k, 2k has stopped meaning
-		// anything.
+		// At this magnitude whole thousands collapse: 3396 and 2547 both round to "3k".
 		const ticks = [0n, 84900n, 169800n, 254700n, 339600n];
 		const labels = compactAxis(ticks, 'EUR');
 		expect(new Set(labels).size).toBe(labels.length);
@@ -59,18 +56,14 @@ describe('compactAxis', () => {
 	});
 
 	it('abbreviates every label by the same step', () => {
-		// Five even steps of 653 000, which the axis used to print as
-		// 0 · 653k · 1M · 2M · 3M — two units on one scale, so the reader had to
-		// convert before they could see it was even linear.
+		// Five even steps of 653 000, all abbreviated to the same unit so the scale reads as linear.
 		const ceiling = 261_200_000n;
 		const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => BigInt(Math.round(Number(ceiling) * f)));
 		expect(compactAxis(ticks, 'CZK')).toEqual(['0', '0.7M', '1.3M', '2.0M', '2.6M']);
 	});
 
 	it('does not round a gridline to a figure it is not', () => {
-		// "2M" and "3M" are distinct, which is all the old rule asked of them, and
-		// each overstates its own gridline by about a sixth.
-		// Distinct at whole millions, so the old rule accepted them outright.
+		// "2M" and "3M" are distinct at whole millions, but each overstates its gridline by about a sixth.
 		expect(compactAxis([0n, 195_900_000n, 261_200_000n], 'CZK')).toEqual(['0', '2.0M', '2.6M']);
 	});
 

@@ -207,12 +207,11 @@ export function fromRemoteId(remoteId: string): string | null {
 /**
  * The remote id of one overridden occurrence of a series.
  *
- * Two properties, both load-bearing. It stays inside base32hex — Google refuses
- * anything else with a bare 400, which used to reject every recurring event that
- * had an exception. And it is keyed on the RECURRENCE-ID rather than on the
- * override's position in a list: indexed by position, deleting the first of
- * three overrides renames the other two, leaving the events they used to name
- * orphaned at their old times.
+ * Two properties, both load-bearing. It stays inside base32hex — Google
+ * refuses anything else with a bare 400. And it is keyed on the RECURRENCE-ID
+ * rather than the override's position in a list: indexed by position,
+ * deleting the first of three overrides renames the other two, orphaning the
+ * events they used to name at their old times.
  */
 export function overrideRemoteId(remoteId: string, recurrenceId: string): string {
 	const suffix = digest(recurrenceId);

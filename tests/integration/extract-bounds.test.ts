@@ -20,12 +20,9 @@ vi.mock('$env/dynamic/private', () => ({
 }));
 
 /**
- * A 600-page manual occupies the single worker in slices, not for an afternoon.
- *
- * The contract is that hitting a limit is RECORDED rather than silent:
- * `complete=false` with `pagesExtracted` is what lets the inspector say which
- * pages are searchable and offer to continue, instead of indexing a sixth of
- * the file and looking finished.
+ * Hitting a page limit must be recorded, not silent: `complete=false` with
+ * `pagesExtracted` lets the inspector say which pages are searchable and
+ * offer to continue, instead of looking finished after indexing a fraction.
  */
 let harness: Harness;
 let testDb: TestDb;

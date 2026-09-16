@@ -2,21 +2,13 @@
 /**
  * The uncropped photograph, downscaled, for the corner screen.
  *
- * Normally unused: the phone still holds the file it took, and drawing handles
- * over its own copy costs no network at all. This is the fallback for the two
- * cases where it cannot —
+ * Fallback for when the phone no longer holds its own copy: the page was
+ * already kept (phone released the blob), or the local copy is a HEIC the
+ * browser won't decode.
  *
- *   1. the page was KEPT, so the phone released the blob and kept only the
- *      small preview, and the user has come back to re-edit its edges;
- *   2. the local copy is a HEIC the browser will not decode, which is an
- *      iPhone photographing anything at default settings.
- *
- * The decode happens IN THE CHILD, like every other decode. It used to happen
- * here, and that was the one path undoing the architecture: libheif's heap
- * grows and never shrinks, the child makes that floor temporary by exiting, and
- * a web server that never exits made it permanent again. Going through
- * `scanWork` also puts it behind the same one-at-a-time queue, so two people on
- * the corner screen no longer decode two photographs at once.
+ * Decode happens in the child (via `scanWork`), not here — libheif's heap
+ * never shrinks, so decoding in the long-lived server process would leak.
+ * `scanWork` also serializes decodes one at a time.
  */
 import { error } from '@sveltejs/kit';
 import { existsSync } from 'node:fs';
@@ -36,9 +28,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
 
 	const { sourcePath, originalPath } = scanPagePaths(sessionId, pageId, ext);
 
-	// Written once per page. The photograph does not change, so a second visit
-	// to the corner screen — cancelling out of it and going back in is one tap —
-	// is a file read rather than another decode of a 12 MP HEIC.
+	// Written once per page: a second visit reads the cached file instead of re-decoding.
 	if (!existsSync(originalPath)) {
 		await scanWork({ op: 'original', sourcePath, outPath: originalPath, width: MAX_WIDTH });
 	}

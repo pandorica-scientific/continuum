@@ -1,10 +1,8 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
-	// Grants the household holds, valued at the latest close. Broker-neutral on
-	// purpose: where the shares sit is not this card's business. Grants are
-	// created and rescheduled on Salary; what happens here is what happens to
-	// the shares — a settlement, a sale — and a close typed by hand when no
-	// feed has one.
+	// Grants the household holds, valued at the latest close. Grants are
+	// created and rescheduled on Salary; this card handles what happens to the
+	// shares — settlement, sale, or a close typed by hand when no feed has one.
 	import { enhance } from '$app/forms';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import DataTable from '$lib/components/DataTable.svelte';
@@ -218,7 +216,7 @@
 	.muted {
 		color: var(--fg3);
 	}
-	/* Rows sit on the table's grid; the prompt and the tranche list span it. */
+	/* Prompt and tranche list span the table's grid. */
 	.wide {
 		grid-column: 1 / -1;
 	}

@@ -2,12 +2,9 @@
 /**
  * Which months a filed statement says it covers.
  *
- * The coverage ribbon draws periods, and before this an accepted import filed
- * its document with `period_on` left null — the parser held `periodStart` and
- * `periodEnd` and dropped them. Both are OPTIONAL on `ParsedStatement` and most
- * readers never set them, so persisting what the file states is necessary and
- * not sufficient: the movements just written are the fallback, and every
- * accepted import has movements.
+ * `periodStart`/`periodEnd` on `ParsedStatement` are OPTIONAL and most readers
+ * never set them, so persisting the stated period is necessary but not
+ * sufficient — the movements just written must be the fallback.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdir, rm } from 'node:fs/promises';
@@ -101,9 +98,8 @@ beforeEach(async () => {
 	await harness.sql`truncate document cascade`;
 	await harness.sql`truncate import_file cascade`;
 	await harness.sql`truncate account cascade`;
-	// `bank: 'fio'`, because the reader refuses to file a fio statement against
-	// an account belonging to another institution — the guard that stops one
-	// bank's export landing in another bank's ledger.
+	// `bank: 'fio'`: the reader refuses to file a fio statement against an
+	// account belonging to another institution.
 	accountId = (await makeAccount(db, { bank: 'fio', currency: 'CZK', numbers: [] })).id;
 });
 
@@ -118,9 +114,7 @@ describe('a statement filed by an accepted import', () => {
 		const result = await ingestFile('stated.csv', csv, accountId, db);
 		expect(result.error).toBeUndefined();
 
-		// Snapped to whole months: the shelf works in months, and `period_on` is
-		// constrained to the first of one. April and May, which is what a 15th-to-
-		// 14th statement actually accounts for.
+		// Snapped to whole months: `period_on` is constrained to the first of one.
 		const filed = await filedStatement('stated.csv');
 		expect(filed.periodOn).toBe('2026-04-01');
 		expect(filed.periodEndOn).toBe('2026-05-31');
@@ -141,14 +135,8 @@ describe('a statement filed by an accepted import', () => {
 
 describe('a statement nobody could import', () => {
 	it('draws exactly like an imported one once somebody says which month it is', async () => {
-		// `ocr.ts` records the measured truth: 8 of 20 scanned statements read
-		// exactly and the rest are refused. The person is left holding a scan
-		// their bank really sent, and filing the PDF by hand is the reasonable
-		// thing to do with it — so it has to be able to reach the ribbon.
-		//
-		// No separate state for it, and no extra swatch. This shelf asks whether
-		// this month's statement EXISTS, not whether its transactions reached the
-		// ledger, and a scan in the archive answers that question yes.
+		// No separate state or swatch: the shelf asks whether this month's
+		// statement EXISTS, not whether its transactions reached the ledger.
 		const statements = await shelfIdByKey('statements', db);
 		const doc = await makeDocument(db, {
 			shelfId: statements,
@@ -173,9 +161,8 @@ describe('a statement nobody could import', () => {
 	});
 
 	it('has no period at all until somebody gives it one, so it stays off the ribbon', async () => {
-		// Never imported means no movements, which is exactly why it cannot be
-		// dated automatically. Invisible is the wrong answer, which is what the
-		// header's "not dated" count is for — but it must not draw as covered.
+		// Never imported means no movements to date it by automatically — it must
+		// count as "not dated", not draw as covered.
 		const statements = await shelfIdByKey('statements', db);
 		const doc = await makeDocument(db, { shelfId: statements, type: 'bank_statement' });
 		expect(doc.periodOn).toBeNull();

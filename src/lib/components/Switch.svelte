@@ -2,22 +2,10 @@
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 
 	/**
-	 * A form's submit button, wearing a track and a knob.
-	 *
-	 * A button and not a checkbox, deliberately: all three switches in the
-	 * product sit alone in a `<form method="POST">` and ARE the submission — a
-	 * module toggle, a calendar feed, the marker setting. Written as a checkbox
-	 * they would need script to submit anything, and the no-JavaScript path is
-	 * the one this app keeps.
-	 *
-	 * `role="switch"` with `aria-checked` rather than a bare button: without it
-	 * a screen reader announces "Toggle Salary, button" and never says whether
-	 * it is currently on.
-	 *
-	 * This existed three times — twice in Settings, once in Calendar — with the
-	 * markup and about thirty lines of CSS copied between them. Green when on
-	 * rather than blue: it reads as "running", not "selected", and everything
-	 * it wears is an on/off state of something live.
+	 * A form's submit button, wearing a track and a knob. A button rather than
+	 * a checkbox: this always sits alone in a `<form method="POST">` and IS
+	 * the submission, so the no-JS path stays intact. `role="switch"` with
+	 * `aria-checked` so a screen reader says whether it's currently on.
 	 */
 	interface Props {
 		on: boolean;

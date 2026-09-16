@@ -67,8 +67,7 @@ import { seedDemoLife } from './demo-life';
 const DEMO_PASSWORD = 'demo-demo-demo';
 
 /**
- * Every word and figure a generated demo PDF is allowed to print (decision
- * D10).
+ * Every word and figure a generated demo PDF is allowed to print.
  *
  * The rule is one sentence: a demo page may quote the household this file
  * invents and nothing else — not an environment variable, not a setting, not a
@@ -90,8 +89,8 @@ const DEMO_CAR = 'Family hatchback';
 const DEMO_DOG = 'Fík';
 /**
  * Printed on the receipts so search-by-identifier has something to find. A
- * Czech receipt is looked up by its variable symbol far more often than by the
- * shop's name, and that is the search the demo could not previously show.
+ * Czech receipt is looked up by its variable symbol far more often than by
+ * the shop's name.
  */
 const DEMO_VARIABLE_SYMBOLS = ['10078410', '20450913', '30991244'];
 
@@ -618,9 +617,9 @@ export async function seedDemo(): Promise<void> {
 	// Close enough that the lease and its renewal notice are live decisions. At
 	// ten months out both sat outside every window the briefing watches, so the
 	// demo's tenancy was invisible on the screen that exists to surface exactly
-	// this. Named once because the lease DOCUMENT below carries the same date —
-	// D7 recognises the duplicate by comparing the two, so the moment they drift
-	// the demo reminds twice for one lease ending.
+	// this. Named once because the lease DOCUMENT below carries the same date,
+	// which keeps the two comparable — the moment they drift the demo reminds
+	// twice for one lease ending.
 	const tenancyStartsOn = '2025-06-01';
 	const tenancyEndsOn = monthShift(thisMonth, 3) + '-01';
 	await db.insert(tenancy).values({
@@ -788,13 +787,12 @@ export async function seedDemo(): Promise<void> {
 		}))
 	);
 
-	// ---- Paper (decision D10) ----
+	// ---- Paper ----
 	//
 	// Everything below is a REAL file: a small PDF generated here from the
 	// constants at the top of this module, saved to the data volume, hashed, and
-	// queued for extraction like any upload. Until v0.7.1 all of this was
-	// metadata only, so the one instance built to show the viewer, search by
-	// contents, receipts and archived subjects showed none of them.
+	// queued for extraction like any upload — so the viewer, search by
+	// contents, receipts and archived subjects all have something real to show.
 	const thisYear = Number(thisMonth.slice(0, 4));
 
 	// Twelve payslips, through the salary tracker's own writer rather than a
@@ -804,9 +802,8 @@ export async function seedDemo(): Promise<void> {
 	for (let i = 11; i >= 0; i--) {
 		const m = monthShift(thisMonth, -i - 1);
 		const year = Number(m.slice(0, 4));
-		// The figure the demo has always used is GROSS. Until v0.4.6 it lived on
-		// the document and was read as gross while the reader picked net, which
-		// is the defect that release fixed — so the demo states both.
+		// The figure the demo uses is GROSS; the document states both, since
+		// gross and net must never be confused for one another.
 		const gross = 5800000n + BigInt(year - 2024) * 400000n;
 		// A December thirteenth-salary, so the base-versus-bonus split has
 		// something to draw and the year-on-year comparison has a one-off in it
@@ -819,9 +816,9 @@ export async function seedDemo(): Promise<void> {
 
 		// The bank credit FIRST, for every month the demo has one. A payslip
 		// merges into the month's unclaimed row, so recording the credit before
-		// the slip is what leaves one row holding both — and D6's visible link
-		// between the slip and the payment only forms on a row that holds both
-		// ids. A slip recorded first keeps the month as two rows, by ruling.
+		// the slip is what leaves one row holding both — the visible link between
+		// the slip and the payment only forms on a row that holds both ids. A
+		// slip recorded first keeps the month as two rows.
 		const credit = salaryCredits.get(m);
 		if (credit) {
 			await recordSalary({
@@ -1010,9 +1007,9 @@ export async function seedDemo(): Promise<void> {
 	await addEngagement({ organisationId: taxOffice.id, personId: jana }, db);
 
 	// The lease, filed against the TENANCY — not the flat, which outlives any one
-	// lease on it. Filing it there is also what makes D7 apply: the document's
-	// date IS `tenancyEndsOn`, so the briefing and the calendar show the lease
-	// ending once, from the tenancy, rather than once from each track.
+	// lease on it. The document's date IS `tenancyEndsOn`, so the briefing and
+	// the calendar show the lease ending once, from the tenancy, rather than
+	// once from each track.
 	await fileDemoPdf({
 		name: 'Renting contract · Karlín',
 		shelfKey: 'property',
@@ -1464,8 +1461,8 @@ export async function seedDemo(): Promise<void> {
 		lines: ['Annual service, as the warranty requires.']
 	});
 
-	// A shelf the household made, which is the point of v0.8.0's templates: a
-	// Pets shelf drawing a timeline is as good as a shipped one. The dog lives
+	// A shelf the household made: a Pets shelf drawing a timeline is as good
+	// as a shipped one. The dog lives
 	// here rather than on Health, whose cards are the PEOPLE — a pet's records
 	// are the same shape and belong to a different unit.
 	const pets = await addShelf(

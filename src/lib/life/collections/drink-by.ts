@@ -2,14 +2,9 @@
 /**
  * Whether a bottle wants drinking, and when.
  *
- * Years, not dates: a drink-by window is a thing people hold in years, and
- * storing a day would be a precision nobody has. So the arithmetic compares
- * whole years and nothing here needs a clock.
- *
- * The gate at the top is the whole point. A bottle with no window has no
- * opinion — gin, rum, most spirits — and must say nothing at all. Without it,
- * every bottle in the cellar gets told to drink soon inside a window that does
- * not exist.
+ * Years, not dates — a drink-by window is a precision nobody actually has,
+ * so all comparisons are whole years. A bottle with no window (gin, rum,
+ * most spirits) must say nothing at all rather than a false "drink soon".
  */
 
 export interface DrinkWindow {
@@ -27,9 +22,7 @@ export function drinkPhase({ drinkFrom, drinkTo }: DrinkWindow, year: number): D
 
 	if (drinkTo !== null) {
 		if (year > drinkTo) return 'past';
-		// The closing year IS the warning. Saying "drinking well" in the year a
-		// window shuts is true and useless, so the warning wins even where the
-		// window opens and closes in the same year.
+		// The closing year is the warning, even if the window opens the same year.
 		if (year === drinkTo) return 'drink-soon';
 	}
 
@@ -39,12 +32,9 @@ export function drinkPhase({ drinkFrom, drinkTo }: DrinkWindow, year: number): D
 }
 
 /**
- * The traffic light, plus one that is not part of it.
- *
- * Blue for "too young" deliberately: it is a fact about the bottle, not a
- * warning about it, and yellow would have somebody opening it early to make the
- * screen calm down. `keeps` takes `--fg3` because it is the absence of an
- * opinion rather than an opinion.
+ * The traffic light, plus one that is not part of it. Blue for "too young"
+ * deliberately — it's a fact, not a warning to open early. `keeps` uses
+ * `--fg3` since it's the absence of an opinion, not an opinion.
  */
 export function phaseHue(phase: DrinkPhase): string {
 	switch (phase) {

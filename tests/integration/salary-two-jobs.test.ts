@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// A month worked at two jobs.
-//
-// A salary entry was one row per person per month, so a second employer's
-// payslip for the same month simply replaced the first — a month worked twice
-// reported half its pay, and the file for the other job was deleted with it.
+// Regression: a second employer's payslip for the same month must not overwrite the first.
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { rowId } from '../row-id';
@@ -97,8 +93,7 @@ describe('two payslips for one month', () => {
 		expect(rows[0].grossMinor).toBe(10500000n);
 	});
 
-	// A bank credit carries no document, and there is only ever one such row per
-	// month — that is the old invariant, and it still holds.
+	// A bank credit carries no document, and there is only ever one such row per month.
 	it('lets a bank credit fill the net of a month a payslip has not claimed', async () => {
 		await recordSalary(
 			{

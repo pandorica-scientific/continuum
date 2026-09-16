@@ -1,19 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// A scan in progress, on disk.
-//
-// The originals are scratch and the sweep is what makes that true rather than
-// aspirational — a phone that goes flat mid-stack leaves 60 MB behind, and
-// nothing else in the product will ever remove it.
+// A scan in progress, on disk. Originals are scratch; the sweep is what removes
+// them if a phone goes flat mid-stack.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * `$env/dynamic/private` snapshots process.env when Vite builds the virtual
- * module, which is BEFORE this suite picks its directory — so without this the
- * module under test reads the default `data`, and a test that thinks it is
- * writing to a temporary directory quietly drops files into the developer's
- * own uploads. It did exactly that before this mock was added.
- *
- * `document-file-route.test.ts` mocks it the same way, for the same reason.
+ * module, which is BEFORE this suite picks its directory — without this mock the
+ * module under test would write into the developer's own uploads directory.
  */
 vi.mock('$env/dynamic/private', () => ({
 	env: new Proxy({} as Record<string, string | undefined>, {
@@ -50,8 +43,7 @@ describe('a scan session', () => {
 		const session = await createScanSession();
 		const page = await addScanPage(session.id, new Uint8Array([1, 2, 3]), 'photo.jpg');
 
-		// Never beside filed documents: these are scratch, and a stray original in
-		// the uploads directory would look exactly like a document with no row.
+		// A stray original in the uploads directory would look like a document with no row.
 		expect(page.sourcePath).toContain(join('scan', session.id));
 		expect(existsSync(page.sourcePath)).toBe(true);
 	});
@@ -60,8 +52,7 @@ describe('a scan session', () => {
 		const { createScanSession, addScanPage, scanSourceExt } = await load();
 		const session = await createScanSession();
 		const page = await addScanPage(session.id, new Uint8Array([1]), 'IMG_0042.HEIC');
-		// An iPhone hands over a HEIC and the decoder needs to know that before it
-		// opens the file, so the extension is carried rather than normalised away.
+		// The decoder needs to know the format before it opens the file.
 		expect(await scanSourceExt(session.id, page.pageId)).toBe('.heic');
 	});
 
@@ -72,9 +63,8 @@ describe('a scan session', () => {
 	});
 
 	it('refuses an id that tries to leave its directory', async () => {
-		// These arrive from a URL parameter. A `..` that gets through is a read or
-		// a delete anywhere the server can reach; `system/files.ts` checks names
-		// for the same reason.
+		// These arrive from a URL parameter; a `..` that gets through is a read or
+		// delete anywhere the server can reach.
 		const { scanPagePaths, sessionDir } = await load();
 		expect(() =>
 			scanPagePaths('7f3d5a9c-1111-4222-8333-444455556666', '../../etc/passwd')
@@ -91,10 +81,8 @@ describe('a scan session', () => {
 	});
 
 	it('counts the pages a document would hold rather than the photographs taken', async () => {
-		// Every upload writes a source whether its page survives or not, so
-		// counting THOSE counted retakes: someone who photographed six pages twice
-		// was refused at twenty shutter presses while the review screen in front
-		// of them showed fourteen. The cap is a statement about the document.
+		// Counting every upload would count retakes too; the cap is a statement about
+		// the document, not the shutter.
 		const { createScanSession, addScanPage, countScanPages, scanPagePaths } = await load();
 		const session = await createScanSession();
 		const first = await addScanPage(session.id, new Uint8Array([1]), 'a.jpg');
@@ -105,15 +93,13 @@ describe('a scan session', () => {
 		await writeFile(artefactPath('color'), 'kept');
 		expect(await countScanPages(session.id)).toBe(1);
 
-		// The two modes write different extensions, so a page kept twice leaves
-		// two files. It is still one page.
+		// The two modes write different extensions, so a page kept twice leaves two
+		// files; it is still one page.
 		await writeFile(artefactPath('bw'), 'kept');
 		expect(await countScanPages(session.id)).toBe(1);
 	});
 
 	it('drops one page without ending the scan', async () => {
-		// A retake uploads its replacement into the same session, and the rejected
-		// original is the 2–4 MB one.
 		const { createScanSession, addScanPage, dropScanPage, scanPagePaths } = await load();
 		const session = await createScanSession();
 		const first = await addScanPage(session.id, new Uint8Array([1]), 'a.jpg');
@@ -127,11 +113,9 @@ describe('a scan session', () => {
 	});
 
 	it('reclaims a source nobody kept when the next photograph arrives', async () => {
-		// One page is in flight at a time, so a source with no artefact beside it
-		// at the moment a new photograph lands is one whose `DELETE` never
-		// arrived — a closed tab, a phone off the network. The page cap counts
-		// KEPT pages, so without this a client that never says goodbye could add
-		// originals all afternoon with its page count stuck at zero.
+		// A source with no artefact when a new photograph lands is one whose `DELETE`
+		// never arrived (closed tab, phone off the network). Without this, a client
+		// that never says goodbye could add originals forever at zero page count.
 		const { createScanSession, addScanPage, dropUnkeptScanPages, scanPagePaths } = await load();
 		const session = await createScanSession();
 		const abandoned = await addScanPage(session.id, new Uint8Array([1]), 'a.jpg');
@@ -140,15 +124,12 @@ describe('a scan session', () => {
 
 		expect(await dropUnkeptScanPages(session.id)).toBe(1);
 		expect(existsSync(abandoned.sourcePath)).toBe(false);
-		// A page that WAS kept keeps its source: re-editing its edges renders from
-		// the original again.
+		// A page that WAS kept keeps its source, so re-editing renders from the original.
 		expect(existsSync(finished.sourcePath)).toBe(true);
 	});
 
 	it('leaves exactly one artefact behind when a page is kept twice', async () => {
-		// `document/+server.ts` reads whichever artefact exists and tests the PNG
-		// first, so a page kept as colour after black-and-white would go into the
-		// document as the mode the person changed their mind about.
+		// The document reader would otherwise pick up the mode the person changed their mind about.
 		const { createScanSession, addScanPage, dropOtherArtefact, scanPagePaths } = await load();
 		const session = await createScanSession();
 		const page = await addScanPage(session.id, new Uint8Array([1]), 'a.jpg');
@@ -167,11 +148,8 @@ describe('a scan session', () => {
 		const session = await createScanSession();
 		const page = await addScanPage(session.id, new Uint8Array([1]), 'a.jpg');
 
-		// Aged through the module's OWN idea of where the session lives rather
-		// than a path rebuilt here, so this keeps testing the right directory
-		// even if where sessions live ever changes. The files age with it: the
-		// sweep reads the newest mtime INSIDE the session, because that is the
-		// only one a re-render moves.
+		// The sweep reads the newest mtime INSIDE the session, since that's the one a
+		// re-render moves.
 		const old = new Date(Date.now() - 3 * 60 * 60 * 1000);
 		await utimes(page.sourcePath, old, old);
 		await utimes(sessionDir(session.id), old, old);
@@ -187,11 +165,8 @@ describe('a scan session', () => {
 	});
 
 	it('leaves a scan whose only recent work was re-rendering one page', async () => {
-		// The directory's mtime moves when an entry is ADDED, removed or renamed —
-		// not when a file inside it is written over. A mode tap and a corner drag
-		// both overwrite a preview that already exists, so someone spending two
-		// hours on a single difficult page touched the directory once, at the
-		// start, and was then swept out from under.
+		// A directory's mtime moves on add/remove/rename, not when a file inside it is
+		// overwritten — so a mode tap or corner drag alone must not look abandoned.
 		const { createScanSession, addScanPage, sessionDir, scanPagePaths, sweepScanSessions } =
 			await load();
 		const session = await createScanSession();
@@ -199,12 +174,11 @@ describe('a scan session', () => {
 		const { previewPath } = scanPagePaths(session.id, page.pageId);
 		await writeFile(previewPath, 'first render');
 
-		// Two hours pass with the page on screen, and the directory ages with it.
 		const old = new Date(Date.now() - 3 * 60 * 60 * 1000);
 		await utimes(sessionDir(session.id), old, old);
 		await utimes(page.sourcePath, old, old);
 
-		// Then another mode is tapped, which rewrites the preview and nothing else.
+		// Another mode is tapped, rewriting the preview and nothing else.
 		await writeFile(previewPath, 'second render');
 
 		expect(await sweepScanSessions()).toBe(0);
@@ -219,20 +193,14 @@ describe('a scan session', () => {
 
 describe('the reclaim of a scan nobody finished', () => {
 	it('runs on the server"s own tick and not only in this file', () => {
-		// The failure this exists for. The sweep was written, documented as
-		// "Required, not housekeeping", and called from nowhere but the test above
-		// — so every abandoned scan kept its 2–4 MB a page for ever, on the
-		// smallest disk the product runs on.
-		//
-		// The registration is read from source rather than from the boot registry
-		// because importing that here would pull the database into a test whose
-		// whole subject is a temporary directory.
+		// Read from source rather than the boot registry, since importing that would
+		// pull the database into a test whose subject is a temporary directory.
 		expect(readFileSync('src/lib/server/boot/defaults.ts', 'utf8')).toContain('sweepScanSessions');
 	});
 
 	it('is not the only thing that reclaims one, because two hours is a long time', () => {
-		// Closing the tab is how a scan usually ends, and it reaches none of the
-		// buttons that say so. `keepalive` is what lets the request leave anyway.
+		// Closing the tab reaches none of the buttons that say a scan is done;
+		// `keepalive` is what lets the request leave anyway.
 		const flow = readFileSync('src/lib/scan/client/ScanFlow.svelte', 'utf8');
 		expect(flow).toMatch(/addEventListener\('pagehide', leave\)/);
 		expect(readFileSync('src/lib/scan/client/api.ts', 'utf8')).toMatch(/keepalive: true/);

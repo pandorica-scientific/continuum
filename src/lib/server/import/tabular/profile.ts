@@ -69,15 +69,9 @@ export function headerSignature(headers: string[]): string {
  * The header labels of a transaction region, in order.
  *
  * Falls back to the first row that is not a movement when nothing was
- * recognised as a header — which is the case a profile exists for. The header
- * detector names a row by the roles its labels carry, so a bank writing them in
- * a language the dictionary does not hold has no detectable header at all; and
- * keying profiles on what the detector found meant those layouts could be
- * mapped by hand and then never recognised again, because the saved signature
- * was computed over an empty list.
- *
- * A profile is keyed on what the columns are CALLED, and the file calls them
- * something whether or not we understand it.
+ * recognised as a header — a bank writing labels in a language the dictionary
+ * does not hold has no detectable header, but a profile is still keyed on
+ * what the columns are CALLED, whether or not we understand it.
  */
 export function headersOf(region: Region): string[] {
 	if (region.headerIndex !== undefined) return region.rows[region.headerIndex].map((c) => c.text);

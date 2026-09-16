@@ -1,16 +1,12 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// An uploaded file, shown over the screen that linked to it. X, Escape or a
-	// click on the backdrop closes it and puts focus back on the link.
-	//
-	// Deliberately not the browser's tab: the row the file belongs to stays
-	// visible behind it, and coming back is one key rather than a tab switch.
+	// click on the backdrop closes it and returns focus to the link.
 	import { overlayFocus } from '$lib/actions/overlay';
 	import type { FileKind } from '$lib/ui/file-viewer';
 
-	// The source is resolved by the caller, because the two link shapes answer
-	// it differently: `/files/<name>` carries its extension, a document's file
-	// is addressed by id and states its extension on the link.
+	// Source resolved by the caller: `/files/<name>` carries its extension, a
+	// document's file is addressed by id and states its extension separately.
 	let {
 		src,
 		kind,
@@ -43,9 +39,6 @@
 	>
 		<div class="head">
 			<span class="title">{title}</span>
-			<!-- The two things the old new-tab behaviour was good for are kept as
-			     buttons rather than lost: saving the file, and putting it on a
-			     screen of its own beside the app. -->
 			<a class="act" href={src} {download}>Download</a>
 			<a class="act" href={src} target="_blank" rel="noopener">Open in tab</a>
 			<button type="button" class="close" onclick={onclose} aria-label="Close">✕</button>

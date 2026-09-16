@@ -45,15 +45,13 @@ import {
 /**
  * The one place that knows what a document can be filed against.
  *
- * Five screens used to carry their own four-kind list, so a kind added to the
- * database reached whichever of them somebody remembered. What is asserted here
- * is therefore coverage first — the registry against `ENTITY_KINDS` — and then
- * that every kind in it can actually name a row, because a registry entry whose
- * name expression does not run is the same outage as a missing entry.
+ * What is asserted here is coverage first — the registry against
+ * `ENTITY_KINDS` — and then that every kind in it can actually name a row,
+ * because a registry entry whose name expression does not run is the same
+ * outage as a missing entry.
  *
- * The archive rule is not re-tested from first principles (`archive-scope`
- * holds the truth table); what is tested here is that `documentsAbout` carries
- * it at all.
+ * The archive rule's truth table is not re-tested from first principles here;
+ * what is tested is that `documentsAbout` carries it at all.
  */
 let harness: Harness;
 let testDb: TestDb;
@@ -91,8 +89,8 @@ beforeAll(async () => {
 	await testDb
 		.insert(tenancy)
 		.values({ id: target.tenancy, propertyId: target.property, tenantName: 'Petr Nájemník' });
-	// A current account, deliberately: the name expression covers every kind,
-	// where the Documents screen used to offer brokerage accounts only.
+	// A current account, deliberately: the name expression must cover every
+	// account kind, not brokerage accounts only.
 	await makeAccount(testDb, {
 		id: target.account,
 		name: 'Current account',
@@ -590,11 +588,11 @@ describe('what is left to attach', () => {
 });
 
 /**
- * The fix for a picker that fetched the whole library once PER RECORD:
- * a screen with N records now runs one document query and one `document_link`
+ * A screen with N records runs one document query and one `document_link`
  * query for however many targets it asks about, and does the per-target
- * subtraction in JS. `candidateDocuments(targetId, …)` is a thin wrapper over
- * this for the single-record screens (property, tenancy).
+ * subtraction in JS, rather than fetching the whole library once per record.
+ * `candidateDocuments(targetId, …)` is a thin wrapper over this for the
+ * single-record screens (property, tenancy).
  */
 describe('candidateDocumentsFor, batched across several records', () => {
 	it("excludes each target's own links and includes what only the other has", async () => {

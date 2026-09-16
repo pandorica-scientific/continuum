@@ -2,9 +2,7 @@
 // The category tree a fresh instance starts with: nine groups in waterfall
 // order, and the leaves that hang off them.
 //
-// Groups used to be a constant the whole product imported, which meant a
-// household whose spending did not match these nine could not say so. They are
-// seeded into `category_group` on boot and read from there everywhere; this
+// Seeded into `category_group` on boot and read from there everywhere; this
 // file is the seed, not the source of truth at runtime.
 
 import type { EnumValue } from './enums';
@@ -151,8 +149,7 @@ export const CATEGORY_SEED: CategoryDef[] = [
 	{ id: 'other-income', groupKey: 'income', name: 'Other income', sort: 4, isCatchAll: true },
 	// taxes & fees
 	{ id: 'taxes-fees', groupKey: 'taxes', name: 'Taxes & fees', sort: 0 },
-	// bills & utilities — internet and phone were one leaf and could not be told
-	// apart, which is one of the reported gaps.
+	// bills & utilities
 	{ id: 'energy', groupKey: 'bills', name: 'Energy', sort: 0 },
 	{ id: 'water-heating', groupKey: 'bills', name: 'Water & heating', sort: 1 },
 	{ id: 'internet', groupKey: 'bills', name: 'Internet', sort: 2 },

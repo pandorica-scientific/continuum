@@ -9,18 +9,13 @@ import type { ParsedRow, ParsedStatement } from '../types';
  * fingerprint to tell identical same-day payments apart.
  *
  * Fees are kept separate from the amount: the balance moves by amount − fee,
- * the counterparty sees the amount, and "what did Revolut charge me" stays
- * answerable. Started Date is the value date, Completed Date the booking date.
+ * and the counterparty sees the amount. Started Date is the value date,
+ * Completed Date the booking date.
  *
- * ONE STATEMENT PER POCKET. Revolut writes every pocket into the same file and
- * tells them apart only by the Product column, and each pocket keeps its own
- * running balance. Read as a single statement, a file holding 1798 Current rows
- * and three Savings rows proved P0 — "the running balance does not follow from
- * the movements" — because one chain was being checked against two accounts'
- * balances, and the closing balance came from whichever pocket happened to be
- * written last. The Savings rows also carried dates two years earlier, so the
- * period read June 2024 for a July 2026 statement. Split by pocket, the same
- * file proves P3 on all 1798 rows.
+ * ONE STATEMENT PER POCKET. Revolut writes every pocket into the same file,
+ * told apart only by the Product column, each with its own running balance —
+ * reading them as one statement checks one chain against two accounts'
+ * balances and picks up whichever pocket was written last.
  */
 export function parseRevolut(text: string): ParsedStatement[] {
 	const lines = csvLines(text.replace(/^\ufeff/, '')).filter((l) => l.trim());
@@ -40,15 +35,13 @@ export function parseRevolut(text: string): ParsedStatement[] {
 	const cProduct = col('Product');
 
 	// Keyed by pocket, then by currency: a multi-currency pocket keeps a chain
-	// per currency too, for the same reason. A file with neither column still
-	// works — everything lands in one group, which is what it was before.
+	// per currency too. A file with neither column lands in one group.
 	const pockets = new Map<string, { currency: string; rows: ParsedRow[] }>();
 
 	for (const line of lines.slice(1)) {
 		const cells = splitCsvLine(line, ',');
 		if (cells.length < header.length) continue;
-		// A reverted payment never moved money and carries no balance, so it
-		// belongs to no chain.
+		// A reverted payment never moved money and carries no balance.
 		if (cState !== -1 && cells[cState] !== 'COMPLETED') continue;
 
 		const rowCurrency = cells[cCurrency] || 'CZK';
@@ -80,9 +73,8 @@ export function parseRevolut(text: string): ParsedStatement[] {
 			const last = pocket.rows[pocket.rows.length - 1];
 			return {
 				bank: 'revolut',
-				// An adapter ran because the file identified this bank, so the issuer
-				// is evidence here rather than a guess. Readers that cannot tell leave
-				// it undefined; only this field may decide an account.
+				// The adapter ran because the file identified this bank, so issuer is
+				// evidence here, not a guess; only this field may decide an account.
 				issuer: 'revolut',
 				format: 'csv' as const,
 				currency: pocket.currency,

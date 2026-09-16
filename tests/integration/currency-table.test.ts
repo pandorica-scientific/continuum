@@ -25,8 +25,7 @@ describe('the currency table', () => {
 	it('is materialised from the runtime, not hand-seeded', async () => {
 		await refreshCurrencies(harness.db);
 		const [{ n }] = await harness.sql<{ n: number }[]>`select count(*)::int as n from currency`;
-		// CLDR lists about 160 codes. The assertion is that this is not a
-		// hand-written handful of the currencies one household happens to hold.
+		// CLDR lists about 160 codes; a hand-written handful would fail this.
 		expect(n).toBeGreaterThan(100);
 	});
 
@@ -37,23 +36,16 @@ describe('the currency table', () => {
 		const byCode = Object.fromEntries(rows.map((r) => [r.code, r.exponent]));
 		expect(byCode.CZK).toBe(2);
 		expect(byCode.JPY).toBe(0);
-		// ISO 4217 gives HUF two decimal places; CLDR gives zero, and CLDR is how
-		// the currency is actually written. This assertion is the whole reason the
-		// table is derived rather than seeded — a hand-written ISO list would put a
-		// 2 here and disagree with `minorDigits`, which is the defect the exponent
-		// column exists to prevent.
+		// ISO 4217 gives HUF two decimal places; CLDR gives zero, which is how
+		// HUF is actually written and disagrees with a hand-written ISO list.
 		expect(byCode.HUF).toBe(0);
 		expect(byCode.KWD).toBe(3);
 	});
 
 	it('holds an exponent every currency column can actually be scaled by', async () => {
 		await refreshCurrencies(harness.db);
-		// CLDR lists three exponents and no more: 0 (33 codes), 2 (123) and 3 (the
-		// six Gulf and North African dinars). ISO 4217 defines a fourth for CLF and
-		// UYW, which CLDR does not list at all — so `minorDigits` never returns 4
-		// and nothing stored here needs to handle it. The bound is asserted rather
-		// than the exact set, so a runtime that starts listing CLF does not fail
-		// this suite for being more complete than the one it was written against.
+		// CLDR uses exponents 0, 2 and 3; ISO 4217's exponent-4 codes (CLF, UYW)
+		// aren't in CLDR, so the bound is asserted rather than the exact set.
 		const [{ lo, hi }] = await harness.sql<{ lo: number; hi: number }[]>`
 			select min(exponent)::int as lo, max(exponent)::int as hi from currency`;
 		expect(lo).toBe(0);

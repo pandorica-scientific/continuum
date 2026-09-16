@@ -4,13 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { taxSummaryTiles } from '$lib/tax-tiles';
 import { salarySummaryTiles } from '$lib/salary-tiles';
 
-/**
- * The two screens that used to own a way of drawing figures.
- *
- * The bands rendered NOTHING with no years, so the page jumped the moment the
- * first year arrived. As tiles they always draw, reading `—` — which is also
- * what makes the frame the same height on every screen.
- */
+// Tiles always draw, reading `—` with no data, so the page never jumps layout
+// the moment the first year arrives.
 describe('summary tiles', () => {
 	it('tax: an empty record draws dashes, never blanks', () => {
 		const tiles = taxSummaryTiles([], 'CZK');

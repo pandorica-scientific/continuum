@@ -124,11 +124,8 @@ describe('a later import', () => {
 	it('leaves a row that was already decided as a one-sided transfer alone', async () => {
 		await markOneSidedTransfer(MOVE, SAVINGS, testDb);
 
-		// The sweep that re-categorises undecided rows looks for "no category and
-		// no pair", which is exactly the shape a one-sided transfer has: the
-		// category is cleared because a transfer is not spending, and there is no
-		// pair because there is no second leg. Without the shared predicate it
-		// would take the decision back on the next import.
+		// The sweep re-categorises rows with "no category and no pair" — exactly
+		// the shape a one-sided transfer has, so it must not undo the decision.
 		await pairAndCategorise(testDb);
 
 		const [row] = await testDb.select().from(schema.transaction);

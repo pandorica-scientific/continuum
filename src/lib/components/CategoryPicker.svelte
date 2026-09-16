@@ -2,19 +2,10 @@
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import { tick, untrack } from 'svelte';
 
-	// A category chooser that opens where there is room for it.
-	//
-	// This replaces a native <select>, which is not a decision taken lightly: a
-	// native select is accessible for free, works on every device, and needs no
-	// code. But its popup is positioned by the browser and cannot be steered, and
-	// on the review queue — a long list of rows, each with a chooser — opening one
-	// near the bottom of the page expanded downwards past the fold, so the options
-	// were off-screen until you scrolled to find them.
-	//
-	// What is rebuilt here is therefore only what a select gave away: where the
-	// list appears, and how tall it is. Everything else a select provides is kept
-	// deliberately — a real form value, group headings, keyboard traversal,
-	// typeahead, and the combobox roles a screen reader expects.
+	// Replaces a native <select> only to control where its list opens (a native
+	// select's popup can run off-screen on long pages). Keeps everything else a
+	// select gives for free: real form value, group headings, keyboard
+	// traversal, typeahead, and combobox a11y roles.
 
 	interface Item {
 		id: string;
@@ -40,10 +31,8 @@
 		onpick?: (id: string) => void;
 	} = $props();
 
-	// The INITIAL value, read once. untrack rather than a bare read: this is
-	// deliberately not reactive, because the prop carries what the categoriser
-	// suggested and a later re-render must not overwrite what a person has since
-	// chosen with the suggestion they were rejecting.
+	// Initial value only, read once — must not be reactive, or a later
+	// re-render of the suggested value would clobber the user's own choice.
 	let selected = $state(untrack(() => value));
 	let open = $state(false);
 	let trigger = $state<HTMLButtonElement | null>(null);
@@ -63,8 +52,7 @@
 		const margin = 8;
 		const below = window.innerHeight - rect.bottom - margin;
 		const above = rect.top - margin;
-		// Below unless above is genuinely roomier — a list that jumps sides for a
-		// few pixels is worse than one that is a little short.
+		// Opens below unless above is genuinely roomier.
 		const useAbove = below < 180 && above > below;
 		placement = {
 			above: useAbove,
@@ -101,8 +89,7 @@
 		);
 	}
 
-	// Typeahead, as a select has: type "gro" and land on Groceries. Cleared after
-	// a pause so the next word starts fresh.
+	// Typeahead: type "gro" to land on Groceries. Cleared after a pause.
 	let typed = '';
 	let typedAt = 0;
 	function typeahead(key: string) {
@@ -170,10 +157,7 @@
 />
 
 <div class="picker" class:open>
-	<!-- The form value. A hidden input rather than the button, so this posts
-	     exactly as the select it replaces did and every existing action is
-	     untouched. Inside the wrapper, so the component is one element in the DOM
-	     and anything scoping to it finds the value too. -->
+	<!-- Hidden input posts the value exactly as the replaced <select> did. -->
 	<input type="hidden" {name} value={selected ?? ''} />
 
 	<button
@@ -193,8 +177,8 @@
 	</button>
 
 	{#if open}
-		<!-- Dismissed by clicking away. A button rather than a div so it is a real
-		     control, and aria-hidden because it is scenery, not a choice. -->
+		<!-- Dismisses on click-away; a button so it's a real control, aria-hidden
+		     because it's scenery, not a choice. -->
 		<button type="button" class="scrim" aria-hidden="true" tabindex="-1" onclick={hide}></button>
 		<ul
 			bind:this={list}
@@ -212,11 +196,8 @@
 					<ul class="group-items" role="none">
 						{#each group.items as item (item.id)}
 							{@const index = flat.findIndex((entry) => entry.id === item.id)}
-							<!-- No keyboard handler here on purpose. In the listbox pattern the
-							     options are not focusable: focus stays on the combobox and every
-							     key is handled there, which is what lets Up/Down/typeahead work
-							     without the browser losing track of what is being edited. The
-							     rule cannot see that, so it is answered rather than obeyed. -->
+							<!-- Listbox pattern: options aren't focusable, focus stays on the
+							     combobox and keys are handled there. -->
 							<!-- svelte-ignore a11y_click_events_have_key_events -->
 							<li
 								class="option"
@@ -276,7 +257,7 @@
 		outline: 2px solid var(--blue);
 		outline-offset: 2px;
 	}
-	/* Covers the page so a click anywhere closes the list, and sits under it. */
+	/* Covers the page so a click anywhere closes the list. */
 	.scrim {
 		position: fixed;
 		inset: 0;
@@ -294,22 +275,16 @@
 		padding: var(--space-2);
 		list-style: none;
 		overflow-y: auto;
-		/* Scrolling stops at this panel's own end. Without it the wheel is handed
-		   on to whatever scrolls behind, so reaching the bottom here quietly
-		   starts scrolling the page — and scrolling back moves the wrong one
-		   first. See docs/ui-guidelines.md. */
+		/* Contains scroll to this panel instead of the page behind it. */
 		overscroll-behavior: contain;
-		/* --bg2, not --card. The card tokens are TINTS in the dark theme —
-		   rgba(255,255,255,0.03) — which read as a raised panel in the document
-		   flow and as a transparent smear when something floats over content.
-		   floating-surfaces.test.ts enforces this; it caught the mistake here. */
+		/* --bg2, not --card: --card is a translucent tint in the dark theme and
+		   reads as a transparent smear when floating over content. */
 		background: var(--bg2);
 		border: 1px solid var(--bd2);
 		border-radius: var(--radius-md);
 		box-shadow: var(--shadow-float);
 	}
-	/* The whole point: when there is no room beneath, it opens upwards instead of
-	   expanding past the bottom of the page. */
+	/* Opens upwards when there's no room beneath. */
 	.list.above {
 		top: auto;
 		bottom: 100%;
@@ -335,7 +310,6 @@
 		cursor: pointer;
 	}
 	.option[data-active='true'] {
-		/* Opaque for the same reason as the list behind it. */
 		background: var(--bg);
 	}
 	.option[aria-selected='true'] {

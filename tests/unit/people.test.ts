@@ -29,9 +29,8 @@ describe('parseBirthYear', () => {
 		expect(parseBirthYear('   ', now)).toBeNull();
 	});
 
-	// inputmode="numeric" is a keyboard hint, not a constraint, so these all
-	// reach the server. Before this guard they became NaN and Postgres rejected
-	// the insert with a 500 instead of a message the admin could act on.
+	// Regression: unguarded, these became NaN and Postgres rejected the insert
+	// with a 500 instead of a message the admin could act on.
 	it('rejects anything that is not a whole number', () => {
 		expect(parseBirthYear('nineteen', now)).toBe('invalid');
 		expect(parseBirthYear('19 88', now)).toBe('invalid');

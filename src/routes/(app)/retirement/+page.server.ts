@@ -35,13 +35,8 @@ const RETIRE_NUMBER_KEYS = [
 
 /**
  * Name the assumption that is out of range rather than refusing the snapshot
- * as a whole.
- *
- * This page autosaves, so there is no moment where a person is submitting and
- * can see what was wrong. One generic refusal meant an out-of-range value that
- * stayed in the form refused every later edit too — changing spending or a
- * growth slider silently did nothing behind the same line of text, for as long
- * as the offending field held its value.
+ * as a whole — this page autosaves, so a generic refusal would silently block
+ * every later edit while the offending field still held its bad value.
  */
 function retireConfigFromForm(form: FormData): { config: RetireConfig } | { message: string } {
 	type NumberKey = (typeof RETIRE_NUMBER_KEYS)[number];

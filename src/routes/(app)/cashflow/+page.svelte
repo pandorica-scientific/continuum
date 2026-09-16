@@ -16,18 +16,9 @@
 	const fmt = (v: number) => formatMinor(fromMajor(v, data.baseCurrency), data.baseCurrency);
 	const unit = $derived(displayCurrency(data.baseCurrency));
 
-	// The same window the Overview panel shows as a waterfall, told here as
-	// three answers instead: how each month compared, where the money went,
-	// and where it came from. The waterfall stays on Overview; two screens
-	// drawing the same Sankey was the same screen twice.
-	// Biggest first, and only what money actually went to: a group that saw
-	// nothing this window is a row saying nothing, and the reserves the
-	// waterfall lists as a stage are where money came FROM — they are told on
-	// the right.
-	// The share is of what went OUT, worked out here from the rows shown: the
-	// loader's `pct` is a share of income, which is what the Overview's waterfall
-	// draws, and on this list it would leave the bar short in a saving month and
-	// past full in a drawdown one.
+	// Biggest first, only groups money actually went to (reserves are told as a source, on the right).
+	// Share is of what went out, recomputed here — the loader's `pct` is a share
+	// of income, which would leave the bar short (saving month) or overfull (drawdown).
 	const groups = $derived.by(() => {
 		const spent = data.flow.breakdown
 			.map((g) => ({
@@ -79,9 +70,8 @@
 
 	<SummaryBand
 		tiles={[
-			// The wash says WHICH figure this is; the colour on the value says
-			// whether it is good news. In and Saved carry both; Out is red ground
-			// with plain ink, because money going out is not in itself a problem.
+			// Wash says which figure this is; value colour says whether it's good news.
+			// Out uses plain ink — money going out isn't in itself a problem.
 			{
 				label: 'Money in',
 				value: fmt(data.metrics.moneyIn),

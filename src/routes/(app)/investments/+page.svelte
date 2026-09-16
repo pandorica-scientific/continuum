@@ -12,9 +12,8 @@
 
 	let { data, form } = $props();
 
-	// Dismissal is keyed on the message itself rather than being a bare boolean:
-	// a new failure must reappear even when the previous one was dismissed, and
-	// a flag somebody has to remember to reset is how that stops happening.
+	// Keyed on the message, not a bare boolean: a new failure must reappear
+	// even when the previous one was dismissed.
 	let dismissed = $state<string | null>(null);
 	const errorMessage = $derived(form?.message && form.message !== dismissed ? form.message : null);
 
@@ -32,7 +31,7 @@
 		{ key: 'gain', label: 'Gain', align: 'end', width: 'minmax(72px, auto)' }
 	]);
 
-	// FileList from a browse or a drop, File[] from the scan engine.
+	// FileList from a browse or drop; File[] from the scan engine.
 	async function upload(files: FileList | File[]) {
 		const file = files[0];
 		if (!file) return { type: 'error' as const, message: 'Choose a report first.' };
@@ -60,23 +59,18 @@
 				})
 				.filter(Boolean)
 				.join(' ');
-		// Which points are hard market values from a report rather than
-		// reconstruction. This decides whether the actual line is drawn at all;
-		// it no longer draws a marker per point — a single snapshot rendered as
-		// one dot at the right-hand end, which read as a defect rather than data.
+		// Which points are hard market values from a report rather than reconstruction.
 		const actualPoints = data.series
 			.map((p, i) => (p.isSnapshot && p.actual !== null ? { x: x(i), y: y(p.actual) } : null))
 			.filter((p): p is { x: number; y: number } => p !== null);
-		// Where the actual line starts and stops, so the fill under it closes
-		// at its own ends rather than at the plot's: a series with no value for
-		// its first months drew a wedge from the corner up to the first point.
+		// Where the actual line starts and stops, so its fill closes at its own
+		// ends rather than the plot's.
 		const actualIndexes = data.series.map((p, i) => (p.actual === null || p.isMarked ? null : i));
 		const firstActual = actualIndexes.find((i) => i !== null) ?? 0;
 		const lastActual = [...actualIndexes].reverse().find((i) => i !== null) ?? 0;
 		const actualSpan = { x0: x(firstActual).toFixed(1), x1: x(lastActual).toFixed(1) };
-		// After the last report the line continues dashed: units the report
-		// listed at closes fetched since. It hangs off the last reported point so
-		// the eye reads one line changing character, not two lines.
+		// After the last report, the line continues dashed off the last reported
+		// point, so it reads as one line changing character, not two lines.
 		const lastSnapshotFromEnd = [...data.series].reverse().findIndex((p) => p.isSnapshot);
 		const anchor = lastSnapshotFromEnd === -1 ? -1 : data.series.length - 1 - lastSnapshotFromEnd;
 		const marked =
@@ -90,14 +84,9 @@
 						)
 						.filter((s): s is string => s !== null)
 						.join(' ');
-		// A rule where each year begins, so the labels beneath the plot have
-		// something to point at. Drawn at the FIRST month of each year rather than
-		// spaced evenly: the series can start mid-year, and an evenly spaced rule
-		// would sit wherever it liked and quietly mislead.
-		//
-		// The labels are positioned from the same index as the rules. They used to
-		// be laid out space-between, which put every one of them somewhere the
-		// rule was not.
+		// Drawn at the FIRST month of each year rather than spaced evenly: the series
+		// can start mid-year, and an evenly spaced rule would mislead. Labels are
+		// positioned from this same index so they line up with their rule.
 		const years = [...new Set(data.series.map((p) => p.month.slice(0, 4)))].map((year) => {
 			const index = data.series.findIndex((p) => p.month.slice(0, 4) === year);
 			const left = (x(index) / CW) * 100;
@@ -522,9 +511,7 @@
 		align-items: center;
 		gap: 7px;
 	}
-	/* A line sample, not the holdings' colour bar below: the two shared one
-	   class name and the bar's 8×22 rule won, which drew every legend line as
-	   a curled speck. */
+	/* A line sample, not the holdings' colour bar below — must not share that class name. */
 	.legend .swatch {
 		width: 16px;
 		height: 0;
@@ -552,9 +539,8 @@
 		flex-direction: column;
 		gap: var(--space-8);
 	}
-	/* Chart on the left, legend on the right — the reported fault was a donut
-	   drawn at a fixed 148px in a card far wider than that, with its legend
-	   stacked underneath and most of the box empty. */
+	/* Chart on the left, legend on the right, so the donut doesn't sit fixed-size
+	   in a much wider card with the legend stacked underneath it. */
 	.donut-wrap {
 		display: flex;
 		flex-direction: row;
@@ -572,8 +558,7 @@
 		display: grid;
 		place-items: center;
 	}
-	/* A pie, not a donut — the same change Accounts made. The hole held the
-	   holding COUNT, which is now in the panel header where a count belongs. */
+	/* A pie, not a donut: the hole's count now lives in the panel header. */
 	.legend-col {
 		flex: 1 1 240px;
 		display: flex;

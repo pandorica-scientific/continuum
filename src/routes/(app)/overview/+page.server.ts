@@ -16,10 +16,8 @@ import type { PageServerLoad } from './$types';
 export const load: PageServerLoad = async ({ url, locals }) => {
 	const { period, anchor } = parsePeriodParams(url.searchParams);
 
-	// The newest month the record holds, read once. The screen's caption names it
-	// — "as of the latest statement" — and it is what the panels anchor to when
-	// the URL names no month of its own, so asking twice is how the header and
-	// the figures below it come to disagree at a month boundary.
+	// The newest month with data, read once — reused for both the caption and
+	// the panels' default anchor so they can't disagree at a month boundary.
 	const [baseCurrency, modules, dataMonth, rows] = await Promise.all([
 		getBaseCurrency(),
 		getModules(),
@@ -32,30 +30,19 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			: Promise.resolve([])
 	]);
 
-	// Null means this person has never chosen anything, so the board starts with
-	// nothing on it and offers the picker instead of a board nobody asked for.
-	// An empty array is a different state that looks the same from here: someone
-	// who removed every panel, who has already answered the picker's question
-	// and must not be asked it again. Nothing backfills the nulls — everyone
-	// already here is shown the picker once and their answer is stored.
+	// Null means never chosen (offer the picker); an empty array means every
+	// panel was deliberately removed (do not ask again) — the two must stay distinct.
 	const stored = rows[0]?.overviewLayout ?? null;
 	const layout = normalise(stored ?? [], PANEL_BOUNDS);
 	const shown = visible(layout, (key) => panelAvailable(key, modules));
 
-	// Memoised across panels, not across the request: several panels want the
-	// rate table and more than one wants net worth, and this stops them each
-	// fetching their own. The (app) layout still computes net worth separately
-	// for the sidebar card — load functions run in parallel, so sharing that
-	// would need a request-scoped cache this screen has no business adding.
+	// Memoised across panels (not across the request — the sidebar's net worth
+	// is computed separately, since load functions run in parallel).
 	let netWorthPromise: ReturnType<typeof computeNetWorth> | null = null;
 	let ratesPromise: ReturnType<typeof loadRateTable> | null = null;
 	let spendingPromise: ReturnType<typeof expenseSpendingByMonth> | null = null;
 
 	const rates = () => (ratesPromise ??= loadRateTable());
-	// The briefing's overspend card and the month-against-its-average panel ask
-	// the same question of the whole ledger. Behind one thunk they ask it once,
-	// and over the rate table this request has already loaded rather than a
-	// second copy of it.
 	const spending = () =>
 		(spendingPromise ??= rates().then((table) =>
 			expenseSpendingByMonth(baseCurrency, { rates: table })
@@ -66,9 +53,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		{
 			baseCurrency,
 			period,
-			// The URL wins when it names a month; otherwise the board reports on
-			// the newest month there is data for. Whether that month exists in the
-			// record is settled further down, where the bounds are already read.
+			// The URL wins when it names a month; otherwise the newest month with data.
 			anchorMonth: anchor ?? dataMonth,
 			netWorth: () => (netWorthPromise ??= computeNetWorth()),
 			rates,

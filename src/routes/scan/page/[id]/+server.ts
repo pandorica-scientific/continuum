@@ -2,14 +2,9 @@
 /**
  * Throw away one page, without ending the scan.
  *
- * A retake uploads a new page into the same session, and the one being replaced
- * used to stay where it was: nothing asked for it again, but it is the 2–4 MB
- * ORIGINAL, and a stack photographed twice held twice the scratch until the
- * document was made. The session-wide DELETE next door is the other end of the
- * same idea — this is the one page, that is all of them.
- *
- * Deleting a page that was already kept is legal and means what it says. The
- * client only sends this for a page it is discarding.
+ * A retake's replaced page must be dropped here rather than left in place, or a
+ * stack photographed twice keeps twice the scratch (2-4 MB originals) until the
+ * document is made. Deleting an already-kept page is legal and means what it says.
  */
 import { json } from '@sveltejs/kit';
 import { scanId } from '$lib/server/scan/http';

@@ -13,10 +13,9 @@ import { brokerReports, uploadBrokerReport } from '$lib/server/invest/reports';
 import { hashBytes, readUpload } from '$lib/server/system/files';
 import type { BrokerReport } from '$lib/server/invest/adapter';
 
-// $env/dynamic/private snapshots process.env when Vite builds the virtual
-// module, which is before this suite picks the directory its uploads live in.
-// A live getter is the only way `saveUploadBytes`/`readUpload` see the files
-// written under the directory this suite chose rather than ./data.
+// $env/dynamic/private snapshots process.env at build time, before this suite
+// picks its upload directory — a live getter is the only way
+// `saveUploadBytes`/`readUpload` see it.
 vi.mock('$env/dynamic/private', () => ({
 	env: new Proxy({} as Record<string, string | undefined>, {
 		get: (_target, key: string) => process.env[key]
@@ -64,15 +63,13 @@ function report(overrides: Partial<BrokerReport> = {}): BrokerReport {
 }
 
 /**
- * A synthetic XTB workbook `uploadBrokerReport` can actually detect and
- * parse — real bytes are required here (unlike `report()` above), because
- * filing the document needs `parseBrokerReport` to run the adapter's own
- * `sniff`/`parse`, not a hand-built `BrokerReport`.
+ * A synthetic XTB workbook `uploadBrokerReport` can detect and parse — real
+ * bytes, unlike `report()` above, since filing needs the adapter's own
+ * sniff/parse to run rather than a hand-built `BrokerReport`.
  *
- * Trimmed to the minimum the format needs: all three sheets `parseXtb`
- * unconditionally reads (`sheet()` throws if one is missing), and just
- * enough of "Open Positions" to fix the report's date and currency
- * deterministically rather than at whatever moment the test happens to run.
+ * Trimmed to the minimum: all three sheets `parseXtb` unconditionally reads,
+ * and just enough of "Open Positions" to fix date and currency
+ * deterministically.
  */
 function makeXtbWorkbook(generatedAt: string): Uint8Array {
 	const wb = XLSX.utils.book_new();
@@ -162,10 +159,7 @@ describe('broker ingest', () => {
 	});
 });
 
-// ---------------------------------------------------------------------------
-// Decision D8: the uploaded report becomes a document, not just ledger rows.
-// Before this, `ingestBrokerFile` was the only upload in the product that
-// retained no file at all.
+// The uploaded report becomes a document, not just ledger rows.
 
 describe('the broker report upload becomes a document (decision D8)', () => {
 	it('stores the file and files one broker_report document on Statements, linked to the sole brokerage account', async () => {
@@ -212,11 +206,8 @@ describe('the broker report upload becomes a document (decision D8)', () => {
 			.where(eq(schema.tagLink.targetId, doc.id));
 		expect(tags.map((t) => t.name).sort()).toEqual(['2026', 'xtb']);
 
-		// The bytes are actually on the volume, not merely a hash that matches.
-		// Compared as `Buffer`s rather than with `toEqual` on the raw
-		// `Uint8Array`s: vitest's deep-equal reports two content-identical typed
-		// arrays as unequal here for reasons that have nothing to do with their
-		// bytes (confirmed by an index-by-index walk finding no divergence).
+		// Compared as Buffers, not via toEqual on raw Uint8Arrays: vitest's
+		// deep-equal reports content-identical typed arrays as unequal here.
 		const stored = await readUpload(doc.storedName!);
 		expect(stored).not.toBeNull();
 		expect(Buffer.compare(Buffer.from(stored!), Buffer.from(bytes))).toBe(0);
@@ -241,9 +232,8 @@ describe('the broker report upload becomes a document (decision D8)', () => {
 		const docsBefore = await testDb.select().from(schema.document);
 		expect(docsBefore).toHaveLength(1);
 
-		// A second upload of the identical bytes: the broker's own operation ids
-		// are what make THIS idempotent, which is why the ingest is expected to
-		// run again rather than being skipped once a document already exists.
+		// The broker's own operation ids make the ingest itself idempotent, so it
+		// is expected to run again rather than being skipped.
 		const second = await uploadBrokerReport('account_statement.xlsx', bytes, testDb);
 		expect(second.snapshotDay).toBe(first.snapshotDay);
 
@@ -288,14 +278,11 @@ describe('the broker report upload becomes a document (decision D8)', () => {
 		expect(links).toHaveLength(0);
 	});
 
-	// The finding this covers: `document.content_hash` carries only a plain
-	// index, not a unique constraint, so a plain SELECT-then-INSERT outside any
-	// lock lets two concurrent identical uploads (a double-click, two tabs)
-	// both read "nothing exists yet" and both go on to save a file and insert a
-	// document. `import/ingest.ts` solves the identical problem for
-	// `import_file` with a `pg_advisory_xact_lock` keyed on the content hash,
-	// taken INSIDE the transaction before the duplicate is (re-)checked; this
-	// is the same defence for `document`.
+	// `document.content_hash` has only a plain index, not a unique constraint,
+	// so two concurrent uploads could both see "nothing exists" and insert
+	// twice. Guarded like `import/ingest.ts` guards `import_file`: a
+	// `pg_advisory_xact_lock` keyed on the content hash, taken inside the
+	// transaction.
 	it('two concurrent uploads of the same bytes create exactly one document and one stored file', async () => {
 		const bytes = makeXtbWorkbook('2026-07-11 10:00:00');
 

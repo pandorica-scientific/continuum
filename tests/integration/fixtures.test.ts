@@ -18,11 +18,7 @@ import {
 	session
 } from './fixtures';
 
-/**
- * The builders are about to carry most of the suite's rows, so what they
- * default to is now a shared assumption. Pin it here rather than discovering
- * it from a failure three suites away.
- */
+/** What the builders default to is a shared assumption; pin it here rather than discovering it from a failure three suites away. */
 let harness: Harness;
 let db: TestDb;
 

@@ -3,17 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { assertSafeToParse } from '$lib/server/import/safety';
 
 /**
- * A zip's central directory is written by whoever made the file.
- *
- * Every size limit here used to be checked against those numbers alone, which
- * is a defence against honesty. Measured before this suite existed: a 299 KB
- * upload declaring nothing at all passed every check, and SheetJS then inflated
- * it anyway — RSS moved by 812 MB in 586 ms, on the self-hosted box the limits
- * exist to protect.
- *
- * So the declared sizes are still read, because they give the clearest message
- * when they are honest, and then the entries are actually inflated under a
- * shared byte budget.
+ * A zip's declared sizes are written by whoever made the file, so they are
+ * not trusted alone: entries are actually inflated under a shared byte budget.
  */
 function workbookDeclaring(uncompressedBytes: number, megabytesOfPayload: number): Uint8Array {
 	const payload = Buffer.alloc(megabytesOfPayload * 1024 * 1024, 0x41);
@@ -53,8 +44,7 @@ describe('the upload safety boundary', () => {
 	});
 
 	it('refuses a bomb that declares nothing at all', () => {
-		// The case the old boundary accepted: 299 KB in, 300 MB out, and a
-		// central directory claiming zero bytes of content.
+		// Regression: a central directory claiming zero bytes still let a 300 MB expansion through.
 		expect(() => assertSafeToParse(workbookDeclaring(0, 300), 'xlsx')).toThrow(/expands past/i);
 	});
 

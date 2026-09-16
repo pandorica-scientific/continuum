@@ -51,9 +51,7 @@ describe('expiryTreatment', () => {
 	});
 
 	it('takes the amber window from the type, so a passport warns six months out', () => {
-		// 120 days away: quiet at the 60-day default, amber for a type that takes
-		// half a year to replace. The window is the type's, not the shelf's —
-		// behaviour hangs off type everywhere else in the archive too.
+		// The amber window belongs to the type, not the shelf.
 		expect(
 			hueOf(
 				expiryTreatment({ expiresOn: '2026-12-26', expiryVerb: 'expires' }, false, TODAY, 'wide')
@@ -73,9 +71,7 @@ describe('expiryTreatment', () => {
 	});
 
 	it('keeps money on its own clock — a wider paperwork window never widens "due"', () => {
-		// 90 days out with a 180-day window passed in: still quiet, because a
-		// type's window says how long a REPLACEMENT takes, which tells you nothing
-		// about when a bill is worth worrying over.
+		// A type's window says how long a replacement takes, not when a bill is due.
 		expect(
 			hueOf(
 				expiryTreatment({ expiresOn: '2026-11-26', expiryVerb: 'due' }, false, TODAY, 'wide', 180)
@@ -148,9 +144,7 @@ describe('expiryTreatment', () => {
 	});
 
 	it('says when a document with no expiry arrived, in an outline pill', () => {
-		// The column reads as a column, but there is no logic behind the date, so
-		// no fill: fifty filled pills saying nothing would be the loudest thing
-		// on the screen.
+		// No fill: a filled pill implies logic behind the date, and there is none.
 		expect(
 			expiryTreatment(
 				{ expiresOn: null, expiryVerb: 'expires', addedOn: '2024-11-02' },
@@ -341,14 +335,8 @@ describe('groupSummary', () => {
 	});
 });
 
-/**
- * The "what it is about" filter.
- *
- * A flat list of names was readable while the screen named four kinds. Now that
- * every registered kind reaches it, "Alza 2026-03-04" sits beside "Robert" and
- * "Vinohrady flat" with nothing to say which is which — so the options carry
- * the heading their kind belongs to and are read under it.
- */
+// Options carry the heading of the kind they belong to, since a flat list of
+// names gives no way to tell a person from a transaction.
 describe('the about filter', () => {
 	const option = (over: Partial<AboutOption> = {}): AboutOption => ({
 		id: over.id ?? 'e1',
@@ -375,9 +363,7 @@ describe('the about filter', () => {
 	});
 
 	it('reads a name with its count, and a transaction with its amount between them', () => {
-		// A card payment's name is a shop and a date; two of them from the same
-		// shop on the same day are told apart by the amount, which is what `meta`
-		// carries for every kind whose name alone is ambiguous.
+		// `meta` disambiguates same-name, same-day entries, e.g. two card payments.
 		expect(aboutOptionLabel(option({ name: 'Robert', count: 4 }))).toBe('Robert · 4');
 		expect(
 			aboutOptionLabel(option({ name: 'Alza 2026-03-04', meta: '−1 234,50 CZK', count: 1 }))

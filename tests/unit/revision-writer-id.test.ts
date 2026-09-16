@@ -3,10 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { uuidv7 } from 'uuidv7';
 import { isRevisionWriterId } from '$lib/server/settings';
 
-// A writer id is an opaque per-tab identity. It has no reason to care which
-// UUID version it is — and caring is what broke it: the pattern demanded
-// version 1-5 while the page issued version 7, so every autosave was refused
-// with "The save writer is invalid."
+// Regression: the pattern demanded UUID version 1-5 while the page issued
+// version 7, so every autosave was refused.
 describe('isRevisionWriterId', () => {
 	it('accepts the ids the application actually issues', () => {
 		for (let i = 0; i < 20; i++) {

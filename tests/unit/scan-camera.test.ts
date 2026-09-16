@@ -14,27 +14,14 @@ describe('isSecureForCamera', () => {
 	});
 
 	it('is FALSE on a plain-http LAN address — the self-hosting case that matters', () => {
-		// This is the whole reason the insecure-origin screen and the native
-		// camera fallback exist. Getting it wrong means a self-hoster is told
-		// their device has no camera.
+		// Getting it wrong tells a self-hoster their device has no camera.
 		expect(isSecureForCamera({ protocol: 'http:', hostname: '192.168.68.51' })).toBe(false);
 		expect(isSecureForCamera({ protocol: 'http:', hostname: 'continuum.lan' })).toBe(false);
 	});
 });
 
 /*
- * `createStability`, `guidanceFor` and the loop timings used to be tested here.
- *
- * They belonged to the viewfinder's live outline — OpenCV running about nine
- * times a second in the browser to trace the page while someone aimed, and the
- * coaching that went with it ("Hold steady", "Too dark — try more light").
- * v0.8.6 removed all of it: the detection that drew the outline is the same
- * WebAssembly heap an iPhone could not always allocate, and taking it out of
- * the browser is the point of the release.
- *
- * Nothing replaced those tests because nothing replaced that code. The
- * viewfinder is now a plain camera with a static frame guide, and everything
- * the detector has to say arrives after the shutter, from the server — where a
- * crop that came out wrong is dragged into place with the corner handles rather
- * than being aimed at more carefully.
+ * `createStability`, `guidanceFor` and the live-outline loop timings used to be
+ * tested here. That code was removed: OpenCV in the browser could exhaust an
+ * iPhone's WASM heap, so detection now runs after the shutter, server-side.
  */

@@ -1,15 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * Where a place lands on the map.
+ * Where a place lands on the map. `d3-geo` and `topojson-client`, not the
+ * `d3` meta-package — must work offline on a self-hosted box.
  *
- * `d3-geo` for the projection and `topojson-client` for turning a topology into
- * features — two packages, not the `d3` meta-package, and no CDN tag: the
- * prototype's script tags do not survive the port into a bundle that has to
- * work offline on a self-hosted box.
- *
- * No DOM in this file. It hands back a projection and the path strings drawn
- * from it, so the arithmetic can be tested without a browser and the component
- * is markup.
+ * No DOM in this file: hands back a projection and path strings so the
+ * arithmetic can be tested without a browser.
  */
 import {
 	geoArea,
@@ -43,41 +38,27 @@ export interface CountryShape {
 }
 
 /**
- * The world, fitted to the frame.
- *
- * Natural Earth, not Mercator, and the handoff draws it that way for a reason:
- * this map is a picture of how much of the world a household has seen, and
- * Mercator answers that question wrongly — it makes Greenland the size of
- * Africa and shrinks everywhere most people actually go. A scratch map is read
- * as area, so the projection has to be one that roughly preserves it.
- *
- * The curved edge is the projection's own, not a decoration: meridians bend
- * towards the poles, which is what buys back the area Mercator spends.
+ * The world, fitted to the frame. Natural Earth, not Mercator — a scratch map
+ * is read as area, and Mercator makes Greenland the size of Africa. The
+ * curved edge is the projection's own, not a decoration.
  */
 export function worldProjection(
 	_world: FeatureCollection<Geometry>,
 	view: { width: number; height: number; inset: number } = VIEW
 ): GeoProjection {
-	// Fitted to the SPHERE, not to the countries. The handoff's prototype does
-	// this and it matters: fitting the features makes the frame depend on which
-	// islands the dataset happens to include, so the world drifts and rescales
-	// the day the outline file is updated. The globe is a fixed thing.
+	// Fitted to the SPHERE, not the countries — fitting features would make the
+	// frame drift/rescale whenever the outline dataset changes.
 	return geoNaturalEarth1().fitSize([view.width, view.height], {
 		type: 'Sphere'
 	} as unknown as GeoPermissibleObjects);
 }
 
 /**
- * Put Crimea and Sevastopol back in Ukraine.
- *
- * The world outline follows Natural Earth's de-facto view and files them under
- * Russia. The admin-1 provinces are already corrected at fetch time; this is
- * the same correction for the country outlines, ported from the handoff's
- * prototype so the two datasets agree.
- *
- * Matched by geography rather than by name, because the country polygons carry
- * no province names at all: a ring lying entirely inside the peninsula's box is
- * the peninsula. Mutates the collection in place, once, before it is projected.
+ * Put Crimea and Sevastopol back in Ukraine — the world outline follows
+ * Natural Earth's de-facto view and files them under Russia; admin-1
+ * provinces are already corrected at fetch time, this matches the country
+ * outlines to agree. Matched by geography (box containment), since country
+ * polygons carry no province names. Mutates the collection in place.
  */
 export function moveCrimea(world: FeatureCollection<Geometry>): void {
 	const russia = world.features.find((f) => (f.properties as { name?: string })?.name === 'Russia');
@@ -112,24 +93,17 @@ export function moveCrimea(world: FeatureCollection<Geometry>): void {
 }
 
 /**
- * The edge of the world, for the projection currently in use.
- *
- * A `Sphere` is a real GeoJSON-ish type `d3-geo` understands: it draws the
- * outline of the whole globe under this projection, which is the curved lens
- * the handoff frames the map in. Drawn rather than faked with a border radius,
- * so it stays correct if the projection ever changes again.
+ * The edge of the world, for the projection currently in use. Drawn from a
+ * `Sphere` rather than faked with a border radius, so it stays correct if the
+ * projection changes.
  */
 export const sphereOutline = (projection: GeoProjection): string =>
 	geoPath(projection)({ type: 'Sphere' } as unknown as GeoPermissibleObjects) ?? '';
 
 /**
- * One country, re-fitted so it fills the frame on its own.
- *
- * `rotate([-centroid[0], 0])` before fitting is what keeps Russia and Fiji
- * whole: a country straddling the antimeridian is sliced in half by a
- * projection centred on Greenwich, and the halves then fit a box that spans the
- * entire world. Turning the globe so the country is in the middle first costs
- * one line and removes the class.
+ * One country, re-fitted so it fills the frame on its own. Rotating to
+ * centre the country before fitting keeps antimeridian-straddling countries
+ * (Russia, Fiji) whole, rather than sliced by a Greenwich-centred projection.
  */
 export function countryProjection(
 	shape: Feature<Geometry>,

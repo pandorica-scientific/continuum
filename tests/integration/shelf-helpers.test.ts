@@ -3,11 +3,9 @@ import { shelfIdByKey, systemShelfId } from '$lib/server/documents/shelves';
 import { ALL_MIGRATIONS, startPostgres, type Harness } from './harness';
 
 /**
- * A shelf key is resolved in one place, and an unknown one is loud.
- *
- * The alternative — a fallback to inbox — files a payslip somewhere nobody
- * looks and reports nothing, which is how the old code's `shelf: 'payslips'`
- * string could drift from the set the database accepted without anyone noticing.
+ * A shelf key is resolved in one place, and an unknown one is loud: a
+ * fallback to inbox would file a document nobody looks for and drift
+ * silently from the set the database accepts.
  */
 let harness: Harness;
 
@@ -28,9 +26,7 @@ describe('shelf helpers', () => {
 	});
 
 	it('throws on a key nobody seeded, rather than filing into nowhere', async () => {
-		// A silent fallback to inbox would file a payslip somewhere nobody looks
-		// and nothing would report it. A missing key is a defect in this repo,
-		// not a user's mistake.
+		// A missing key is a defect in this repo, not a user's mistake.
 		await expect(shelfIdByKey('payslips', harness.db)).rejects.toThrow(/payslips/);
 	});
 

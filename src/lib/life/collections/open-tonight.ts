@@ -1,14 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * What to open tonight, and why.
- *
- * Every suggestion carries the rule that produced it, so a household can
- * disagree with the reasoning rather than with the taste. "Open this" is an
- * opinion nobody asked for; "its window closes this year" is a fact they can
- * argue with.
- *
- * Two at most. A list of eight suggestions is a second bottle grid, and a
- * suggestion that has to be scrolled to is not a suggestion.
+ * What to open tonight, and why. Every suggestion carries the rule that
+ * produced it, so a household can disagree with the reasoning, not the taste.
+ * Two at most — more would just be a second bottle grid.
  */
 import { drinkPhase, type DrinkWindow } from '$lib/life/collections/drink-by';
 
@@ -41,9 +35,7 @@ export interface Suggestion {
 
 /**
  * At most two bottles worth opening, each with its reason.
- *
- * Only sealed bottles are suggested: telling somebody to open the bottle
- * already open on the counter is the kind of advice that gets a screen ignored.
+ * Only sealed bottles are suggested — not one already open on the counter.
  */
 export function openTonight(cellar: Candidate[], year: number): Suggestion[] {
 	const sealed = cellar.filter((one) => one.owned - one.opened > 0);
@@ -61,9 +53,8 @@ export function openTonight(cellar: Candidate[], year: number): Suggestion[] {
 					: 'Its drink-by window closes this year.'
 		}));
 
-	// A bottle somebody rated and then left alone. Only where there IS a last
-	// tasting: a bottle nobody has ever opened has no "have not opened one in
-	// fourteen months" to report, and saying it anyway would be inventing a fact.
+	// A bottle rated and then left alone — only where a last tasting exists,
+	// otherwise there is no "months since" to report.
 	const neglected = sealed
 		.filter(
 			(one) =>
@@ -82,8 +73,8 @@ export function openTonight(cellar: Candidate[], year: number): Suggestion[] {
 			)}.`
 		}));
 
-	// A closing window beats a good score: one is a deadline, the other is a
-	// preference. De-duplicated by bottle, so one row never fills both slots.
+	// A closing window (deadline) beats a good score (preference); de-duplicated
+	// by bottle so one row never fills both slots.
 	const seen = new Set<string>();
 	const picked: Suggestion[] = [];
 	for (const suggestion of [...closing, ...neglected]) {

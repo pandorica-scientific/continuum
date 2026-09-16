@@ -99,11 +99,8 @@ function utcStamp(iso: string): string {
  *
  * Reading the UTC date is correct because AN ALL-DAY EVENT IS HELD ANCHORED TO
  * UTC — 00:00:00.000Z through 23:59:59.000Z on its day — whatever zone the row
- * carries. That is the convention parseIcs below produces, the one the ledger's
- * generated events use, and (since this branch) the one the calendar form
- * writes. Anchoring an all-day event to the household's wall clock instead put
- * local midnight in the previous UTC day, and every consumer that reads a date
- * back off the instant then published it a day early.
+ * carries. Anchoring to the household's wall clock instead puts local midnight
+ * in the previous UTC day, publishing the date a day early.
  */
 function dateStamp(iso: string): string {
 	return new Date(iso).toISOString().slice(0, 10).replace(/-/g, '');
@@ -125,9 +122,8 @@ function exclusiveEnd(iso: string): string {
  *
  * END OF THAT DAY, not its midnight: an all-day event is held internally as
  * 00:00:00 through 23:59:59. Landing on midnight makes every all-day event come
- * back twenty-four hours short, which hashes differently, which the engine reads
- * as a remote DATE MOVE — and for a generated event that writes a new payment
- * day into the loan on every single pass.
+ * back twenty-four hours short, which the engine then reads as a remote date
+ * move on every pass.
  */
 function inclusiveEnd(iso: string, allDay: boolean): string {
 	if (!allDay) return iso;
@@ -142,16 +138,12 @@ function dateProperty(name: string, iso: string, allDay: boolean): string {
 	// All-day is a DATE, deliberately without a time or a zone: an all-day event
 	// carrying an instant lands on the wrong day either side of the date line.
 	if (allDay) return `${name};VALUE=DATE:${dateStamp(iso)}`;
-	// A bare UTC value, and NO TZID. RFC 5545 forbids TZID on a UTC value — the
-	// two say contradictory things about what the digits mean — and this file was
-	// emitting `DTSTART;TZID=Europe/Prague:20260910T070000Z` with no VTIMEZONE
-	// component to define the zone either. Continuum's own round trip hid it
-	// because parseStamp reads the Z and ignores the rest; a stricter client has
-	// every right to refuse the whole resource.
+	// A bare UTC value, and NO TZID: RFC 5545 forbids TZID on a UTC value, since
+	// the two say contradictory things about what the digits mean.
 	//
 	// The zone still has to travel: recurrence expands against wall-clock time,
 	// so a series that comes back as UTC drifts by an hour for half the year. It
-	// goes in an X- property, which is the RFC's own extension mechanism.
+	// goes in an X- property, the RFC's own extension mechanism.
 	return `${name}:${utcStamp(iso)}`;
 }
 
@@ -164,12 +156,9 @@ function eventBlock(
 	const endsAt = exception?.endsAt ?? series.endsAt;
 	const title = exception?.title ?? series.title;
 	const notes = exception?.notes ?? series.notes;
-	// An override may differ from its series in these three as well, and each one
-	// changes how the block is WRITTEN rather than just what it says: all-day
-	// picks DATE over DATE-TIME, and the zone decides what the digits mean. Taking
-	// them from the series regardless published the occurrence in the wrong shape,
-	// and there was nothing in the resource for the next pull to read them back
-	// from — so the override was lost on the round trip.
+	// An override may differ from its series in these three too, and each one
+	// changes how the block is WRITTEN, not just what it says: all-day picks DATE
+	// over DATE-TIME, and the zone decides what the digits mean.
 	const allDay = exception?.allDay ?? series.allDay;
 	const tz = exception?.tz ?? series.tz;
 	const category = exception?.category ?? series.category;
@@ -190,10 +179,9 @@ function eventBlock(
 
 	lines.push(dateProperty('DTSTART', startsAt, allDay));
 	lines.push(dateProperty('DTEND', allDay ? exclusiveEnd(endsAt) : endsAt, allDay));
-	// On an all-day event too, even though its DATE value carries no time. The
-	// zone is part of what the content hash covers, so an event authored in
-	// Prague that comes back saying UTC compares as changed on every single pass —
-	// push, echo, push — which is the exact loop this design exists to avoid.
+	// On an all-day event too, even though its DATE value carries no time: the
+	// zone is part of the content hash, and dropping it would make every pass
+	// compare as changed.
 	if (tz) lines.push(`${TZ_PROPERTY}:${escapeText(tz)}`);
 	lines.push(`SUMMARY:${escapeText(title)}`);
 
@@ -208,16 +196,9 @@ function eventBlock(
 	return lines;
 }
 
-/**
- * Any number of series as ONE iCalendar document.
- *
- * The published feed used to build its own — its own PRODID, its own DTSTAMP,
- * its own idea of how to escape a summary (replace commas with spaces) and no
- * DTEND at all. Two serialisers for one format is two sets of interoperability
- * bugs, and only one of them had a matching parser: everything learned about
- * folding, escaping and exclusive all-day ends applied to the events we push and
- * not to the ones the household actually subscribes to.
- */
+/** Any number of series as ONE iCalendar document. Shared with the published
+ *  feed so there is only one serialiser, with one matching parser, for the
+ *  format's interoperability edge cases. */
 export function toIcsCalendar(all: EventSeries[], calendarName?: string): string {
 	const lines = [
 		'BEGIN:VCALENDAR',
@@ -283,11 +264,9 @@ function parseStamp(property: Property): string | null {
 		return isoOrNull(`${y}-${m}-${d}T00:00:00.000Z`);
 	}
 	const full = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z?)$/.exec(value);
-	// Anything else is read as best it can be, and refused rather than thrown.
-	// `new Date('').toISOString()` raises a RangeError, and parseIcs is called in
-	// a bare loop over every pulled resource — so one VEVENT another client wrote
-	// with a value these two patterns do not cover aborted the WHOLE pull, and
-	// went on aborting it every pass until someone deleted that event by hand.
+	// Anything else is read as best it can be, and refused rather than thrown:
+	// `new Date('').toISOString()` raises, and one unparseable VEVENT must not
+	// abort the whole pull.
 	if (!full) return isoOrNull(value);
 	const [, y, m, d, hh, mm, ss, zulu] = full;
 
@@ -357,11 +336,8 @@ export function parseIcs(text: string): EventSeries | null {
 	const allDay = start.params.get('VALUE') === 'DATE';
 	const end = find(master, 'DTEND');
 
-	// A zone Intl does not recognise — a Windows name like "W. Europe Standard
-	// Time", say — is worse than none: it is stored on the row, and every later
-	// expansion reads it back, so one imported event made the calendar screen
-	// throw with nothing on it to reach the event and correct it.
-	//
+	// A zone Intl does not recognise (a Windows name, say) is worse than none: it
+	// would be stored on the row and every later expansion would throw.
 	// TZID first, for an event another client wrote; our own X- property next,
 	// since a UTC value may not legally carry a TZID.
 	const readTz = (block: Property[], stamp: Property | undefined): string => {
@@ -390,24 +366,19 @@ export function parseIcs(text: string): EventSeries | null {
 
 		// Stored ONLY where the override genuinely departs from the master.
 		//
-		// Every override block carries a summary, a zone and a category, because it
-		// has to stand alone as a VEVENT — including the ones it merely inherited.
-		// Reading them back as overrides turns our own push into a difference on
-		// the very next pull: the hash we stored says "inherits", the hash of what
-		// came back says "overrides", and the merge can only call that a remote
-		// edit. It then writes the inherited values in as real overrides, so a
-		// later rename of the series stops reaching that occurrence — a cancelled
-		// occurrence, which never carries a title of its own, acquired one on the
-		// first pass after it was created. Diffing against the master closes it.
+		// Every override block carries a summary, a zone and a category, since it
+		// must stand alone as a VEVENT, including values it merely inherited.
+		// Reading those back as real overrides would turn our own push into a
+		// spurious remote edit on the next pull — diffing against the master
+		// avoids that.
 		const overrideAllDay = overrideStart ? overrideStart.params.get('VALUE') === 'DATE' : allDay;
 		const overrideTz = readTz(block, overrideStart);
 		const overrideCategory = find(block, 'CATEGORIES')
 			? unescapeText(find(block, 'CATEGORIES')!.value)
 			: null;
 
-		// Undone on an override too, not only on the master. An all-day occurrence
-		// is written with the same exclusive DTEND, so reading it raw made every
-		// override of an all-day series come back a day short of what we sent.
+		// Undone on an override too, not only on the master: an all-day occurrence
+		// is written with the same exclusive DTEND.
 		const rawOverrideEnd = overrideEndProperty ? parseStamp(overrideEndProperty) : null;
 		const overrideTitle = summary ? unescapeText(summary.value) : null;
 		const overrideNotes = description ? unescapeText(description.value) : null;
@@ -431,10 +402,7 @@ export function parseIcs(text: string): EventSeries | null {
 	if (!startsAt) return null;
 
 	// DTEND is OPTIONAL. RFC 5545 says a DATE-valued DTSTART with no DTEND is a
-	// ONE-DAY event — so the end is the start plus a day, and subtracting a day
-	// from the start (which is what falling back to DTSTART did) produced an
-	// event ending twenty-four hours before it began. Any client that omits
-	// DTEND, or sends DURATION instead, hit it.
+	// ONE-DAY event, so the end is the start plus a day, not the start itself.
 	const rawEnd = end ? parseStamp(end) : null;
 	const endsAt = rawEnd ?? (allDay ? exclusiveEnd(startsAt) : startsAt);
 

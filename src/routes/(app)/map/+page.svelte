@@ -21,11 +21,8 @@
 	]);
 
 	/**
-	 * What counts as visited under the current filter.
-	 *
-	 * A filter over the one loaded shape rather than a second query: the
-	 * household's view and one person's view have to agree about what visited
-	 * means, and two queries is two chances for them not to.
+	 * What counts as visited under the current filter — a filter over the one
+	 * loaded shape, not a second query, so the two views can't disagree.
 	 */
 	const visited = $derived(
 		new Set(
@@ -39,13 +36,8 @@
 			.reduce((sum, one) => sum + one.regions.length, 0)
 	);
 
-	/**
-	 * The two cards below follow the tab, not the household.
-	 *
-	 * Household is the aggregate — everywhere anybody went. A person's tab is
-	 * what that person saw. Feeding the cards the unfiltered set made the tabs
-	 * change the map and leave the progress alone, which reads as a bug.
-	 */
+	/** The two cards below follow the tab, not the household — else the tabs
+	    would change the map but leave the progress cards alone. */
 	const creditsHere = $derived(
 		Object.fromEntries(Object.entries(data.credits).filter(([code]) => visited.has(code)))
 	);
@@ -102,7 +94,6 @@
 {/if}
 
 {#if data.world && !data.geodata?.missing}
-	<!-- Two equal columns below the map. -->
 	<div class="progress">
 		{#if data.zones}
 			<TimeZones

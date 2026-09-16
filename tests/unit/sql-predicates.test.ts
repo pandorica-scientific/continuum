@@ -3,10 +3,9 @@ import { PgDialect } from 'drizzle-orm/pg-core';
 import { describe, expect, it } from 'vitest';
 import { transferPair } from '$lib/server/db/schema';
 
-// Drizzle's and() wraps the whole list in one pair of parentheses and never its
-// operands, so a raw sql fragment carrying a top-level `or` silently escapes
-// the filters beside it. This renders the real predicate through drizzle's own
-// dialect rather than reasoning about it.
+// Drizzle's and() wraps the whole list in parentheses but never its operands,
+// so a raw sql fragment carrying a top-level `or` silently escapes the filters
+// beside it. Render the real predicate through drizzle's own dialect.
 const dialect = new PgDialect();
 const render = (q: unknown) => dialect.sqlToQuery(q as never).sql;
 

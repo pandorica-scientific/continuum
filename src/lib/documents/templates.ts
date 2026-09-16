@@ -12,9 +12,6 @@
  * draws a history. The preset decides what a card begins with, never what it
  * may become, for the same reason `shelf_type` decides what the type filter
  * offers first and not what the shelf will accept.
- *
- * This replaces `src/lib/shelf-profiles.ts`, which keyed the same knowledge by
- * shelf and so had nothing to say about a shelf somebody made.
  */
 import type { EnumValue } from '$lib/enums';
 

@@ -15,14 +15,12 @@ vi.mock('$env/dynamic/private', () => ({
 }));
 
 /**
- * Task 13: the Loans screen's own `DocumentsCard`, one per loan.
+ * The Loans screen's own `DocumentsCard`, one per loan.
  *
- * The screen shows every loan at once, so what matters here is the split: a
- * document filed against ONE loan must not appear on another loan's card even
- * though both cards are rendered from the same load. Attach/detach run
- * through the real actions, because the registry lookup inside
- * `attachDocument`/`detachDocument` — is `targetId` actually a loan — is the
- * part a hand-written insert would not cover.
+ * All loans render from one load, so what matters is the split: a document
+ * filed against one loan must not appear on another's card. Attach/detach go
+ * through the real actions, since the registry lookup — is `targetId`
+ * actually a loan — is what a hand-written insert would skip.
  */
 let harness: Harness;
 let testDb: TestDb;

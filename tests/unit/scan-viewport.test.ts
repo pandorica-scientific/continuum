@@ -2,17 +2,9 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 
-/**
- * The scan screens must fit the visible viewport, not the layout one.
- *
- * `position: fixed; inset: 0` sounds like "fill the screen" and on a desktop it
- * is. On iOS Safari it resolves against the LARGE viewport — the full height
- * including the strip behind the collapsing browser chrome — so the panel comes
- * out taller than the visible area and the page scrolls to make up the
- * difference. On the preview that means having to scroll to see the bottom of
- * the page you are being asked to approve; on the viewfinder it means the
- * camera slides under your thumb.
- */
+// On iOS Safari, `inset: 0` resolves against the LARGE viewport (including the
+// collapsing browser chrome strip), making fixed panels taller than visible
+// and forcing the page to scroll. Screens must size to the dynamic viewport.
 const PANELS = [
 	['src/lib/scan/client/ScanCapture.svelte', '.capture'],
 	['src/lib/scan/client/ScanPagePreview.svelte', '.preview'],

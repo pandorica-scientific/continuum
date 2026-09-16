@@ -5,18 +5,15 @@
 
 	let { data, form } = $props();
 
-	// The first person is only where the field starts. Read once: a re-render
-	// must not pull the choice back after someone has picked the other one.
+	// Read once: a re-render must not pull the selection back to the default.
 	let personId = $state(untrack(() => data.people[0]?.id ?? ''));
 </script>
 
 <svelte:head><title>Continuum — sign in</title></svelte:head>
 
 <div class="signin">
-	<!-- The left panel is the product's one piece of marketing, and it is only
-	     ever seen by somebody who already runs it — so it says what is true about
-	     the instance rather than what it could do. Below 900px it is dropped
-	     entirely: on a phone the form is the whole screen. -->
+	<!-- Only ever seen by someone already running the instance, so it states facts
+	     rather than pitching. Dropped below 900px — on a phone the form is the whole screen. -->
 	<aside class="hero">
 		<span class="hero-mark"><BrandMark size={30} /></span>
 		<h1 class="tagline">Your household's money, on your own machine.</h1>
@@ -63,9 +60,7 @@
 				</div>
 				<input type="hidden" name="personId" value={personId} />
 				{#if data.openMode}
-					<!-- No credential is being asked for, so no field is shown. Saying so
-					     plainly matters: a sign-in box that simply lets you in is
-					     otherwise indistinguishable from one that is broken. -->
+					<!-- State plainly that no credential is needed, or the box reads as broken. -->
 					<p class="open-note">
 						This instance is open — anyone who can reach it can sign in as anyone. Turn that off in
 						Settings.
@@ -96,15 +91,10 @@
 		justify-content: center;
 		gap: var(--space-7);
 		padding: 60px 56px;
-		/* Down the panel, not across its corner: this one is tall and narrow, so
-		   at the token's default 135deg the teal end landed in the bottom-right
-		   as a blob rather than as the end of a flow. */
+		/* Default 135deg pooled the teal end in the bottom-right on this tall, narrow panel. */
 		--hero-angle: 165deg;
 		background: var(--hero-bg);
-		/* Fixed white in both themes: the gradient is dark in both. And the mark
-		   inside inherits it, which is the point of BrandMark taking its colour
-		   from context. */
-		color: #fff;
+		color: #fff; /* Gradient is dark in both themes; BrandMark inherits this. */
 	}
 	.hero-mark {
 		display: grid;

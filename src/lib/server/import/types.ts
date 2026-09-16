@@ -14,10 +14,9 @@ export type BankId = string;
 /**
  * How a statement was read, and what proved it.
  *
- * Kept because the proof engine used to decide whether to file a statement and
- * then discard its reasoning, which left the ledger holding numbers with no
- * account of where they came from. A row that later looks wrong could not be
- * traced back to the reading that produced it.
+ * Kept rather than discarded once the proof engine has decided whether to
+ * file a statement, so a row that later looks wrong can be traced back to the
+ * reading that produced it.
  */
 interface StatementProvenance {
 	/** Which reader produced this: an adapter, a standard, or which assembler. */

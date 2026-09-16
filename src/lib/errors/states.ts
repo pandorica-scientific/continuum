@@ -2,12 +2,11 @@
 // What each error screen says.
 //
 // Data rather than markup, so the same catalogue serves the error page, a test
-// and the docs without being rewritten in each. One entry per state we can
-// actually reach; anything else falls back by class (see `stateFor`).
+// and the docs. One entry per state we can actually reach; anything else
+// falls back by class (see `stateFor`).
 //
-// The titles have a temperament; the bodies do not. Someone reading these is
-// already having a bad time, so the sentence that explains what happened and
-// what to do about it is written plainly every time.
+// The titles have a temperament; the bodies do not — plain and actionable
+// every time.
 
 interface ErrorState {
 	/** The HTTP status, as text. '000' is the browser being unable to reach us at all. */
@@ -126,10 +125,8 @@ const BY_CODE = new Map(ERROR_STATES.map((s) => [s.code, s]));
 /**
  * The screen for a status.
  *
- * A status with no entry of its own falls back to its class rather than to a
- * blank page: any other 5xx reads as a server error, any other 4xx as a bad
- * request. That fallback is the point of this function — `error(418)` from
- * somewhere unexpected must still render something a person can act on.
+ * A status with no entry of its own falls back to its class: any other 5xx
+ * reads as a server error, any other 4xx as a bad request.
  */
 export function stateFor(status: number): ErrorState {
 	const exact = BY_CODE.get(String(status));
@@ -138,10 +135,8 @@ export function stateFor(status: number): ErrorState {
 }
 
 // SvelteKit fills in a generic message when the thrown error carried none.
-// Showing "Not Found" as the explanation under "This page is not in this
-// timeline" is worse than the catalogue's sentence, so these are ignored and
-// anything else — a real message from an `error(400, '…')` call site — is
-// shown instead, because it says what went wrong for THIS request.
+// These are ignored in favour of the catalogue's own sentence; a real message
+// from an `error(400, '…')` call site is shown instead.
 const GENERIC = new Set(['not found', 'internal error', 'internal server error', 'error']);
 
 export function isGenericMessage(message: string | undefined | null): boolean {

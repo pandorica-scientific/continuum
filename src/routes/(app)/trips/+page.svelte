@@ -18,22 +18,14 @@
 	let query = $state('');
 
 	/**
-	 * Making a trip happens over the board, not away from it.
-	 *
-	 * `null` is closed, `'new'` is a trip from nothing, and an idea is one being
-	 * promoted — with the card still visible behind the dialog, which is the
-	 * thing being turned into a trip.
-	 *
-	 * The controls that open it stay real links to `/trips/new`, so the route is
-	 * still there for a browser with script switched off; opening the dialog is
-	 * what happens instead when the click can be taken.
+	 * `null` is closed, `'new'` is a trip from nothing, an idea is one being
+	 * promoted. Controls that open it stay real links to `/trips/new` so the
+	 * route works with script disabled.
 	 */
 	let making = $state<'new' | (typeof data.ideas)[number] | null>(null);
 	let addingIdea = $state(false);
 
-	// A rejected submission re-renders with a message, and the dialog it came
-	// from has to still be open to show it — otherwise the error lands on a
-	// screen with no form on it. `on` says which dialog that was.
+	// `on` says which dialog a rejected submission's message belongs to, so it reopens there.
 	$effect(() => {
 		if (form?.on === 'trip' && !making) making = 'new';
 		if (form?.on === 'idea') addingIdea = true;
@@ -97,11 +89,8 @@
 	const visibleIdeas = $derived(data.ideas.filter((idea) => matches(`${idea.name} ${idea.note}`)));
 
 	/**
-	 * Past trips grouped by the year they started, newest year first.
-	 *
-	 * Built as a plain record rather than a Map: this is derived and read, never
-	 * mutated, and `svelte/prefer-svelte-reactivity` is right that a bare Map in
-	 * a component is usually a reactivity bug waiting to happen.
+	 * Past trips grouped by the year they started, newest year first. Built as a
+	 * plain record, not a Map — this is derived and read, never mutated.
 	 */
 	const years = $derived.by(() => {
 		const byYear: Record<number, typeof past> = {};
@@ -113,12 +102,7 @@
 			.sort(([a], [b]) => b - a);
 	});
 
-	/**
-	 * The idea taken off the board, held for six seconds.
-	 *
-	 * Everything needed to put it back is kept here rather than fetched again:
-	 * the row is already gone by the time the bar is shown.
-	 */
+	/** The idea taken off the board, held for six seconds so it can be put back without refetching. */
 	let undo = $state<{
 		name: string;
 		emoji: string;
@@ -262,8 +246,7 @@
 	/>
 {/if}
 
-<!-- At the component root, not inside the section: an idea removed while the
-     reader has scrolled to the stamp wall has to say so where they are. -->
+<!-- At the component root so it's visible however far the reader has scrolled. -->
 {#if undo}
 	<div class="undo" role="status">
 		<span>{undo.name} — off the board.</span>
@@ -298,10 +281,7 @@
 		justify-content: start;
 		gap: var(--card-gap, 16px);
 	}
-	/* Each card is wrapped in the form that removes it, so the FORM is the grid
-	   item and the card inside it was free to be whatever height its note made
-	   it — a row of cards with four different bottom edges. The grid stretches
-	   the form; these two pass that height through to the card. */
+	/* The form (grid item) is stretched by the grid; pass its height through to the card inside. */
 	.board :global(form) {
 		height: 100%;
 	}
@@ -316,8 +296,7 @@
 		color: var(--fg3);
 		max-width: 52ch;
 	}
-	/* Floating, so it is painted with an opaque token and carries the float
-	   shadow — the only thing telling a reader where the page stopped. */
+	/* Floating — opaque background and shadow, the only cue for where the page stopped. */
 	.undo {
 		position: fixed;
 		left: 50%;

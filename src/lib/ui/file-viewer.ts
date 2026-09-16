@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 /**
- * Opening an uploaded file used to mean a new browser tab: the app disappeared,
- * the browser's own viewer took over, and getting back to the row you were
- * reading was a tab switch away. Files now open in an overlay on top of the
- * screen that linked to them.
+ * Files open in an overlay on top of the screen that linked to them, rather
+ * than a new browser tab.
  *
  * The decision of WHETHER a click becomes an overlay lives here rather than in
  * the layout, because it is the part with rules worth testing: which extensions

@@ -234,10 +234,8 @@ export function makeCalDavProvider(raw: Record<string, string>): CalendarProvide
 				if (!href) continue;
 
 				// A 404 inside a multistatus is how a deletion is reported. All that
-				// survives is the path, so the RESOURCE NAME is reported and the uid is
-				// left empty — reporting the resource name as though it were the uid is
-				// what made every deletion made on a phone match nothing local and get
-				// dropped while the cursor advanced past it.
+				// survives is the path, so the resource name (not the uid) is reported —
+				// callers must match on `remoteId`, not `uid`, for a deletion.
 				if (/HTTP\/1\.[01] 404/i.test(block)) {
 					changes.push({ uid: '', remoteId: uidFromHref(href), series: null, etag: null });
 					continue;
@@ -245,15 +243,10 @@ export function makeCalDavProvider(raw: Record<string, string>): CalendarProvide
 
 				const fetched = await request(config, absolute(href), { method: 'GET' });
 
-				// THROWS rather than skipping, matching fullReconcile. The status was
-				// not read at all, so a 503 or a rate-limited GET produced an error
-				// document, parseIcs returned null, the resource was quietly skipped —
-				// and the pass then COMMITTED the new sync-token, so that change was
-				// never listed again. One transient failure left the local copy
-				// permanently divergent with nothing recorded anywhere.
-				//
-				// 404 and 410 are the exception: the resource went between the REPORT
-				// and this GET, which is a deletion and is reported as one.
+				// THROWS rather than skipping, matching fullReconcile: silently skipping a
+				// failed GET would still commit the new sync-token, permanently losing
+				// that change. 404/410 are the exception — the resource was deleted
+				// between the REPORT and this GET, so report it as a deletion.
 				if (fetched.status === 404 || fetched.status === 410) {
 					changes.push({ uid: '', remoteId: uidFromHref(href), series: null, etag: null });
 					continue;
@@ -301,9 +294,8 @@ export function makeCalDavProvider(raw: Record<string, string>): CalendarProvide
 							// was asked for rather than a failure.
 							return { ok: true, remoteId: op.remoteId, etag: null };
 						}
-						// Everything else — 401, 403, 429, 500 — is a REAL failure, and
-						// calling it success orphaned the remote event, cleared the
-						// account's error line and never retried.
+						// Everything else — 401, 403, 429, 500 — is a REAL failure: reporting
+						// it as success would orphan the remote event with no retry.
 						return {
 							ok: false,
 							remoteId: op.remoteId,
@@ -359,14 +351,10 @@ export function makeCalDavProvider(raw: Record<string, string>): CalendarProvide
 	/**
 	 * Everything in the collection, for when the cursor is no good.
 	 *
-	 * THROWS on a bad answer rather than returning what it managed to read. Its
+	 * THROWS on a bad answer rather than returning what it managed to read: its
 	 * result is handed to the engine with `reset` set, and under reset an absent
-	 * event means a deleted one — so an empty list from a transient 503 is the
-	 * engine being told, with authority, that the server holds nothing at all.
-	 * That deleted every authored event and suppressed every generated one, and
-	 * the household's ledger events stopped being published for good. The old
-	 * code issued this REPORT and iterated the response without ever looking at
-	 * its status.
+	 * event means a deleted one — an empty list from a transient 503 would tell
+	 * the engine, with authority, that the server holds nothing at all.
 	 */
 	async function fullReconcile(): Promise<RemoteChange[]> {
 		const calendar = requireCalendar();

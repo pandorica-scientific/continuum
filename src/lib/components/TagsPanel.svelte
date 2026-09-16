@@ -1,7 +1,5 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
-	// Every tag, what it is on, and what it has cost — in the Documents centre
-	// column, where the rail stays put beside it.
 	import { enhance } from '$app/forms';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import { tagHue } from '$lib/tag-hue';

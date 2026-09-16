@@ -2,14 +2,9 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-/**
- * The three primitives every screen's top is built from.
- *
- * Source guards rather than rendered assertions: what matters about these two
- * components is that they are the ONLY way figures and a control row appear at
- * the top of a screen, which is a fact about the source. `screen-frame.test.ts`
- * is the other half — it fails any screen that draws its own.
- */
+// Source guards rather than rendered assertions: these must be the ONLY way
+// figures and a control row appear at the top of a screen. screen-frame.test.ts
+// is the other half — it fails any screen that draws its own.
 const read = (path: string) => readFileSync(path, 'utf8');
 
 describe('the summary band', () => {
@@ -17,9 +12,8 @@ describe('the summary band', () => {
 		const source = read('src/lib/components/SummaryBand.svelte');
 		expect(source).toContain("import MetricTile from './MetricTile.svelte'");
 		expect(source).toContain('<MetricTile');
-		// auto-fit against a floor, not a column per tile: a headline figure must
-		// never wrap, and equal `1fr` columns will squeeze five of them until it
-		// does. The floor is the contract; the column count follows from it.
+		// auto-fit against a floor, not a column per tile: equal `1fr` columns
+		// would squeeze a headline figure until it wraps.
 		expect(source).toMatch(/grid-template-columns:\s*repeat\(auto-fit, minmax\(200px, 1fr\)\)/);
 		expect(source).toContain('gap: var(--space-6)');
 	});

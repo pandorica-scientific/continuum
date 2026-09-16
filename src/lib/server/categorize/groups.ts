@@ -15,9 +15,8 @@ export interface GroupRow {
 /**
  * The category groups, in waterfall order.
  *
- * Every screen that used to import the `CATEGORY_GROUPS` constant reads this
- * instead, so a group a household adds appears in the charts, the filters and
- * the review queue without a deploy.
+ * A group a household adds appears in the charts, filters and review queue
+ * without a deploy.
  */
 export async function loadCategoryGroups(handle: Queryable = db): Promise<GroupRow[]> {
 	return handle
@@ -30,10 +29,8 @@ export async function loadCategoryGroups(handle: Queryable = db): Promise<GroupR
  * Groups that are stages of the waterfall — everything that is neither the
  * income that opens it nor the savings that close it.
  *
- * Keyed on `role` rather than on the two well-known keys it replaced. Those
- * keys are deletable like any other now, and a household that renames Income
- * or adds a second savings group would otherwise have seen it silently counted
- * as an expense.
+ * Keyed on `role`, not on well-known keys: a household can rename or add
+ * groups and the waterfall still classifies them correctly.
  */
 export function expenseGroups(groups: GroupRow[]): GroupRow[] {
 	return groups.filter((group) => group.role === 'expense');

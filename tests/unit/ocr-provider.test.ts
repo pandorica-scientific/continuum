@@ -12,20 +12,14 @@ import {
 } from '$lib/server/ocr';
 import { tesseractProvider } from '$lib/server/documents/extract/ocr';
 
-// `tessdata/` is fetched at build time and is not in the repository, so CI has
-// none. The RULE is tested against a fixed list either way; the two cases that
-// genuinely need the models on disk say so.
+// `tessdata/` is fetched at build time and is not in the repository, so CI has none;
+// most cases here test against a fixed list instead of the models on disk.
 const VENDORED = ['ces', 'deu', 'eng', 'pol', 'spa'];
 const installed = ocrAvailable();
 
 /**
- * The seam, not tesseract.
- *
- * What matters here is that a language nobody vendored is refused at the
- * boundary rather than several seconds into a worker, and that the provider
- * states which engine and version produced a reading — the deferred ONNX
- * adapter is a second implementation of this interface, and a confidence
- * distribution that cannot name its engine says nothing.
+ * Tests the seam, not tesseract: a language nobody vendored must be refused at the
+ * boundary rather than several seconds into a worker.
  */
 describe('the OCR provider seam', () => {
 	it('names the engine and its version', () => {
@@ -35,10 +29,7 @@ describe('the OCR provider seam', () => {
 	});
 
 	it('names exactly the languages the fetch script vendors', () => {
-		// A code named here that nobody fetches fails inside the worker, seconds
-		// in, with a message about a file path. The list and the script that fills
-		// the directory are one fact, so they are checked against each other
-		// rather than both being maintained by hand.
+		// Checked against the fetch script rather than maintained separately by hand.
 		const script = readFileSync(resolve('scripts/fetch-tessdata.mjs'), 'utf8');
 		const declared = script.match(/const LANGUAGES = \[([^\]]*)\]/)?.[1] ?? '';
 		const fetched = [...declared.matchAll(/'([a-z]{3})'/g)].map((m) => m[1]);
@@ -59,10 +50,8 @@ describe('the OCR provider seam', () => {
 	});
 
 	it('says whether OCR can run at all, from the models rather than the directory', () => {
-		// There were two answers to this and they disagreed: one asked whether
-		// `tessdata/` exists, which an empty directory satisfies, and the statement
-		// reader held that weaker one. A half-fetched install then reported OCR
-		// available and failed seconds later inside the worker.
+		// Checking that `tessdata/` exists is not enough — an empty directory satisfies that
+		// and a half-fetched install would report OCR available then fail in the worker.
 		expect(ocrAvailable()).toBe(availableLanguages().length > 0);
 	});
 
@@ -80,9 +69,7 @@ describe('the OCR provider seam', () => {
 	});
 
 	it('reads a real page through the real engine', async () => {
-		// One end-to-end run, so the wiring is proved rather than assumed: the
-		// language path, the gzip models, the Buffer conversion and the shape of
-		// what tesseract.js hands back all only fail for real.
+		// One end-to-end run so the wiring is proved rather than assumed.
 		const source = resolve('tests/fixtures/synthetic/pdf-text/statement-001.pdf');
 		if (!ocrAvailable() || !existsSync(source)) return;
 		const [page] = await renderPdfPages(new Uint8Array(readFileSync(source)), 300, 1);

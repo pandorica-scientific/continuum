@@ -1,39 +1,20 @@
 <script module lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
-	/**
-	 * How many rows a page holds.
-	 *
-	 * Five by default because the rows this pages are tall — a year that opens
-	 * into its months, a rule carrying its conditions and its score. A table that
-	 * fills the screen before anything is expanded has nowhere to put what
-	 * expanding it produces. The larger sizes are for reading a whole list at
-	 * once.
-	 *
-	 * Deliberately not the transactions screen's 10/25/50: a transaction is one
-	 * line.
-	 */
+	/** Page sizes for tall rows (year/month, rule+score); not the transactions
+	 *  screen's 10/25/50, since a transaction row is one line. */
 	export const LIST_PAGE_SIZES = [5, 25, 50] as const;
 	export const DEFAULT_LIST_PAGE_SIZE = LIST_PAGE_SIZES[0];
 </script>
 
 <script lang="ts">
-	// Above the rows it sizes, while the ‹ › nav sits beneath them — the same
-	// split the transactions screen uses. How much to show is a decision you make
-	// before reading; which page to read is one you make after.
 	let {
 		size = $bindable(),
 		onchange,
 		label
 	}: {
 		size: number;
-		/**
-		 * Called after the size changes, for the caller to reset its page.
-		 *
-		 * The page belongs to whoever is doing the paging, so it is reset there
-		 * rather than reached into from here — but it MUST be reset: keeping the
-		 * index would land you on a page that no longer exists at the new size,
-		 * or scroll you somewhere you did not ask to be.
-		 */
+		/** Called after size changes; caller must reset its page index, or it
+		 *  may point past the new page count. */
 		onchange?: () => void;
 		/** What a row is, plural, for the control's accessible name. */
 		label: string;
@@ -58,7 +39,6 @@
 </span>
 
 <style>
-	/* Same control as the transactions screen's rows-per-page. */
 	.per-page {
 		display: inline-flex;
 		align-items: center;

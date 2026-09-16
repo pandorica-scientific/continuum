@@ -27,9 +27,8 @@ import {
 /**
  * The sources that watch equity, tax, rates, accounts and valuations.
  *
- * Like `briefing-documents`, this points the module-level `db` singleton at the
- * harness: the sources read it rather than a handle they are given, and the
- * strip is only worth testing the way the Overview builds it.
+ * Like `briefing-documents`, this points the module-level `db` singleton at
+ * the harness: the sources read it rather than a handle they are given.
  */
 vi.mock('$env/dynamic/private', () => ({
 	env: new Proxy({} as Record<string, string | undefined>, {
@@ -242,9 +241,8 @@ describe('an unfiled tax year', () => {
 		expect(kindOf(items, 'Tax')).toHaveLength(0);
 	});
 
-	// Nobody files on the second of January, and a card that cannot be cleared
-	// is one people learn to read past. Skipped in December, where there is no
-	// later month of the same year to set it to.
+	// A card that cannot be cleared gets learned past; skipped in December,
+	// which has no later month of the same year to set it to.
 	const thisMonth = Number(today.slice(5, 7));
 	it.skipIf(thisMonth === 12)('stays quiet before the month the household set', async () => {
 		await testDb

@@ -84,8 +84,7 @@ describe('fractions, the way a kitchen writes them', () => {
 		expect(formatQuantity(2.125)).toBe('2⅛');
 	});
 
-	// No measuring jug has fifths, so rendering one would be arithmetic rather
-	// than cooking.
+	// No measuring jug has fifths, so rendering one would be arithmetic rather than cooking.
 	it('does not invent a fraction nobody can measure', () => {
 		expect(formatQuantity(0.2)).toBe('0.2');
 	});
@@ -151,8 +150,7 @@ describe('a quantity going back into the edit form', () => {
 		expect(quantityForInput(undefined)).toBe('');
 	});
 
-	// Never a kitchen fraction: "½" posted back parses as nothing, and the
-	// quantity would empty itself on every save.
+	// Never a kitchen fraction: "½" posted back parses as nothing and empties the field.
 	it('stays plain decimal, so what it writes can be posted back', () => {
 		expect(quantityForInput('0.500')).toBe('0.5');
 		expect(quantityForInput(0.25)).toBe('0.25');

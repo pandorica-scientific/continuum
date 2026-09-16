@@ -1,12 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-// Every pill is translucent ink over a translucent tint over a card that is
-// itself over a gradient canvas. Reading that stack from the browser is what
-// makes contrast auditing here unreliable — a getComputedStyle walk sees the
-// tint's own rgba and, in dark mode, falls back to white for the ground and
-// reports nonsense. So the stack is flattened arithmetically from the token
-// values instead, which is exact and needs no browser.
+// The pill stack (ink over tint over card over gradient canvas) can't be read
+// reliably via getComputedStyle, so contrast is computed from the token values instead.
 
 type Rgb = [number, number, number];
 
@@ -52,12 +48,8 @@ function ratio(a: Rgb, b: Rgb): number {
 }
 
 /**
- * Derived, never listed. A hardcoded roster is a hole that opens silently: this
- * list held seven names while the palette had nine tint families, so `--indigo`
- * and `--brand` shipped as pill fills that no test had ever measured. Reading the
- * families out of the stylesheet means a hue added tomorrow is checked tomorrow.
- *
- * A tint with no ink of the same name is not a pill and is skipped — `--grey-tint`
+ * Derived from the stylesheet, never a hardcoded roster, so a hue added tomorrow
+ * is checked tomorrow. A tint with no ink of the same name is skipped — `--grey-tint`
  * is a ground, and there is no `--grey` to set on it.
  */
 function pillHues(tokens: Record<string, string>): string[] {

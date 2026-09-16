@@ -2,17 +2,10 @@
 /**
  * Creating and editing organisations, and the role periods against them.
  *
- * The screen for this is a third section in the Documents rail, beside SHELVES
- * and SUBJECTS — not the Contacts area. An organisation earns its place here by
- * being a thing paper is FILED AGAINST, which is exactly what a subject is, so
- * it inherits the rail's vocabulary rather than growing a second one. A contact
- * is a person AT a company; putting an employer beside them would make "who do
- * I know" and "who pays me" the same list.
- *
- * Every refusal below is one a subject already makes, for the same reason. Where
- * this file and `documents/subjects.ts` look alike, that is the point: two
- * records a household creates by name should not behave differently depending
- * on which screen minted them.
+ * An organisation is a thing paper is FILED AGAINST, like a subject — it lives
+ * in the Documents rail (SHELVES/SUBJECTS/organisations), not Contacts. Mirrors
+ * `documents/subjects.ts` deliberately: both are household-named records and
+ * should behave the same regardless of which screen created them.
  */
 import { asc, count, eq, sql } from 'drizzle-orm';
 import postgres from 'postgres';
@@ -40,9 +33,8 @@ const normalise = (name: string): string => name.trim().replace(/\s+/g, ' ');
 /**
  * The one collision a person can cause, as a sentence.
  *
- * Drizzle wraps the driver's `PostgresError` in a `DrizzleQueryError` with the
- * original as `.cause`, which is where the constraint name is read from — the
- * same unwrapping `subjects.ts` does, for the same driver.
+ * Drizzle wraps the driver's `PostgresError` in `.cause` — the constraint name
+ * is read from there, same as `subjects.ts`.
  */
 function isNameTaken(error: unknown): boolean {
 	const cause = error instanceof Error ? error.cause : undefined;
@@ -81,11 +73,8 @@ export interface OrganisationRow {
 	/** How many people have ever had a role period here. */
 	peopleCount: number;
 	/**
-	 * Every role period, oldest first — not just the current one.
-	 *
-	 * A promotion is a second period, so the editor has to show both or a person
-	 * cannot tell the difference between "promoted in 2021" and "started in
-	 * 2021", which is exactly the distinction the record exists to keep.
+	 * Every role period, oldest first — not just the current one. A promotion is
+	 * a second period; showing only the latest would erase when it happened.
 	 */
 	people: OrganisationPerson[];
 }
@@ -102,9 +91,8 @@ export async function listOrganisations(handle: Queryable = db): Promise<Organis
 			})
 			.from(organisation)
 			.orderBy(organisation.name),
-		// Grouped over every target rather than narrowed to organisations,
-		// because `document_link` points at `entity` and deciding which kinds
-		// exist is the registry's job, not this module's.
+		// Grouped over every target, not narrowed to organisations: `document_link`
+		// points at `entity`, and deciding which kinds exist isn't this module's job.
 		handle
 			.select({ targetId: documentLink.targetId, n: count() })
 			.from(documentLink)
@@ -158,14 +146,11 @@ export interface LanePreset {
 /**
  * What each kind of organisation is expected to send, as a starting point.
  *
- * Seeds and not rules, the same relationship `shelf_type` has with the shelf
- * seed rows: this is what a fresh organisation begins with, and it
- * belongs to the household from the moment it exists. Editing this list changes
- * what the NEXT one starts with and touches nothing already created.
+ * Seeds, not rules — like `shelf_type`'s relationship to shelf seed rows.
+ * Editing this list changes what the NEXT organisation starts with only.
  *
- * `other` seeds nothing. A kind with no rhythm of its own would get lanes that
- * are wrong rather than lanes that are empty, and an empty lane is a finding
- * while a wrong one is noise.
+ * `other` seeds nothing: a kind with no rhythm would get wrong lanes, and a
+ * wrong lane is noise while an empty one is a finding.
  */
 export const LANE_PRESETS: Record<EnumValue<'organisation.kind'>, LanePreset[]> = {
 	employer: [
@@ -179,8 +164,8 @@ export const LANE_PRESETS: Record<EnumValue<'organisation.kind'>, LanePreset[]> 
 			cadence: 'yearly',
 			conditions: [{ field: 'type', op: 'is', value: 'tax_document' }]
 		},
-		// Last, and matching everything: the lanes are tried in order, so a
-		// no-cadence lane at the end is "whatever the others did not claim".
+		// Last and matching everything: lanes are tried in order, so this catches
+		// whatever the others didn't claim.
 		{ label: 'Changes to pay', cadence: 'none', conditions: [] }
 	],
 	authority: [
@@ -220,13 +205,9 @@ export interface LaneRow {
 /**
  * Whether this lane may still propose anything.
  *
- * Trusted while it has been corrected no more often than it has been accepted.
- * A lane that has never proposed starts trusted — it has done nothing wrong —
- * and one that keeps being wrong falls silent WITHOUT anybody having to notice
- * it and turn it off, which is the only way a rule nobody is watching stops
- * doing damage.
- *
- * Pure, so the rule can be read and tested without a database.
+ * Trusted while corrected no more often than accepted, so a lane that keeps
+ * being wrong falls silent without anybody having to turn it off. Pure, so
+ * the rule can be tested without a database.
  */
 export function laneTrusted(lane: { acceptedCount: number; correctedCount: number }): boolean {
 	return lane.correctedCount <= lane.acceptedCount;
@@ -249,8 +230,7 @@ export async function recordLaneOutcome(
  * A card's lanes, in the order they are drawn and tried.
  *
  * Takes an ENTITY id, so a car's road tax and an employer's payslips are the
- * same call. It was `organisationId` while Income & Tax was the only shelf
- * drawing lanes.
+ * same call.
  */
 export async function lanesFor(entityId: string, handle: Queryable = db): Promise<LaneRow[]> {
 	return handle
@@ -300,8 +280,8 @@ export async function addLane(
 /**
  * The organisation with this name, minting one where the household has none.
  *
- * Idempotent rather than an error, exactly as `upsertSubjectByName` is: two
- * people adding "Tax office" on two devices have agreed, not collided.
+ * Idempotent, like `upsertSubjectByName`: two people adding "Tax office" on
+ * two devices have agreed, not collided.
  */
 export async function addOrganisation(
 	input: { name: string; shelfId: string; kind?: EnumValue<'organisation.kind'>; emoji?: string },
@@ -323,10 +303,8 @@ export async function addOrganisation(
 		.onConflictDoNothing()
 		.returning({ id: organisation.id });
 
-	// Lanes only for a row this call actually created. Adding by a name that
-	// already exists returns the existing organisation, and seeding again would
-	// put the app's guess back on top of whatever the household has since made
-	// of it.
+	// Lanes only for a row this call actually created — reusing an existing
+	// name must not reseed over whatever the household has since changed.
 	if (created.length > 0) {
 		let sortOrder = 0;
 		for (const preset of LANE_PRESETS[kind]) {
@@ -381,10 +359,8 @@ export async function setOrganisationEmoji(
 /**
  * Remove an organisation, refusing while anything is filed against it.
  *
- * The same rule a shelf keeps: a document must always be somewhere, and
- * deleting the employer out from under a payslip is not a delete anybody asked
- * for. Role periods go with it — a role has no meaning without the organisation
- * it was with — which the foreign key's CASCADE already does.
+ * Same rule a shelf keeps: a document must always be somewhere. Role periods
+ * cascade with it via the foreign key — a role has no meaning without the org.
  */
 export async function deleteOrganisation(id: string, handle: Queryable = db): Promise<void> {
 	const [filed] = await handle
@@ -423,9 +399,8 @@ export async function addEngagement(
 /**
  * Close a role period rather than deleting it.
  *
- * History is the point: a lane counts the filings it expected from the earliest
- * start across every period, so a period removed on promotion takes its years
- * with it and the count silently shrinks.
+ * History is the point: a lane counts expected filings from the earliest start
+ * across every period, so deleting one on promotion would shrink the count.
  */
 export async function endEngagement(
 	id: string,

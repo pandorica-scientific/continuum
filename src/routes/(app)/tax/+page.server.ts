@@ -69,11 +69,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const convert = (amount: bigint, from: string, to: string, day: string) =>
 		convertOrFace(rates, amount, from, to, day);
 
-	// Prefill totals for every person × salary-year, as editable major-unit
-	// text. Computed at display time, never stored — so it cannot go stale.
-	//
-	// Only years with a GROSS figure: a year evidenced solely by bank credits
-	// knows what arrived after tax, which is not what a tax statement declares.
+	// Prefill totals, computed at display time (never stored, so it cannot go stale).
+	// Only years with a GROSS figure — a bank-credit-only year is after-tax, not a declared statement.
 	const payslipYears = [
 		...new Set(
 			salaryRows.filter((r) => r.grossMinor !== null).map((r) => Number(r.periodMonth.slice(0, 4)))
@@ -106,11 +103,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const years = taxByYear(statements, prefs.currency, convert, filterPerson);
 	const hues = hueTokens(statements.map((s) => s.country));
 
-	// The currencies worth offering as a display currency: the household's own,
-	// plus the ones it has actually filed in. NOT availableCurrencies(), which
-	// is every code the rate table quotes — thirty-odd of them, rendered as a
-	// segmented control nobody can use, and offering to restate a Czech-and-
-	// Spanish record in Malaysian ringgit.
+	// The household's own currency, plus the ones actually filed in — not
+	// availableCurrencies(), which is every code the rate table quotes.
 	const displayCurrencies = [base, ...statements.map((s) => s.currency)].filter(
 		(code, i, all) => all.indexOf(code) === i
 	);
@@ -202,11 +196,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 };
 
 /**
- * Save every file the form carried, or none of them.
- *
- * One kind per batch: three broker PDFs at once is one action, a mixed batch is
- * two. If any upload throws, the ones already on the volume go with it — a
- * half-saved batch nothing points at is litter no screen ever shows.
+ * Save every file the form carried, or none of them. If any upload throws,
+ * the ones already on the volume are removed too — a half-saved batch is litter.
  */
 async function takeUploads(
 	form: FormData
@@ -243,12 +234,8 @@ async function discardUploads(attachments: StatementAttachment[]): Promise<void>
 const NOT_YOUR_STATEMENT = 'You can only file your own tax statements.';
 
 /**
- * The statement an action names, if the signed-in person may act on it.
- *
- * A statement is about one person, and that person is read from the row rather
- * than trusted from the form — the form carries an id, and an id is not a
- * claim about whose paper it is. Same rule as payslips: a member touches their
- * own, an administrator anybody's.
+ * The statement an action names, if the signed-in person may act on it. The
+ * owning person is read from the row, not trusted from the form.
  */
 async function statementFor(
 	statementId: string,
@@ -312,17 +299,12 @@ export const actions: Actions = {
 
 		// A statement brings its paperwork with it: every file chosen here becomes
 		// a document on the Finance shelf, filed against the same person, and
-		// linked to the statement. Before this, attaching anything meant leaving the
-		// screen, filing the document elsewhere, and coming back — and only one
-		// document could be attached at all, though a year's filing is several.
+		// linked to the statement.
 		const uploaded = await takeUploads(form);
 		if ('message' in uploaded) return fail(400, { message: uploaded.message });
 		const { attachments } = uploaded;
 
-		// The files are on the volume before the rows are, so every way out of the
-		// save that does not commit the statement takes ALL of them with it —
-		// refusal and failure alike. An upload nothing points at is invisible
-		// litter, and half a batch of it is worse than none.
+		// Files land on the volume before the rows do, so any failure to commit takes all of them with it.
 		let result;
 		try {
 			result = await saveStatement({
@@ -351,12 +333,7 @@ export const actions: Actions = {
 		return { ok: true };
 	},
 
-	/**
-	 * Add files to a statement that already exists.
-	 *
-	 * Same filing rules as the dialog's own upload, because both go through the
-	 * domain — the two cannot drift into naming or tagging things differently.
-	 */
+	/** Add files to a statement that already exists — same filing rules as the dialog's own upload. */
 	attach: async ({ request, locals }) => {
 		const form = await request.formData();
 		const statementId = asRowId(form.get('id'));
@@ -392,35 +369,24 @@ export const actions: Actions = {
 		return { ok: true };
 	},
 
-	/**
-	 * Unlink. The document stays on the Finance shelf, still filed against the
-	 * person — only the connection to this statement goes.
-	 *
-	 * `DocumentsCard`'s own detach form posts `targetId`, not `id` — the field
-	 * name every other screen's card already uses.
-	 */
+	/** Unlink only; the document stays filed. `DocumentsCard` posts `targetId`, not `id`. */
 	detach: async ({ request, locals }) => {
 		const form = await request.formData();
 		const statementId = asRowId(form.get('targetId'));
 		const found = await statementFor(statementId, locals.person);
 		if (!found.ok) return fail(found.status, { message: found.message });
-		// The registry's own detach, the one every other card uses. Tax kept a
-		// local copy that checked neither the document nor the target, so two
-		// functions of one name enforced two different things.
+		// The registry's own detach, shared with every other card — not a local copy.
 		const outcome = await detachDocument(statementId, asRowId(form.get('documentId')));
 		if (!outcome.ok) return fail(outcome.status, { message: outcome.message });
 		return { ok: true };
 	},
 
 	/**
-	 * Delete the document itself, and the file behind it.
-	 *
-	 * Deliberately a different action from detach: this destroys filed
-	 * paperwork. Routed through `removeDocument` (Task 9) rather than a plain
-	 * row delete, because a tax attachment can be a payslip — deleting one
-	 * directly would leave `salary_entry.document_id` SET NULL underneath it,
-	 * an orphaned row still counted in a year's total. `removeDocument` forgets
-	 * the payslip's contribution first, keeping only what the bank proved.
+	 * Delete the document itself, and the file behind it — destroys filed
+	 * paperwork, unlike detach. Routed through `removeDocument` rather than a
+	 * plain row delete: a tax attachment can be a payslip, and a direct delete
+	 * would leave `salary_entry.document_id` SET NULL, an orphaned row still
+	 * counted in a year's total.
 	 */
 	deleteAttachment: async ({ request, locals }) => {
 		const form = await request.formData();

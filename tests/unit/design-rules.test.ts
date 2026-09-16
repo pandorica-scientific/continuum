@@ -6,20 +6,8 @@ import noRawShadow, { ALLOWED } from '../../eslint-rules/no-raw-shadow.js';
 import opaqueFloatingSurface from '../../eslint-rules/opaque-floating-surface.js';
 import noEmojiEyebrow from '../../eslint-rules/no-emoji-eyebrow.js';
 
-/**
- * The two design rules that used to be prose, and the tokens they enforce.
- *
- * `docs/ui-guidelines.md` said "No shadows anywhere" and put it on the
- * before-you-ship checklist while eighteen `box-shadow` declarations quietly
- * failed it; the floating-surface rule was a suite that read every `.svelte`
- * file off disk and re-implemented a CSS parser with a regex. Both are lint
- * rules now — they report on the file that broke them, in the same pass as the
- * licence header — and this is what holds the rules themselves.
- *
- * The fixtures are plain JS whose source happens to contain a `<style>` block,
- * exactly as `no-raw-geometry.test.ts` does: the rules read the block as text,
- * because ESLint does not parse CSS inside a Svelte component.
- */
+// Fixtures are plain JS whose source contains a `<style>` block; the rules
+// read it as text, since ESLint does not parse CSS inside a Svelte component.
 const tester = new RuleTester();
 
 describe('design/no-raw-shadow', () => {
@@ -42,9 +30,6 @@ describe('design/no-raw-shadow', () => {
 	});
 
 	it('leaves an inset marker alone, which is not elevation at all', () => {
-		// `inset 3px 0 0 var(--teal)` is a left rail drawn with the one property
-		// that can paint inside a cell without taking layout space. Four matrices
-		// and the documents list use it.
 		expect(() =>
 			run([{ code: 'const c = `<style>.a{box-shadow:inset 3px 0 0 var(--teal);}</style>`;' }], [])
 		).not.toThrow();
@@ -162,10 +147,8 @@ describe('design/no-emoji-eyebrow', () => {
 
 describe('the elevation tokens', () => {
 	it('defines exactly the ones the rule allows', () => {
-		// A lint rule that has drifted from the tokens it enforces is worse than
-		// no lint rule — the same reason `no-raw-geometry.test.ts` reads app.css.
-		// Read from the rule's own list rather than restated here, so adding a
-		// fifth elevation token cannot pass by updating one of the two copies.
+		// Reads from the rule's own list rather than restating it, so adding a
+		// token can't pass by updating only one of the two copies.
 		const css = readFileSync('src/lib/styles/app.css', 'utf8');
 		const allowed = ALLOWED.map((v) => `${v.slice('var('.length, -1)}:`).sort();
 		for (const name of allowed) expect(css).toMatch(new RegExp(`${name}\\s*[^;]+;`));

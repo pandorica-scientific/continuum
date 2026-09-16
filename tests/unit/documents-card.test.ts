@@ -1,13 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-/**
- * The one card that every record screen files its paper through.
- *
- * There is no browser suite in this repository, so the card is rendered to a
- * string and read: what is asserted here is the part a screen depends on —
- * which links exist, which forms exist, and what a person is told when nothing
- * is filed yet. The expiry hue is asserted through the pure helper as well as
- * through the markup, because the helper is what the screens share.
- */
 import { describe, expect, it } from 'vitest';
 
 import { documentExpiryTone } from '$lib/documents/view';

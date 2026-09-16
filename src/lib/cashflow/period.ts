@@ -123,9 +123,8 @@ export function periodRange(
 	const anchor = anchorMonth
 		? new Date(Date.UTC(Number(anchorMonth.slice(0, 4)), Number(anchorMonth.slice(5, 7)) - 1, 1))
 		: today;
-	// UTC throughout. The previous version read the year and month in local time
-	// and then built the boundaries with Date.UTC, which lands on the wrong month
-	// for anyone west of UTC during the first hours of one.
+	// UTC throughout — mixing a local-time read with Date.UTC boundaries lands on
+	// the wrong month for anyone west of UTC during the first hours of one.
 	const y = anchor.getUTCFullYear();
 	const m = anchor.getUTCMonth();
 	const end = new Date(Date.UTC(y, m + 1, 0)).toISOString().slice(0, 10);

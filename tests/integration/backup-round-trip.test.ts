@@ -1,15 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// A dump nobody has ever read back is a dump nobody knows restores.
-//
-// The unit suite covers ordering, the schedule policy and the directory guard —
-// everything except the one thing a backup is for. Until v0.4.3 every dump
-// named the generated `entity_kind` column in its COPY headers while COPY TO
-// STDOUT omitted it from the rows, so every header was one column too wide and
-// no backup ever taken could be loaded.
-//
-// So this suite calls the real dumpDatabase() and feeds what it produces back
-// into a real database. Replicating its column logic here would have passed
-// against the broken code.
+// Regression: a generated column was named in the COPY header but omitted from
+// COPY TO STDOUT rows, making dumps unrestorable. This suite round-trips the
+// real dumpDatabase() into a real database instead of replicating its column
+// logic, which could pass against broken output.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { rowId } from '../row-id';
 import * as schema from '$lib/server/db/schema';
@@ -18,9 +11,8 @@ import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 import { makeDocument, makePerson } from './fixtures';
 
-// $env/dynamic/private snapshots process.env when Vite builds the virtual
-// module, which happens before this suite picks its port. A live getter is the
-// only way to hand dumpDatabase the harness it is meant to dump.
+// $env/dynamic/private snapshots process.env at build time, before this suite
+// picks its port — a live getter is the only way to point dumpDatabase at it.
 vi.mock('$env/dynamic/private', () => ({
 	env: new Proxy({} as Record<string, string | undefined>, {
 		get: (_target, key: string) => process.env[key]
@@ -50,11 +42,9 @@ afterAll(async () => {
 });
 
 /**
- * Apply a dump the way psql does.
- *
- * The driver cannot run `COPY … FROM stdin` with its data inline the way a psql
- * script carries it, so the blocks are split out and streamed — which is what
- * psql itself does under the covers. Everything else runs as a plain statement.
+ * Apply a dump the way psql does: COPY blocks are split out and streamed,
+ * since the driver cannot run `COPY … FROM stdin` with inline data. Every
+ * other line runs as a plain statement.
  */
 async function restore(dump: string): Promise<void> {
 	const lines = dump.split('\n');
@@ -95,10 +85,8 @@ describe('dumpDatabase', () => {
 
 		const dump = await dumpDatabase();
 
-		// Eleven tables carry a GENERATED ALWAYS entity_kind. COPY TO STDOUT
-		// omits it from the data, so naming it makes the header one column wider
-		// than every row it introduces — which is what made every dump
-		// unrestorable before v0.4.3.
+		// COPY TO STDOUT omits a GENERATED ALWAYS column from the data, so naming
+		// entity_kind in the header would make it one column too wide.
 		const headers = dump.split('\n').filter((line) => line.startsWith('copy "'));
 		expect(headers.length).toBeGreaterThan(0);
 		for (const header of headers) {
@@ -150,17 +138,14 @@ describe('dumpDatabase', () => {
 		const documents = await testDb.select().from(schema.document);
 
 		expect(people.map((p) => p.name)).toEqual(['Person A']);
-		// The baseline seeds a Household subject, so this is the seeded row plus
-		// the one this test added — both of which the dump has to bring back.
 		expect(subjects.map((s) => s.name).sort()).toEqual(['Car']);
 		expect(documents.map((d) => d.name)).toEqual(['Passport · Person A']);
 	});
 
 	it('brings the entity rows back, so a restored record can still be linked', async () => {
-		// The restore runs under session_replication_role = replica, which
-		// suppresses the register triggers. Registration therefore has to come
-		// from the dumped entity table itself — if it did not, every restored
-		// record would be silently unlinkable.
+		// Restore runs under session_replication_role = replica, suppressing
+		// register triggers, so registration must come from the dumped entity
+		// table itself, or every restored record would be silently unlinkable.
 		const dump = await dumpDatabase();
 		await restore(dump);
 

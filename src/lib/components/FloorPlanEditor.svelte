@@ -22,8 +22,8 @@
 
 	const CELL = 10;
 
-	// The editor owns the drawing from the moment it opens; `initial` is only
-	// where it starts, and re-reading it would discard rooms drawn since.
+	// `initial` is only the starting point; re-reading it would discard
+	// rooms drawn since.
 	const start = untrack(() => ({
 		cellCm: initial?.cellCm ?? DEFAULT_CELL_CM,
 		rooms: initial
@@ -113,7 +113,7 @@
 		if (clickOnly && dragStart) {
 			const hit = roomAt(dragStart.x, dragStart.y);
 			if (mode === 'erase') {
-				// a click chips away a single cell — how slopes get sculpted
+				// A click chips away a single cell — how slopes get sculpted.
 				if (hit !== null) {
 					rooms[hit].cells = rooms[hit].cells.filter(
 						([x, y]) => !(x === dragStart!.x && y === dragStart!.y)

@@ -2,13 +2,9 @@
 /**
  * A lane's cells: the coverage ribbon's rules, with a window in place of a month.
  *
- * Four states and no fifth, the same four the Statements ribbon draws — filed,
- * a gap, not arrived yet, and before the relationship began. The last is what
- * stops a car bought in 2021 reading as missing five years of insurance, and it
- * is the reason a card carries a bound at all.
- *
- * Pure arithmetic, so the edge cases that actually bite — a two-year window that
- * has ended, a card with no bound — are stated without a database.
+ * Four states: filed, a gap, not arrived yet, and before the relationship
+ * began — the last stops a car bought in 2021 reading as missing five years
+ * of insurance.
  */
 import type { CoverageBox } from '$lib/statements/coverage';
 

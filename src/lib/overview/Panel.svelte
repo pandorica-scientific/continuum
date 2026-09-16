@@ -31,7 +31,7 @@
 		hue?: string;
 		/** A count or a period, right of the title and half its weight. */
 		sub?: string | null;
-		/** The screen this panel is a summary of, if it has one. */
+		/** The screen this panel is a summary of, if any. */
 		href?: string | null;
 		customising?: boolean;
 		dragging?: boolean;
@@ -45,8 +45,8 @@
 		onpointerdown?: (event: PointerEvent) => void;
 		onresizestart?: (event: PointerEvent) => void;
 		/** A control on the head row, left of "Open →": the flow panel's period.
-		 *  Drawn only when `headControls` names one — a snippet reference is
-		 *  truthy whatever it renders, so the board cannot pass "none" by it. */
+		 *  Drawn only when `headControls` names one, since a snippet reference is
+		 *  truthy regardless of what it renders. */
 		controls?: Snippet;
 		headControls?: 'period';
 		children: Snippet;
@@ -55,9 +55,6 @@
 
 <section class="panel" class:customising class:dragging class:narrow>
 	<header>
-		<!-- A tile and a sentence-case name, not an uppercase eyebrow. Eighteen
-		     tracked-out capitals were the loudest thing on a board whose whole
-		     job is to let figures be read. -->
 		<span class="head">
 			<IconTile {hue} {icon} size={26} />
 			<span class="name">{title}</span>
@@ -90,29 +87,15 @@
 			{/if}
 		{/if}
 		{#if !customising && href}
-			<!--
-				The one way through to the screen behind a panel. Three panels used to
-				put a link of their own at the foot of their body instead, which meant
-				the same destination sat in a different place on every panel that had
-				one, and nowhere at all on the ten that did not.
-
-				It gives way to the customise controls rather than sitting beside them:
-				while the board is being arranged the header belongs to moving and
-				removing, and a link there is one more thing a stray tap can follow.
-			-->
+			<!-- Gives way to the customise controls: while arranging, the header belongs to moving/removing. -->
 			<a class="open" {href} aria-label="Open {title}">Open →</a>
 		{/if}
 	</header>
 
-	<!--
-		Panel content is inert while customising. Panels hold links and scrollable
-		rows, so without this a drag that starts on a row inside Recent activity
-		opens that transaction instead of moving the panel.
-
-		role="group" rather than a bare div, because a div carrying a pointer
-		handler is nothing at all to a screen reader. Moving a panel is a drag on
-		the wide board; the header's arrows are the route in the narrow one.
-	-->
+	<!-- Inert while customising, else a drag starting on a row (e.g. Recent
+	     activity) would open that link instead of moving the panel.
+	     role="group" rather than a bare div, since a div with a pointer handler
+	     is nothing to a screen reader. -->
 	<div
 		class="body"
 		class:inert={customising}
@@ -138,14 +121,11 @@
 		border-radius: var(--radius-card);
 		box-shadow: var(--shadow-card);
 		padding: 18px 20px;
-		/* Fills its rows and may exceed them: the stored height is a floor. */
+		/* The stored height is a floor: content may exceed it. */
 		height: 100%;
 		min-height: 0;
 		overflow: hidden;
 	}
-	/* The board being arranged is a mode, and the brand edge is what says so
-	   on every panel at once. It used to be --bd2, a shade off the resting
-	   border that nobody could see. */
 	.panel.customising {
 		border-color: var(--brand);
 	}
@@ -190,9 +170,7 @@
 		gap: var(--space-3);
 		flex: none;
 	}
-	/* Quiet on purpose: it is on every panel, and ten links competing with the
-	   figures they sit above would be the loudest thing on the board. The hover
-	   is the whole affordance, so the global underline is taken off it. */
+	/* Quiet on purpose: it's on every panel. Hover is the whole affordance, so the global underline is off. */
 	.head-controls {
 		display: flex;
 		align-items: center;
@@ -234,14 +212,7 @@
 	.remove {
 		color: var(--fg3);
 	}
-	/* Fixed box: content taller than the panel scrolls inside it. */
-	/* The body is not a scroller. It was one, with `overscroll-behavior:
-	   contain` so the wheel stopped at the panel's end — and a panel whose
-	   content FITS is still a scroll container, so the wheel over any panel
-	   went nowhere and the page could not be scrolled from most of the board.
-	   The board's rows grow with their content instead (`minmax(row, auto)`),
-	   so a tall panel makes a tall row and the page is the one thing that
-	   scrolls. */
+	/* Not a scroller: rows grow with content (`minmax(row, auto)`), so the page is the one thing that scrolls. */
 	.body {
 		flex: 1;
 		min-height: 0;

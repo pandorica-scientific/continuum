@@ -125,14 +125,12 @@
 		</label>
 	</div>
 
-	<!-- Recurrence is only offered on the whole series. Changing the rule of a
-	     single occurrence is not a thing that can mean anything: an occurrence
-	     belongs to its series' rule. -->
-	<!-- `!occurrence?.recurring` matters: a single event has no scope radios, so
-	     `scope` sits at its 'this' default forever and this block never opened —
-	     which meant an existing event could not be given a recurrence at all,
-	     only a brand-new one. The hidden scope=all below is what the server
-	     receives for those, so the editor belongs open here. -->
+	<!-- Recurrence is only offered on the whole series — a single occurrence
+	     can't have its own rule.
+	     `!occurrence?.recurring` matters: without it, a non-recurring existing
+	     event (no scope radios, `scope` stuck at 'this') could never be given a
+	     recurrence. The hidden scope=all below covers what the server expects
+	     for that case. -->
 	{#if !editing || !occurrence?.recurring || scope === 'all'}
 		<div class="recurrence">
 			<RecurrenceEditor

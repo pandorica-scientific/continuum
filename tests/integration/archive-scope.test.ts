@@ -11,10 +11,8 @@ import { generateEvents } from '$lib/server/calendar';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 import { makeDocument } from './fixtures';
 
-// `documentExpiry` (the briefing source) takes no handle and always reads the
-// module-level `db` singleton, so it has to be pointed at this harness the
-// same way `restricted-read-paths.test.ts` does it — `generateEvents` takes an
-// explicit handle and needs none of this.
+// `documentExpiry` reads the module-level `db` singleton, so it must be
+// pointed at this harness; `generateEvents` takes an explicit handle instead.
 vi.mock('$env/dynamic/private', () => ({
 	env: new Proxy({} as Record<string, string | undefined>, {
 		get: (_target, key: string) => process.env[key]
@@ -79,8 +77,8 @@ async function visibleIds(includeArchived: boolean): Promise<string[]> {
 }
 
 describe('the archive scope predicate', () => {
-	// v3 §2.3, exactly. The first row is the vacuous-all bug: a document linked
-	// to nothing has no archived subject, and must stay visible.
+	// The first row is the vacuous-all bug: a document linked to nothing has no
+	// archived subject, and must stay visible.
 	const table = [
 		{ links: [], visible: true, why: 'no subject links at all' },
 		{ links: ['active'], visible: true, why: 'an active car' },
@@ -104,10 +102,8 @@ describe('the archive scope predicate', () => {
 	});
 
 	it('leaves a document linked to a non-subject entity alone', async () => {
-		// A document filed against a person or a flat has no subject link at all,
-		// which is the same shape as the first row of the table and must behave
-		// the same way — the predicate joins through `subject`, not through
-		// `document_link` alone.
+		// Same shape as the first table row: the predicate joins through
+		// `subject`, not `document_link` alone.
 		const id = await seedDocumentLinkedTo([]);
 		const [row] = await testDb.select().from(document).where(eq(document.id, id));
 		expect(row).toBeDefined();
@@ -118,7 +114,7 @@ describe('the archive scope predicate', () => {
 /** Far enough out to be a briefing item and a calendar event, not so far it falls off either window. */
 const soon = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
 
-/** A document with an expiry date, linked to subjects of the given kinds — the sold-car shape from docs/documents.md. */
+/** A document with an expiry date, linked to subjects of the given kinds. */
 async function seedExpiringDocumentLinkedTo(
 	name: string,
 	kinds: ('active' | 'archived')[]
@@ -147,8 +143,8 @@ async function seedExpiringDocumentLinkedTo(
 }
 
 describe('the briefing applies the same scope', () => {
-	// docs/documents.md promises that a sold car's insurance renewal stops
-	// appearing on the Overview once the car (its only subject) is archived.
+	// A sold car's insurance renewal must stop appearing on the Overview once
+	// the car (its only subject) is archived.
 	it('drops a document whose only subject link is archived, and keeps one with an active link', async () => {
 		await seedExpiringDocumentLinkedTo('Car insurance · sold Skoda', ['archived']);
 		await seedExpiringDocumentLinkedTo('Car insurance · household Volvo', ['active']);

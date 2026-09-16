@@ -2,15 +2,10 @@
 /**
  * What kind of file is this, decided from its own bytes.
  *
- * The extension is not evidence. Banks serve CSV as `.txt`, MT940 as `.sta`,
- * CAMT as `.xml` or `.camt`, ABO as `.gpc`, and users rename things. Worse, a
- * mislabelled file that reaches the wrong parser does not fail loudly — it
- * reads zero rows and reports success, which is the exact failure this release
- * exists to make impossible.
- *
- * Routing by FORMAT first and bank second is also what makes the standards
- * parsers worth writing: one CAMT.053 reader serves every bank that exports
- * it, with no per-bank code at all.
+ * The extension is not evidence — banks serve CSV as `.txt`, MT940 as `.sta`,
+ * CAMT as `.xml` or `.camt`, ABO as `.gpc`, and users rename things. A
+ * mislabelled file reaching the wrong parser fails silently: zero rows,
+ * reported as success.
  */
 
 export type StatementFormat =

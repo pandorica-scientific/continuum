@@ -4,18 +4,14 @@ import { mapPool, PUSH_CONCURRENCY } from '$lib/server/calendar/sync/pool';
 /**
  * The bounded worker pool both provider adapters push through.
  *
- * Both used to write strictly one at a time, so a first sync took as many round
- * trips in series as the household had events while holding the account's sync
- * lease open. Doing them all at once is the other failure — a 429, and iCloud
- * throttles the whole account rather than the one request.
+ * Writing strictly one at a time holds the sync lease open too long; writing them
+ * all at once risks a 429 that throttles the whole account.
  */
 describe('running provider writes a few at a time', () => {
 	const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-	// THE LOAD-BEARING PROPERTY. The sync engine pairs results[i] with the op it
-	// sent as pushOps[i]. A result landing at the wrong index records one event's
-	// etag and merge base against another event's link row, which is a corrupted
-	// merge base rather than a slow sync.
+	// Load-bearing: the sync engine pairs results[i] with pushOps[i]. A result at
+	// the wrong index would record one event's etag against another's link row.
 	it('returns results in input order however they finish', async () => {
 		const items = [30, 5, 20, 0, 10];
 		const out = await mapPool(items, 3, async (ms) => {
@@ -55,8 +51,7 @@ describe('running provider writes a few at a time', () => {
 		expect(peak).toBeGreaterThan(1);
 	});
 
-	// A worker takes the next index when it frees up rather than being dealt a
-	// quarter of the queue up front, so one slow write holds up only itself.
+	// A worker takes the next index when it frees up, so one slow write holds up only itself.
 	it('does not let one slow item block the items behind it', async () => {
 		const finished: number[] = [];
 		await mapPool([50, 0, 0, 0], 2, async (ms, index) => {

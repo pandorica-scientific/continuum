@@ -2,10 +2,8 @@
 /**
  * What a document may be about, narrowed to its shelf.
  *
- * A document belongs to one shelf and never links across shelves. Before
- * v0.8.0 every pickable record on the instance was offered on every shelf,
- * which is how a receipt for a washing machine could end up about a tenancy —
- * and how a car's insurer and the tax office sat in one undifferentiated list.
+ * A document belongs to one shelf and never links across shelves — otherwise
+ * a receipt for a washing machine could end up about a tenancy.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { organisation, subject } from '$lib/server/db/schema';
@@ -63,8 +61,7 @@ describe('what a document may be about', () => {
 			{ shelfId: (await shelfBy('income_tax')).id, name: 'Finanční úřad', kind: 'authority' },
 			testDb
 		);
-		// The tax office is a card on Income & Tax. Filing a car's policy must not
-		// offer it, however plausible an insurer and an office look side by side.
+		// A tax-office card must not be offered when filing a car's policy.
 		expect(await pickableTargetsForShelf(vehicles, testDb)).toEqual([]);
 	});
 
@@ -81,8 +78,8 @@ describe('what a document may be about', () => {
 	it('a property shelf offers every address, which belongs to the household', async () => {
 		const property = await shelfBy('property');
 		await makeProperty(testDb, { name: 'Dejvická 12' });
-		// A property has a screen of its own and is not homed on a shelf, so every
-		// one is offered — there is only one Property shelf to offer them on.
+		// A property is not homed on a shelf, so every one is offered on the one
+		// Property shelf.
 		const offered = await pickableTargetsForShelf(property, testDb);
 		expect(offered.map((t) => t.name)).toEqual(['Dejvická 12']);
 	});

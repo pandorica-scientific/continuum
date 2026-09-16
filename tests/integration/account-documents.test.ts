@@ -16,13 +16,12 @@ vi.mock('$env/dynamic/private', () => ({
 }));
 
 /**
- * Task 14: the Accounts screen's own `DocumentsCard`, one per account.
+ * The Accounts screen's own `DocumentsCard`, one per account.
  *
  * There is no upload control on this card — imports and the Investments
- * upload own creation — so the first case here runs a real Fio CSV through
- * `ingestFile` (the fixture shape `import-integrity.test.ts` uses) and checks
- * the statement it files lands on the RIGHT account's card. The rest exercise
- * attach/detach exactly like the other two document-card suites.
+ * upload own creation — so the first case runs a real Fio CSV through
+ * `ingestFile` and checks the statement lands on the right account's card.
+ * The rest exercise attach/detach like the other document-card suites.
  */
 let harness: Harness;
 let testDb: TestDb;
@@ -161,8 +160,7 @@ describe('a statement filed by ingest', () => {
 		const { accounts } = await loadAccounts(asAdmin);
 		const card = accounts.find((a) => a.id === ACCOUNT);
 		expect(card?.documents).toHaveLength(1);
-		// `statementDocumentName` already bakes the bank and the period into the
-		// name, which is why the card's meta line does not need to repeat them.
+		// `statementDocumentName` bakes the bank and period into the name already.
 		expect(card?.documents[0].name).toContain('Fio');
 
 		expect(accounts.find((a) => a.id === OTHER_ACCOUNT)?.documents).toEqual([]);

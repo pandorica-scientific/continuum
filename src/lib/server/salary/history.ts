@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Salary history, assembled from the two places salary is evidenced.
-//
-// Lived on the Retirement screen until v0.4.4, where it sat beside a projection
-// that never read it. It is a Money question — what was earned — so it moved to
-// its own screen, and the assembly came here rather than being copied.
 
 import { eq } from 'drizzle-orm';
 import { db, type Db } from '$lib/server/db';
@@ -36,19 +32,13 @@ export interface SalaryMonthTotal {
 /**
  * A person's months, oldest first, with each month's statements ADDED UP.
  *
- * A month can hold more than one — two jobs are two payslips — and what a
- * person earned that month is the sum of them. Taking any single row would
- * report one employer and silently drop the other, which is the defect that
- * made this worth having in one place.
+ * A month can hold more than one payslip (two jobs); taking any single row
+ * would silently drop the other. Summed only after each row is converted, at
+ * the MONTH's own date — not today's rate, which would make history reprice
+ * every morning.
  *
- * Summed only after each row is converted, because two jobs can pay in two
- * currencies and there is no adding those together beforehand. Conversion is at
- * the MONTH's own date, not today's rate: a 2019 payslip restated at this
- * morning's rate is a different number every morning.
- *
- * Pure and exported rather than folded into the loader, because the Overview's
- * Salary panel wants the same months from the same rows, and two spellings of
- * "what July earned" are two figures that will disagree.
+ * Pure and exported (not folded into the loader) so the Overview's Salary
+ * panel computes the same months from the same rows.
  */
 export function monthlyTotals(
 	entries: readonly SalaryEntryFigures[],
@@ -91,20 +81,14 @@ export interface SalaryPersonHistory {
 	/** Payslip documents filed against this person, newest first. */
 	payslips: {
 		/**
-		 * The salary ENTRY's id.
-		 *
-		 * It was the document's, which stopped being an identity the moment a
-		 * month could hold two payslips: every correction the screen makes names
-		 * the row it corrects, and two rows for one month need two names.
+		 * The salary ENTRY's id, not the document's — a month can hold two
+		 * payslips, and a correction needs to name which row it corrects.
 		 */
 		id: string;
 		/**
 		 * The stored file this statement was read from — null when the reader may
-		 * not know it exists.
-		 *
-		 * Restricted paper is ABSENT rather than forbidden, and an id in the page
-		 * payload still says the document is there, so it leaves with the file.
-		 * What the month earned is the entry's own figure and stays either way.
+		 * not know it exists. Restricted paper is ABSENT rather than forbidden;
+		 * what the month earned stays either way.
 		 */
 		documentId: string | null;
 		periodMonth: string;
@@ -112,14 +96,8 @@ export interface SalaryPersonHistory {
 		netMinor: bigint | null;
 		bonusMinor: bigint | null;
 		/**
-		 * The currency the month was RECORDED in, and the unit these figures are
-		 * in — not the base currency.
-		 *
-		 * The year rows above are converted, because comparing years is the
-		 * question they answer and it cannot be asked across currencies. A slip
-		 * row is the opposite question: it is the evidence, and the evidence says
-		 * 135 887 Kč. Restating it as €5 415 shows a number that appears nowhere
-		 * on the piece of paper the row links to.
+		 * The currency the month was RECORDED in, not the base currency — unlike
+		 * the year rows above, a slip row is the evidence and must match the paper.
 		 */
 		currency: string;
 		file: string | null;
@@ -129,13 +107,9 @@ export interface SalaryPersonHistory {
 /**
  * Every person's salary history, converted to one currency.
  *
- * Two sources, kept apart on purpose. A payslip states GROSS and is a document
- * on the Payslips shelf; a salary credit the ledger already holds is NET and
- * arrives as a `salary_entry` row. A month can be evidenced by both, and
- * averaging them together would report a figure that is neither.
- *
- * Conversion is at the month's own date, not today's rate — a 2019 payslip
- * restated at this morning's rate is a different number every morning.
+ * Two sources kept apart: a payslip states GROSS (a document); a ledger
+ * salary credit is NET (`salary_entry`). Averaging them would report neither.
+ * Conversion is at the month's own date, not today's rate.
  */
 export async function loadSalaryHistory(
 	baseCurrency: string,
@@ -150,9 +124,8 @@ export async function loadSalaryHistory(
 			.from(person)
 			.orderBy(person.createdAt, person.id),
 		handle.select().from(document).where(eq(document.type, 'payslip')),
-		// Filtered to people: document_link also holds a document's properties,
-		// accounts and subjects, and a payslip filed against a flat is not a
-		// payslip belonging to a flat.
+		// Filtered to people: document_link also holds properties, accounts and
+		// subjects, which aren't payslip owners.
 		handle
 			.select({ documentId: documentLink.documentId, personId: documentLink.targetId })
 			.from(documentLink)
@@ -177,9 +150,8 @@ export async function loadSalaryHistory(
 		// two screens report two different Julys.
 		const months = monthlyTotals(recorded, convert, baseCurrency);
 
-		// The document is the FILE, and nothing else. Every figure below comes from
-		// the entry: a document that also carried an amount was a second source of
-		// truth, and it was read as gross while the reader had picked net.
+		// The document is the FILE, and nothing else — every figure below comes
+		// from the entry, not the document.
 		const fileOf = new Map(
 			slipDocs.filter((d) => ownerOf.get(d.id) === p.id).map((d) => [d.id, d.storedName] as const)
 		);
@@ -192,18 +164,13 @@ export async function loadSalaryHistory(
 				p.birthYear,
 				vests.filter((v) => v.personId === p.id)
 			),
-			// Slip rows are the entries as STORED, so they are built from `recorded`
-			// rather than from `converted`: every figure below is the raw one, and
-			// walking the converted list only to look each row back up meant
-			// converting three amounts per slip and discarding all of them.
+			// Slip rows are the entries as STORED, built from `recorded` not
+			// `converted` — every figure below is the raw one.
 			payslips: recorded
 				.filter((e) => e.documentId !== null)
 				.map((e) => {
-					// A slip this reader may not see costs the row its PAPER and
-					// nothing else. Dropping the row instead would delete a month
-					// somebody worked from a screen that is about what they earned —
-					// the figures below are the entry's own and owe nothing to the
-					// document.
+					// A slip this reader may not see costs the row its PAPER only —
+					// the figures below are the entry's own regardless.
 					const paper = fileOf.has(e.documentId!);
 					return {
 						/** The ENTRY, not the document: a correction has to name a row. */
@@ -236,14 +203,9 @@ export interface LatestSalary {
 /**
  * The last month each person was paid for, and the month before it.
  *
- * What the Overview's Salary panel needs and nothing else: the full history
- * assembles years, payslip rows and the paper behind each one, which is several
- * queries and a lot of arithmetic for two months' figures.
- *
- * No actor, deliberately. The read rule guards PAPER — whether this reader may
- * know a payslip document exists — and every figure here comes from
- * `salary_entry`, which is the household's own record of what was earned. A
- * person with no entries at all has no row rather than a row of dashes.
+ * What the Overview's Salary panel needs, avoiding the full history's queries
+ * for payslip rows and paper. No actor: every figure comes from `salary_entry`
+ * directly, not gated by document read rules. No entries means no row.
  */
 export async function latestSalaryByPerson(
 	baseCurrency: string,

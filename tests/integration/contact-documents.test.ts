@@ -15,12 +15,11 @@ vi.mock('$env/dynamic/private', () => ({
 }));
 
 /**
- * Task 15: the Contacts screen's own `DocumentsCard`, one per contact.
+ * The Contacts screen's own `DocumentsCard`, one per contact.
  *
- * The card lives inside the inline edit panel (`ContactForm`), not on the row
- * itself, but the load still carries every contact's documents — the list is
- * already loaded whole (see `contact-fold.test.ts`), so this is one extra pair
- * of queries per row rather than a second round trip when a panel opens.
+ * The card lives in the inline edit panel, not the row, but the load still
+ * carries every contact's documents to avoid a second round trip when a
+ * panel opens.
  */
 let harness: Harness;
 let testDb: TestDb;

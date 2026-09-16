@@ -4,11 +4,9 @@ import { icsUid } from '$lib/server/calendar';
 /**
  * The published feed's event identity.
  *
- * UIDs used to be `${day}-${index}@continuum-ledger` — the event's POSITION in
- * the generated array. Adding a loan renumbers everything after it on that day,
- * so a subscribed calendar sees the old events deleted and new ones created.
- * Churn in a read-only feed; under two-way sync it would be duplication and
- * data loss, because the remote side keys on exactly this value.
+ * Must be derived from the event's key, never its position: a UID keyed on
+ * array index renumbers on every insert, causing churn in a read-only feed
+ * and duplication or data loss under two-way sync.
  */
 describe('ics uid', () => {
 	it('is derived from the event key, not its position', () => {

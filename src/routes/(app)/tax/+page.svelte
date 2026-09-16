@@ -1,14 +1,5 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
-	// Four stacked sections, each more specific than the one above it: the band
-	// answers "how much, overall", the chart answers "what is the shape", the
-	// matrix answers "which year, which country", and the expanded row answers
-	// "what exactly did that statement say".
-	//
-	// The person control sits between the band and the chart. It governs both
-	// the chart and the matrix, so it has to precede them; the band stays
-	// household-wide, because a figure labelled "overall" that answered to a
-	// control beneath it would read backwards.
 	import { untrack } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
@@ -24,15 +15,9 @@
 
 	type Row = (typeof data.statements)[number];
 
-	// Closed on arrival. The newest year used to open itself, which meant the
-	// table never showed the shape it is for — every year against every other —
-	// until something was collapsed first. The chevron on every row is enough to
-	// find, and the screen's own summary already answers the question the open
-	// year was answering.
-	//
-	// The three below read the load once and belong to the screen afterwards,
-	// which is what untrack says: `savePrefs` reloads the page data, and a
-	// re-read would snap an expanded year shut while it was being read.
+	// The three below read the load once (untrack) and belong to the screen
+	// afterwards: `savePrefs` reloads the page data, and a re-read would snap
+	// an expanded year shut while it was being read.
 	let openYear = $state<number | null>(null);
 	let mode = $state<'stack' | 'rate'>(untrack(() => data.prefs.mode));
 	let personFilter = $state(untrack(() => data.prefs.person));

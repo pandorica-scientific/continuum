@@ -1,14 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * Who may file a payslip.
- *
- * `payslipMatchingContent` recognises a re-uploaded slip by its bytes and says
- * nothing about who is asking — deliberately, because applying the read rule
- * there would make a member's upload MISS the restricted slip it matches, mint
- * a second document and a second salary entry, and report the month's pay
- * twice. The answer is a gate at the action instead: a member files their own
- * payslips, an admin files anybody's, and nobody else's upload can rename a
- * restricted slip or move the month it evidences.
+ * `payslipMatchingContent` says nothing about who is asking, deliberately —
+ * applying the read rule there would make a member's upload MISS the
+ * restricted slip it matches and double-count the month's pay. The gate is
+ * at the action instead: a member files their own, an admin files anybody's.
  */
 import { mkdir, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';

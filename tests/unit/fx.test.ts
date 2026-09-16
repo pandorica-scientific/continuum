@@ -6,13 +6,12 @@ import {
 	missingRateCodes,
 	type RateTable
 } from '$lib/server/fx/table';
+import { orderCurrencies } from '$lib/server/fx/currencies';
 
 const rates = (entries: [string, { day: string; rate: number }[]][]): RateTable => new Map(entries);
 
 describe('historical FX conversion', () => {
-	// refreshRates only fetches the current fixing and the CNB publishes
-	// forward, so a day before the first fetch can never gain its own rate.
-	// Returning null here read as face value: 10 000 EUR counted as 10 000 CZK.
+	// No fixing exists before the first fetch date; carry the oldest known rate back instead of null.
 	it('carries the oldest fixing back before the first known day', () => {
 		const table = rates([['EUR', [{ day: '2026-01-02', rate: 25 }]]]);
 
@@ -28,9 +27,7 @@ describe('historical FX conversion', () => {
 		expect(conversionBasis(table, 'USD', 'CZK', '2026-01-02')).toBe('none');
 	});
 
-	// proposePairs skips its cross-currency branch whenever convert returns
-	// null, so both legs of an own transfer keep counting as real income and
-	// real spending. A carried rate keeps that comparison alive.
+	// A carried rate keeps cross-currency comparisons working for historical statements.
 	it('keeps a cross-currency comparison possible for historical statements', () => {
 		const table = rates([
 			['EUR', [{ day: '2026-01-02', rate: 25 }]],
@@ -61,10 +58,7 @@ describe('missing-rate fallback', () => {
 		expect(convertOrFace(new Map(), 12345n, 'KWD', 'JPY', '2020-01-01')).toBe(12n);
 	});
 
-	// The two reasons are reported apart, because they want different advice. A
-	// currency with no rate at all may be a connectivity problem worth acting on;
-	// a figure older than the first stored fixing is nobody's fault and cannot be
-	// fixed by checking the internet.
+	// A missing rate and a carried historical rate call for different advice, so they're reported apart.
 	it('separates a historical fallback from having no rate at all', () => {
 		const table = rates([['EUR', [{ day: '2026-01-02', rate: 25 }]]]);
 
@@ -100,5 +94,21 @@ describe('missing-rate fallback', () => {
 			'CZK'
 		);
 		expect(result).toEqual({ carried: [], none: ['PLN'] });
+	});
+});
+
+describe('orderCurrencies', () => {
+	it('puts the base first, then what the household holds, then the rest alphabetically', () => {
+		expect(orderCurrencies('EUR', ['USD', 'GBP', 'EUR'], ['CZK', 'PLN', 'USD', 'AUD'])).toEqual([
+			'EUR',
+			'GBP',
+			'USD',
+			'AUD',
+			'CZK',
+			'PLN'
+		]);
+	});
+	it('offers the base even when nothing quotes it', () => {
+		expect(orderCurrencies('XAU', [], ['EUR'])).toEqual(['XAU', 'EUR']);
 	});
 });

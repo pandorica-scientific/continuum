@@ -30,18 +30,13 @@ export const POST: RequestHandler = async ({ request }) => {
 	const carried = typeof existing === 'string' && existing ? existing : null;
 	const sessionId = carried ? scanId(carried, 'scan session') : (await createScanSession()).id;
 
-	// A new photograph means the last one is finished with. One page is in flight
-	// at a time, so any source still sitting here without an artefact beside it
-	// was abandoned by a client that never got its `DELETE` out — a closed tab, a
-	// phone off the network. Reclaimed HERE rather than left to the sweep,
-	// because the page cap counts kept pages and these are not kept: without
-	// this, a session could grow all afternoon while its page count stayed at
-	// zero.
+	// Reclaim any source left behind by an abandoned client (closed tab, dropped
+	// connection) now, rather than waiting on the sweep — the page cap only counts
+	// kept pages, so an abandoned session could otherwise grow unbounded.
 	if (carried) await dropUnkeptScanPages(sessionId);
 
-	// Enforced here as well as in the browser. The browser's cap is now advice —
-	// this endpoint is reachable without it. Counted on the pages already KEPT,
-	// so a retake does not spend one of the twenty.
+	// Re-enforced server-side since the browser's cap is bypassable. Counts only
+	// kept pages, so a retake doesn't spend one of the twenty.
 	if ((await countScanPages(sessionId)) >= MAX_PAGES) {
 		error(409, `A document holds at most ${MAX_PAGES} pages.`);
 	}
@@ -65,9 +60,8 @@ export const POST: RequestHandler = async ({ request }) => {
 		sessionId,
 		pageId,
 		outline: result.outline,
-		// A handful of triples of numbers: the straight edges found in this
-		// photograph, so the corner screen can pull a dragged handle onto one
-		// rather than leaving it where a thumb happened to land.
+		// Straight edges found in the photograph, so the corner screen can snap a
+		// dragged handle onto one instead of leaving it where a thumb landed.
 		lines: result.lines,
 		width: result.width,
 		height: result.height

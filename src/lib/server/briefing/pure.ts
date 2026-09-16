@@ -1,17 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * The briefing's judgements that need no database.
- *
- * Every source in `index.ts` reaches a database on its first line, so anything
- * decided inside one can only be tested by standing a Postgres up. These are
- * the decisions that are not about data at all — plural grammar, which of a
- * document's jobs is the current one, how the strip describes itself — and
- * they live here so a unit test can hold them.
- *
- * It is also where the wording stops being per-source. "1 document" and "2
- * documents" were spelled out at each title, which is two chances to write
- * "1 documents", and the about line was assembled in place by the one source
- * that had it.
+ * The briefing's judgements that need no database — plural grammar, which of
+ * a document's jobs is current, how the strip describes itself — so a unit
+ * test can hold them without standing a Postgres up.
  */
 
 /** One `job` row, as the extraction source reads it. */
@@ -24,14 +15,9 @@ export interface ExtractionJobRow {
 /**
  * Each document's CURRENT extraction state — the newest attempt wins.
  *
- * A document keeps every attempt it has ever had, so asking the database for
- * `state = 'failed'` answers "has this ever failed", which is a different
- * question: a file that failed on Monday and was re-read on Tuesday is not a
- * document anybody has to do anything about.
- *
- * Order-independent rather than trusting the query's `order by`, because the
- * rule is about `queued_at` and reading it off the row order would make this
- * untestable without the query that produced it.
+ * A document keeps every attempt it has ever had, so `state = 'failed'` alone
+ * answers "has this ever failed", a different question. Order-independent
+ * rather than trusting the query's `order by`, so this is testable on its own.
  */
 export function latestJobPerDocument(rows: readonly ExtractionJobRow[]): Map<string, string> {
 	const newest = new Map<string, ExtractionJobRow>();
@@ -47,9 +33,8 @@ export function latestJobPerDocument(rows: readonly ExtractionJobRow[]): Map<str
 /**
  * A document's second line: where it is filed, and what it is about.
  *
- * An unnamed link comes back as an empty string, and "about  and Mortgage ČS"
- * reads as a missing word rather than as a missing record, so it is dropped
- * here rather than at each call site.
+ * An unnamed link comes back as an empty string, dropped here so "about  and
+ * Mortgage ČS" cannot read as a missing word.
  */
 export function aboutLine(shelfLabel: string, names: readonly string[]): string {
 	const named = names.filter(Boolean);
@@ -67,12 +52,9 @@ export function countTitle(n: number, singular: string, plural: string): string 
 const WORDS = ['', 'one', 'two', 'three', 'four'];
 
 /**
- * The sentence under the strip's title.
- *
- * `items` is what is ON the strip and `total` how many the briefing found in
- * all: the sentence counts the cards a person can see, and the "+N more"
- * button beside it carries the rest. `total` answers the only question the
- * cards cannot — whether anything needed anyone at all.
+ * The sentence under the strip's title. `items` is what is ON the strip and
+ * `total` how many the briefing found in all — the "+N more" button carries
+ * the rest.
  */
 export function briefingCaption(items: readonly { hue: string }[], total: number): string {
 	if (total === 0) return 'nothing needs you today';
@@ -103,12 +85,9 @@ export interface TrancheTiming {
 }
 
 /**
- * A tranche that vested and was never written down.
- *
- * The grace period is why this is not simply "vested and unsettled": a vest is
- * a date in a schedule, and the shares behind it reach the broker days later.
- * Asking on the morning of the vest would be asking about something that has
- * not happened yet.
+ * A tranche that vested and was never written down. Not simply "vested and
+ * unsettled" — the shares behind a vest reach the broker days later, so the
+ * grace period avoids asking about something that hasn't happened yet.
  */
 export function settlementOverdue(
 	tranche: TrancheTiming,
@@ -121,10 +100,8 @@ export function settlementOverdue(
 
 /**
  * The tax year worth asking about today, or null while it is too early to ask.
- *
- * Nobody files on the second of January, and a briefing that says so every day
- * of that month is a briefing people learn to read past. The month it starts
- * from is the household's to set.
+ * A briefing nagging from the second of January is one people learn to read
+ * past, so the month it starts from is the household's to set.
  */
 export function taxYearToChase(today: string, reminderMonth: number): number | null {
 	const month = Number(today.slice(5, 7));
@@ -135,10 +112,9 @@ export function taxYearToChase(today: string, reminderMonth: number): number | n
 /**
  * How far behind a lane is, judged by its LAST expected period.
  *
- * A lane with an old hole in it and this month's paper filed is not something
- * anybody has to act on today — the ribbon on the shelf already draws it. What
- * belongs on the briefing is a rhythm that has stopped, which is what a gap in
- * the most recent period that could hold something means. Zero otherwise.
+ * A lane with an old hole but this month's paper filed is not something to act
+ * on today — the shelf's own ribbon already draws it. What belongs on the
+ * briefing is a rhythm that has stopped.
  */
 export function laneShortfall(cells: readonly { state: string }[]): number {
 	const expected = cells.filter((cell) => cell.state === 'filed' || cell.state === 'gap');

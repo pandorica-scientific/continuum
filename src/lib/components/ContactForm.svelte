@@ -84,10 +84,8 @@
 </script>
 
 <div class="card editor">
-	<!-- Its own `<form>`, not the outer element: `DocumentsCard` below posts
-	     forms of its own, and a form nested inside a form is invalid HTML — the
-	     browser would claim a submit for whichever one it picks, not the one
-	     that was clicked. -->
+	<!-- Own `<form>`, not the outer element: `DocumentsCard` below posts its own
+	     forms, and a form nested inside a form is invalid HTML. -->
 	<form class="editor" method="POST" action="?/save" enctype="multipart/form-data">
 		{#if contact?.id}<input type="hidden" name="id" value={contact.id} />{/if}
 		<input type="hidden" name="existingPhoto" value={contact?.photo ?? ''} />
@@ -209,9 +207,7 @@
 		grid-column: 1 / -1;
 	}
 
-	/* Field labels match the Documents add-form exactly: 12px, --fg3, 5px gap.
-	   This form sits two clicks from that one and they should not look like two
-	   different products. */
+	/* Matches the Documents add-form's label styling exactly. */
 	label,
 	.photo-current {
 		display: flex;
@@ -271,8 +267,7 @@
 		gap: var(--space-4);
 	}
 
-	/* Destructive, but still a .btn: the app has exactly two button shapes and
-	   inventing a third for this one would be the inconsistency, not the fix. */
+	/* Destructive, but still a .btn — the app has exactly two button shapes. */
 	.danger {
 		margin-left: auto;
 		color: var(--red);

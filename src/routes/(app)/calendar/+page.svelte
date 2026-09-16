@@ -104,10 +104,8 @@
 </section>
 
 {#if data.conflicts.length > 0}
-	<!-- The briefing raises these and sends people here, so here is where they can
-	     be cleared. Acknowledging is a button rather than a side effect of the
-	     page loading: a discarded edit and a date that changed in the ledger are
-	     things someone should have to say they have seen. -->
+	<!-- Acknowledging is a button, not a side effect of loading: a discarded edit
+	     or a date changed in the ledger needs an explicit "seen". -->
 	<section class="card conflicts" aria-labelledby="sync-conflicts">
 		<div class="eyebrow-row">
 			<span class="eyebrow" id="sync-conflicts">Sync noticed</span>
@@ -604,10 +602,8 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	/* The feed path is the exception: the paragraph below it tells you to
-	   subscribe with this path, and the token in it is the only key. Ellipsing it
-	   on a narrow screen leaves an instruction that cannot be followed, so this
-	   one wraps instead of truncating. */
+	/* Wraps instead of truncating: this path contains the subscribe token, and
+	   ellipsing it would leave an instruction that can't be followed. */
 	.f-detail.mono {
 		overflow-wrap: anywhere;
 		white-space: normal;

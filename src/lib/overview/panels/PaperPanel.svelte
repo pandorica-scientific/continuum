@@ -1,8 +1,5 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
-	// Three figures and where the paper sits. The figures are the ones that
-	// change what somebody does today — what is unfiled, what is about to lapse,
-	// what already has — and the shelves below them are only navigation.
 	import { readableDate } from '$lib/documents/view';
 
 	interface Shelf {
@@ -24,17 +21,14 @@
 		};
 	} = $props();
 
-	// A zero is not a state, so it stays on the ordinary foreground. Painting
-	// "0 expired" red would put the loudest colour on the screen on the one
-	// household that has nothing wrong with its paperwork.
+	// A zero stays on the ordinary foreground: "0 expired" in red would be the
+	// loudest colour on the screen for a household with nothing wrong.
 	const soonTone = $derived(data.expiring.soon > 0 ? 'var(--yellow)' : 'var(--fg1)');
 	const expiredTone = $derived(data.expiring.expired > 0 ? 'var(--red)' : 'var(--fg1)');
 </script>
 
 <div class="stack">
 	<div class="figures">
-		<!-- The only figure with somewhere of its own to go: the review flow is
-		     what empties the inbox, and /documents cannot. -->
 		<a class="figure" href="/documents?shelf=inbox">
 			<span class="mono count">{data.inbox}</span>
 			<span class="what">waiting to be filed</span>
@@ -95,9 +89,7 @@
 	a.figure:hover .what {
 		color: var(--fg1);
 	}
-	/* A fixed column so the three counts line up under one another however many
-	   digits each has — three figures that do not share an edge read as three
-	   unrelated facts. */
+	/* A fixed column so the three counts line up regardless of digit count. */
 	.count {
 		font-size: var(--text-2xl);
 		font-variant-numeric: tabular-nums;

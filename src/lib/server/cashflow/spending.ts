@@ -2,17 +2,10 @@
 /**
  * What each expense group cost, month by month, over the whole record.
  *
- * `groupMonthlySpending` in `$lib/briefing` does the tally, and it excludes the
- * two group keys `income` and `savings` by NAME. That was right while the
- * groups were a code constant; they are rows a household owns now, so a
- * household that renames Income, or adds a second savings group, had its pay
- * counted as an expense — and the literal is inside a pure function two callers
- * share, which is not where the fix belongs.
- *
- * So the exclusion happens here, at the caller, by ROLE: only categories in an
- * expense-role group reach the map at all, and a category the map does not hold
- * is one the tally skips. The pure function keeps its own guard, which is now
- * saying the same thing twice about the seeded keys and nothing about the rest.
+ * `groupMonthlySpending` in `$lib/briefing` excludes `income`/`savings` by
+ * NAME, which breaks once groups are household-owned rows. So the exclusion
+ * happens here instead, by ROLE: only categories in an expense-role group
+ * reach the map, and one the map does not hold is one the tally skips.
  */
 import { db } from '$lib/server/db';
 import { category, transaction } from '$lib/server/db/schema';

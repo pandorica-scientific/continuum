@@ -6,18 +6,11 @@ import { bindingIsWritable, type OriginBinding } from '$lib/calendar/keys';
 import { recordConflict } from '$lib/server/calendar/conflicts';
 
 // Write-back: a date moved in Google or iCloud, applied to the ledger row that
-// produced the event.
-//
-// This is the one path where a calendar client edits ledger data, so it is
-// deliberately narrow. Only DATE fields, only on rows that genuinely represent a
-// scheduling fact, and every write is recorded — a household should be able to
-// find out later why a lease end changed.
+// produced it. The one path where a calendar client edits ledger data — kept
+// narrow to DATE fields on scheduling-fact rows, and every write is recorded.
 
-// WRITABLE_BINDINGS lives in $lib/calendar/keys beside OriginBinding, because
-// the pure merge decides whether to propose a write-back and this file decides
-// whether to perform one. Two copies of that table is two chances for one of
-// them to start allowing a field the other refuses. Re-exported so callers that
-// think of write-back as belonging here keep working.
+// WRITABLE_BINDINGS lives in $lib/calendar/keys, not here, so the pure merge
+// and this file share one source of truth for which fields are writable.
 export { bindingIsWritable };
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -77,9 +70,7 @@ export async function applyWriteBack(
 				.set({ paymentDay: value as number })
 				.where(eq(loan.id, binding.rowId));
 
-			// SAID PLAINLY, because it is genuinely surprising. paymentDay is a
-			// day-of-month, so there is no way to move one month alone: the whole
-			// schedule moves, past events included.
+			// paymentDay is a day-of-month: moving one month's payment moves them all.
 			message =
 				`${row.name}: the payment day changed from ${row.paymentDay} to ${value} — ` +
 				`every month, from a calendar edit.`;

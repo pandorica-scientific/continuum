@@ -2,12 +2,6 @@
 /**
  * The line chart's geometry, kept pure: no DOM, no Svelte, no measuring.
  *
- * v0.8.1 puts a line chart behind four things that used to be bars or nothing
- * at all — salary change year on year, effective tax rate, the retirement pot
- * against what the target requires, and portfolio value against money in. One
- * engine rather than four, for the same reason `sankey.ts` exists: the axis
- * arithmetic is where the bugs live, and it can be tested without a browser.
- *
  * The renderer measures its own box and hands the width in; everything here is
  * a function of that width, so a chart is never drawn at a scaled stroke.
  */
@@ -57,8 +51,7 @@ export interface PlacedSeries {
  * One block of a stacked bar, in data units.
  *
  * `fill` is whatever SVG will accept — `var(--teal)`, or `url(#hatch)` for a
- * pattern the caller has put in `defs`. The engine never invents a colour; it
- * only decides where the block goes.
+ * pattern the caller has put in `defs`.
  */
 export interface BarSegment {
 	value: number;
@@ -99,13 +92,7 @@ export interface LineGeometry {
 	zeroY: number | null;
 	/** X position of each slot, for the labels underneath. */
 	slots: number[];
-	/**
-	 * Where a pointer over each slot counts, as [x, width].
-	 *
-	 * The whole pitch, not the bar: a reader aiming at the gap between two
-	 * years is aiming at one of them, and a hit zone the width of the bar makes
-	 * a chart with thin bars feel broken.
-	 */
+	/** Where a pointer over each slot counts, as [x, width] — the whole pitch, not just the bar. */
 	hits: { x: number; w: number }[];
 	/** Bars, when the caller passed any. Measured against `barTicks`. */
 	bars: PlacedBar[];
@@ -122,16 +109,9 @@ export interface LineOptions {
 	barFormat?: (value: number) => string;
 	bars?: readonly BarSlot[];
 	/**
-	 * How much of the plot the bars get, 0–1.
-	 *
-	 * Two bands rather than two axes over one band, which is what the salary
-	 * and tax charts have always drawn: money on top at its own scale, the
-	 * percentage line beneath at its own. Sharing one band would mean a scale
-	 * factor between koruna and percent that means nothing, and a line that
-	 * crosses the bars wherever that factor happens to put it.
-	 *
-	 * 0 gives the whole plot to the lines, which is what the "Change" and
-	 * "Effective rate" views are.
+	 * How much of the plot the bars get, 0–1. Two bands rather than one shared
+	 * axis: money and percent have no common scale to overlay on.
+	 * 0 gives the whole plot to the lines.
 	 */
 	barShare?: number;
 	/** Widest a bar may be drawn, whatever the slot pitch allows. */
@@ -140,10 +120,7 @@ export interface LineOptions {
 
 /**
  * Room for a five-figure axis label on the left and an end label on the right.
- *
- * The right is the wider of the two because the label sits BESIDE the last
- * point rather than under it — a legend costs a whole row and makes the reader
- * match colours; a name at the end of the line costs nothing to read.
+ * The right is wider because the label sits beside the last point, not under it.
  */
 export const PAD_LEFT = 56;
 export const PAD_RIGHT = 96;
@@ -156,9 +133,6 @@ const HEADROOM = 0.12;
 /**
  * No bar segment is thinner than this, so a real figure two orders below the
  * rest is present rather than rounded out of existence.
- *
- * Carried over from the tax and salary charts this engine replaces, where it
- * was written for a €174 filing inside a €37 000 bar.
  */
 const HAIRLINE = 0.8;
 
@@ -186,11 +160,9 @@ export function niceStep(rough: number): number {
 }
 
 /**
- * A axis covering `min`–`max` on round steps, with headroom above.
- *
- * Always includes zero when the data is one-signed: a bar or a line measured
- * from an arbitrary floor exaggerates every change on it, which is the oldest
- * misleading chart there is.
+ * An axis covering `min`–`max` on round steps, with headroom above.
+ * Always includes zero when the data is one-signed — a floor above zero
+ * exaggerates every change on the axis.
  */
 export function axisTicks(
 	min: number,
@@ -212,12 +184,8 @@ export function axisTicks(
 }
 
 /**
- * Where each slot sits across the plot.
- *
- * The first and last points are inset rather than flush with the edges: a
- * point drawn on the axis is half clipped, and its end label would run off the
- * box. The inset is a share of the gap, capped, so two points do not sit in
- * the middle of a wide chart with nothing either side.
+ * Where each slot sits across the plot. First/last points are inset from the
+ * edges (capped) so they aren't clipped and end labels don't run off the box.
  */
 function slotPositions(count: number, x: number, w: number): number[] {
 	if (count <= 0) return [];
@@ -234,8 +202,7 @@ export function lineGeometry(
 	height: number,
 	options: LineOptions | ((value: number) => string) = {}
 ): LineGeometry {
-	// A bare formatter is still accepted: the first callers passed one, and a
-	// two-argument overload is cheaper than changing them to pass `{format}`.
+	// A bare formatter is still accepted for callers passing one directly.
 	const opts: LineOptions = typeof options === 'function' ? { format: options } : options;
 	const format = opts.format ?? ((v: number) => String(v));
 	const bars = opts.bars ?? [];
@@ -247,8 +214,7 @@ export function lineGeometry(
 		w: Math.max(0, width - PAD_LEFT - PAD_RIGHT),
 		h: Math.max(0, height - PAD_TOP - PAD_BOTTOM)
 	};
-	// The bars take the top band, the lines the rest. A gap between them, so a
-	// line at the top of its band does not touch the foot of a bar.
+	// Bars take the top band, lines the rest, with a gap so they don't touch.
 	const GAP = barShare > 0 ? 18 : 0;
 	const barH = Math.max(0, plot.h * barShare - GAP);
 	const splitY = plot.y + barH + GAP;
@@ -273,7 +239,7 @@ export function lineGeometry(
 		let run: string[] = [];
 		s.points.forEach((point, i) => {
 			if (point.value === null) {
-				// A gap, not a zero. Close the run so the line breaks here.
+				// A gap, not a zero: close the run so the line breaks here.
 				if (run.length > 1) paths.push(run.join(''));
 				run = [];
 				return;
@@ -301,16 +267,14 @@ export function lineGeometry(
 	const barSpan = barAxis ? barAxis.max - barAxis.min || 1 : 1;
 	const barY = (value: number) => plot.y + barH - ((value - (barAxis?.min ?? 0)) / barSpan) * barH;
 
-	// A share of the pitch, capped. Flush bars read as a histogram, which says
-	// the x axis is continuous — these are years, and they are not.
+	// A share of the pitch, capped: flush bars would read as a continuous histogram.
 	const pitch = count > 1 ? Math.abs(slots[1] - slots[0]) : plot.w;
 	const barWidth = Math.min(opts.maxBarWidth ?? 34, Math.max(2, pitch * 0.38));
 
 	const placedBars: PlacedBar[] = bars.map((slot, i) => {
 		const x = (slots[i] ?? plot.x) - barWidth / 2;
-		// Stacked in pixels rather than in values, so the hairline floor below
-		// cannot be undone by the next segment being placed from a running total
-		// that ignored it. `cursor` walks UP from the foot of the band.
+		// Stacked in pixels, not values, so the HAIRLINE floor per segment holds.
+		// `cursor` walks up from the foot of the band.
 		let cursor = plot.y + barH;
 		const segments = slot.segments.map((seg) => {
 			const raw = Math.max(0, barY(0) - barY(seg.value));
@@ -322,7 +286,6 @@ export function lineGeometry(
 				w: barWidth,
 				h,
 				fill: seg.fill,
-				// A segment too thin to carry a border does not get one.
 				stroke: raw >= STROKE_FLOOR ? seg.stroke : undefined
 			};
 		});
@@ -340,8 +303,7 @@ export function lineGeometry(
 		plot,
 		ticks: axis.ticks.map((value) => ({ value, y: toY(value), label: format(value) })),
 		series: placed,
-		// Only when the data actually straddles it: a zero line at the foot of a
-		// chart of positive numbers is the axis drawn twice.
+		// Only when the data actually straddles zero, to avoid drawing the axis twice.
 		zeroY: axis.min < 0 && axis.max > 0 ? toY(0) : null,
 		slots,
 		hits: slots.map((x) => ({ x: x - pitch / 2, w: pitch })),

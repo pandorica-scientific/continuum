@@ -44,9 +44,8 @@ describe('applyRepayment', () => {
 	});
 
 	it('derives the same anchor the loans screen derives from a stored date', () => {
-		// Both paths go through anchorMonthFor, so the preview and the chart
-		// drawn after saving cannot disagree — they used to, because only the
-		// preview applied the payment-day skip.
+		// Regression: preview and saved chart disagreed when only the preview
+		// applied the payment-day skip.
 		for (const date of ['2026-06-10', '2026-06-15', '2026-06-20', '2026-12-31']) {
 			expect(applyRepayment(terms, { date, amountMinor: 1_00n }).owedAsOfMonth).toBe(
 				anchorMonthFor(date, terms.paymentDay)

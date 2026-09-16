@@ -60,9 +60,8 @@ function validLoanInput(overrides: Partial<CreateLoanInput> = {}): CreateLoanInp
 beforeAll(async () => {
 	harness = await startPostgres('loan-mutations');
 	testDb = harness.db;
-	// The real schema, not a hand-written subset of it. The subset that used
-	// to live here had to be kept in step with schema.ts by hand, and a test
-	// passing against a stale copy of a table says nothing about the real one.
+	// The real schema, not a hand-written subset that could drift from schema.ts
+	// and still pass.
 	await harness.applyMigrations(ALL_MIGRATIONS);
 }, 30_000);
 
@@ -329,9 +328,9 @@ describe('loan mutation transactions', () => {
 		expect((await testDb.select().from(schema.loan))[0].owedMinor).toBe(800_000n);
 	});
 
-	// A period starting later is schedule the bank has already agreed. Deleting
-	// everything from the new start onward destroyed it with no warning and no
-	// recovery; a blank end now runs until that period begins instead.
+	// Regression: deleting everything from the new start onward destroyed
+	// already-agreed schedule with no warning; a blank end now runs until
+	// that period begins instead.
 	it('keeps an agreed later fixation and closes the new one where it begins', async () => {
 		await seedLoan();
 		await testDb.insert(schema.loanFixationPeriod).values([

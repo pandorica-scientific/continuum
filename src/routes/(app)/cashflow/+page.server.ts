@@ -15,7 +15,6 @@ export const load: PageServerLoad = async ({ url }) => {
 		getBaseCurrency()
 	]);
 
-	// Metric tiles for the period.
 	const biggest = flow.breakdown
 		.flatMap((g) => g.leaves.map((l) => ({ group: g.label, ...l })))
 		.sort((a, b) => b.value - a.value)[0];

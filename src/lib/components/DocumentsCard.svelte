@@ -1,14 +1,7 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	//
-	// The paper filed against one record, on every screen that has records.
-	//
-	// Before this, five screens each drew their own version of the same card and
-	// each knew a different amount: the property card coloured any expiry amber,
-	// the transactions one deleted the document when you unlinked it, and three
-	// more listed nothing at all. A card is not where those decisions belong, so
-	// this is the only one — the property card's markup, which was the best of
-	// them, with the rules it was missing.
+	// The paper filed against one record, shared by every screen that has records.
 	//
 	// It renders what it is handed and posts what it is asked to. The archive
 	// scope is not here and must not be: `documentsAbout` applies it in SQL.
@@ -22,8 +15,7 @@
 	} from '$lib/documents/view';
 	import { documentFileHref } from '$lib/ui/file-viewer';
 	// Type only — erased at compile time, so the server module is never pulled
-	// into the browser bundle. The shape of a filed document is defined once,
-	// beside the query that produces it.
+	// into the browser bundle.
 	import type {
 		AboutDocument,
 		CandidateDocument,
@@ -55,35 +47,26 @@
 		attach?: { action: string; candidates: CandidateDocument[] };
 		detachAction?: string;
 		/**
-		 * Ask twice before posting `detachAction`, for the one screen whose
-		 * detach does not merely unlink.
-		 *
-		 * Everywhere else, detaching removes the LINK: the document stays on its
-		 * shelf, so a mis-click costs a re-attach rather than evidence, and one
-		 * tap is enough. Transactions' `detachDocument` deletes the document
-		 * (Task 9) — a mis-click there cannot be undone by re-attaching, so its
-		 * card asks for a second tap first.
+		 * Ask twice before posting `detachAction`. Everywhere else, detaching
+		 * only removes the link and the document stays on its shelf, so one tap
+		 * is enough — but Transactions' `detachDocument` deletes the document,
+		 * which a mis-click can't undo, so its card asks for a second tap.
 		 */
 		confirmDetach?: boolean;
 		heading?: string;
 		/**
 		 * Drop the `.card` wrapper and its padding, for a screen where this card
-		 * lands inside an existing card (the contacts edit panel, an account row)
-		 * — a card nested inside a card doubles the border and padding rather
-		 * than reading as one record. The host supplies both instead.
+		 * lands inside an existing card — the host supplies both instead.
 		 */
 		bare?: boolean;
 	} = $props();
 
-	// The clock the hues are read against. Taken once per render rather than
-	// passed in: a card colours a date relative to the day the person is
-	// looking at it, and every other component that needs today does the same.
+	// The clock the hues are read against.
 	const today = new Date().toISOString().slice(0, 10);
 
 	// Which row's delete is armed, when `confirmDetach` asks for one. Cleared
-	// whenever the filed list changes — a save that adds or removes a document
-	// must not leave a stale button armed for a row that is no longer the one
-	// under the pointer.
+	// whenever the filed list changes, so a stale button can't stay armed for
+	// a row that's no longer under the pointer.
 	let armed = $state<string | null>(null);
 	$effect(() => {
 		void documents;
@@ -99,12 +82,9 @@
 
 	/**
 	 * What the second line says after the shelf: when it falls due, or when it
-	 * arrived. The same phrasing the Documents screen uses, so a document reads
-	 * the same on the card it is filed against and in the files.
+	 * arrived. Same phrasing as the Documents screen.
 	 */
 	function metaOf(d: AboutDocument): string {
-		// The window rides on the row, because a card draws many types at once and
-		// a passport's six months must not become a receipt's.
 		return expiryTreatment(d, false, today, 'wide', d.reminderDays ?? SOON_DAYS)?.text ?? '';
 	}
 </script>
@@ -112,9 +92,8 @@
 <div class={bare ? 'stack' : 'card stack'}>
 	<Eyebrow hue="--fg3" icon="folders" label={heading}>
 		{#snippet right()}
-			<!-- The entity filter, not `?q=<name>`: a name round-trip matches every
-			     document whose name contains the string, which is a different set
-			     from the documents filed against this record. -->
+			<!-- Entity filter, not `?q=<name>`: a name search matches a different,
+			     broader set than documents actually filed against this record. -->
 			<a class="eyebrow-caption" href="/documents?entity={encodeURIComponent(target.id)}">
 				Open in Documents →
 			</a>
@@ -128,8 +107,7 @@
 				<span class="doc-name">
 					{#if d.storedName}
 						<!-- Through the document, never `/files/<stored name>`: a stored
-						     name cannot say which document it belongs to. `data-file-ext`
-						     is how the overlay knows what it is about to show. -->
+						     name alone can't say which document it belongs to. -->
 						<a
 							class="name-text"
 							href={documentFileHref(d.id)}
@@ -149,17 +127,15 @@
 				</span>
 			</div>
 			{#if detachAction && confirmDetach && armed === d.id}
-				<!-- The second tap. Only reached once armed below, and only for the
-				     row that was armed — this is the one that actually deletes. -->
+				<!-- The second tap: actually deletes. -->
 				<form method="POST" action="?/{detachAction}" use:enhance class="detach">
 					<input type="hidden" name="targetId" value={target.id} />
 					<input type="hidden" name="documentId" value={d.id} />
 					<button type="submit" class="unlink confirm">Delete?</button>
 				</form>
 			{:else if detachAction && confirmDetach}
-				<!-- The first tap arms the row rather than posting: this card's detach
-				     deletes the document (see `confirmDetach` above), and a mis-click
-				     here cannot be undone the way an ordinary unlink can. -->
+				<!-- First tap arms the row rather than posting, since this card's
+				     detach deletes the document (see `confirmDetach` above). -->
 				<button
 					type="button"
 					class="unlink"
@@ -169,9 +145,8 @@
 					✕
 				</button>
 			{:else if detachAction}
-				<!-- No confirm step. Detaching removes the LINK; the document stays on
-				     its shelf and is one click away in Documents, so a mis-click costs
-				     a re-attach rather than evidence. -->
+				<!-- No confirm step: detaching only removes the link, the document
+				     stays on its shelf. -->
 				<form method="POST" action="?/{detachAction}" use:enhance class="detach">
 					<input type="hidden" name="targetId" value={target.id} />
 					<input type="hidden" name="documentId" value={d.id} />
@@ -186,12 +161,10 @@
 	{/each}
 
 	{#if attach && attach.candidates.length > 0}
-		<!-- Only when there is something to attach: an empty picker on every card
-		     in the app is a control that answers a question nobody asked. -->
+		<!-- Only shown when there's something to attach. -->
 		<form method="POST" action="?/{attach.action}" use:enhance class="attach">
 			<input type="hidden" name="targetId" value={target.id} />
-			<!-- An empty first option, so Attach cannot silently file whichever
-			     document happened to sort first. -->
+			<!-- Empty first option, so Attach can't silently file whatever sorts first. -->
 			<select name="documentId" required aria-label="Attach an existing document">
 				<option value="">Attach a document you already have…</option>
 				{#each attach.candidates as c (c.id)}
@@ -216,8 +189,8 @@
 	.quiet {
 		line-height: 1.55;
 	}
-	/* The badge column is fixed so a card of mixed formats reads as a column;
-	   the last one collapses to nothing on a card with no detach control. */
+	/* Badge column is fixed width; the last column collapses when there's no
+	   detach control. */
 	.doc {
 		display: grid;
 		grid-template-columns: 38px minmax(0, 1fr) auto;
@@ -259,8 +232,7 @@
 	.detach {
 		display: flex;
 	}
-	/* Quiet until reached for: unfiling is a correction, not an action the card
-	   is offering. It takes the row's height so the grid stays on one line. */
+	/* Quiet until reached for: unfiling is a correction, not an offered action. */
 	.unlink {
 		background: none;
 		border: none;
@@ -273,15 +245,14 @@
 	.unlink:hover {
 		color: var(--fg1);
 	}
-	/* The second tap of a `confirmDetach` card: loud, because what it does
-	   cannot be undone by re-attaching the way an ordinary unlink can. */
+	/* The second tap of a `confirmDetach` card: loud, since it can't be undone. */
 	.unlink.confirm {
 		color: var(--red);
 	}
 	.attach {
 		display: flex;
 		gap: var(--space-4);
-		/* Wraps rather than squeezing the select to nothing on a phone. */
+		/* Wraps rather than squeezing the select down on a phone. */
 		flex-wrap: wrap;
 		align-items: center;
 	}

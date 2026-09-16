@@ -50,15 +50,11 @@ export async function getLastBackupRun(): Promise<BackupRun | null> {
  * A backup that is already under way.
  *
  * Two of these must never overlap: both dump the whole database to the same
- * temporary file and rename it into place, so a second run started while the
- * first is mid-write races it for that name. That was reachable without anyone
- * doing anything unusual — the hourly scheduler and a person pressing the
- * button are independent — and the loser of the race would have left a
- * truncated file as the only backup.
- *
- * In-process is the right scope: the scheduler and the form action are the only
- * two callers and they share a process. A lease in the database would be
- * heavier and would still not make concurrent dumps safe.
+ * temporary file and rename it into place, so a concurrent run (the hourly
+ * scheduler racing a person pressing the button) could leave a truncated
+ * file as the only backup. In-process is the right scope: the scheduler and
+ * the form action share a process, and a database lease would still not
+ * make concurrent dumps safe.
  */
 let inFlight: Promise<BackupRun> | null = null;
 

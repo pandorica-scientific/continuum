@@ -1,11 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-/**
- * Which colour a new cookbook shelf is given.
- *
- * A shelf's colour is an identifier — every recipe standing on it is drawn in
- * it — so two shelves must not be handed the same token while one is free, and
- * the first few must be far enough apart to tell by eye.
- */
+// A shelf's colour is an identifier, so two shelves must not share a token
+// while one is free, and the first few must be distinguishable by eye.
 import { describe, expect, it } from 'vitest';
 import { inkForShelf } from '$lib/server/life/recipes';
 import { RESERVE_COLOR_TOKENS } from '$lib/categories';
@@ -14,8 +9,8 @@ describe('inkForShelf', () => {
 	it('gives the first four shelves four colours nobody would confuse', () => {
 		const taken: string[] = [];
 		for (let at = 0; at < 4; at++) taken.push(inkForShelf(taken));
-		// r1, r3, r5, r7: a green, an indigo, a cyan and a purple. Handing the
-		// ranked list out in its own order gave r1 and r4, which are both greens.
+		// r1, r3, r5, r7: a green, an indigo, a cyan and a purple — picking by
+		// rank order alone can yield two greens.
 		expect(taken).toEqual(['--series-r1', '--series-r3', '--series-r5', '--series-r7']);
 	});
 

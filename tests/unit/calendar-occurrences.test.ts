@@ -106,11 +106,8 @@ describe('expanding a series into occurrences', () => {
 		expect(out.map((o) => o.startsAt)).toContain('2026-10-02T09:00:00.000Z');
 	});
 
-	// The same "null means inherit" rule the title has always followed. These
-	// three used to be read off the series regardless, so a "this event only"
-	// edit that retagged or un-all-dayed one occurrence was accepted by the form
-	// and then drawn from the series values anyway — the screen contradicted the
-	// save, and nothing was pushed.
+	// The same "null means inherit" rule the title follows: a "this event only"
+	// edit must not be silently drawn from the series values instead.
 	it.each([
 		['category', { category: 'health' }, (o: Occurrence) => o.category, 'household'],
 		['all-day', { allDay: true }, (o: Occurrence) => o.allDay, false],

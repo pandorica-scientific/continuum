@@ -2,11 +2,10 @@
 /**
  * Ids that arrive from outside.
  *
- * Surrogate keys became `uuid` in the v0.3.9 schema lock, and PostgreSQL refuses a
- * malformed one outright — `invalid input syntax for type uuid` — rather than
- * simply matching no row. A lookup by an id from a URL or a form therefore
- * turned a 404 into a 500 the moment anyone sent something that was not a uuid,
- * which an end-to-end test caught by asking for a person that does not exist.
+ * Surrogate keys are `uuid`, and PostgreSQL refuses a malformed one outright
+ * — `invalid input syntax for type uuid` — rather than simply matching no
+ * row. A lookup by an id from a URL or a form would turn a 404 into a 500 the
+ * moment anyone sent something that was not a uuid.
  *
  * Junk becomes the nil uuid: a valid uuid that nothing can ever be, because
  * UUIDv7 always carries a timestamp and a version nibble. So the query is legal,

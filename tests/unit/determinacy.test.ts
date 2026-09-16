@@ -149,19 +149,15 @@ describe('parsing an amount under a resolved convention', () => {
 
 describe('signs a statement actually prints', () => {
 	it('reads a U+2212 MINUS SIGN as a minus', () => {
-		// `formatMinor` emits one and Raiffeisenbank's PDFs print it literally, so
-		// `adapters/rb.ts` folds it by hand. The generic reader is the fallback for
-		// every bank without an adapter and read those cells as "not a number",
+		// Guards against the generic reader treating this as "not a number" and
 		// dropping every signed amount on the page.
 		expect(parseAmount('\u22121 000,00', ',', 2)).toBe(-100_000n);
 		expect(parseAmount('\u2212249.00', '.', 2)).toBe(-24_900n);
 	});
 
 	it('reads an explicit plus as a credit', () => {
-		// NUMBER_SHAPE accepts a leading `+`, so a bank writing `+249,00` passed the
-		// shape test and then failed the digits-only test one line below — null for
-		// every credit it has, which drops the amount column under its coverage
-		// threshold and refuses the statement.
+		// Guards against a leading `+` passing the shape test but failing the
+		// digits-only test, nulling every credit and refusing the statement.
 		expect(parseAmount('+249.00', '.', 2)).toBe(24_900n);
 		expect(parseAmount('+1 234,56', ',', 2)).toBe(123_456n);
 	});
@@ -177,14 +173,8 @@ describe('the period a statement prints', () => {
 	});
 
 	it('settles nothing when both readings are possible', () => {
-		// `01/05/2026` to `02/06/2026` is 5 Jan to 6 Feb in a US export and 1 May
-		// to 2 June in a European one. Both are real periods that run forwards, so
-		// the file does not say which of them it means.
-		//
-		// This used to be parsed as day-first outright, and the result was then
-		// handed to `resolveDateOrder` as the evidence that SETTLED the rows'
-		// order — reporting `kind: 'determined'` with a confident evidence string
-		// while every movement imported four months out.
+		// `01/05/2026`–`02/06/2026` reads as two different but equally valid
+		// periods depending on date order, so neither can settle it.
 		expect(resolvePeriod('01/05/2026', '02/06/2026')).toBeUndefined();
 	});
 

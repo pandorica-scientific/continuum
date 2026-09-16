@@ -377,7 +377,7 @@ only the session.
   that draws geometry, and it keeps the arithmetic out of the components —
   `projection.ts`, `labels.ts` and `foil.ts` are pure and unit-tested, so the
   Svelte files are markup over them
-- `geodata/` and `place-icons/` — what the map is drawn from, neither of them
+- `geodata/` and `assets/place-icons/` — what the map is drawn from, neither of them
   source. `scripts/fetch-geodata.mjs` builds the first at image-build time from
   Natural Earth and GeoNames: country and province outlines, time-zone bands,
   continent membership, and `places.json.gz`, in which every curated place has

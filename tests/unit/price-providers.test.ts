@@ -84,8 +84,7 @@ describe('parseStooqCsv', () => {
 describe('refreshPrices provider fallback', () => {
 	it('moves on to the next feed when the first answers in a currency the app cannot convert', async () => {
 		const { refreshPrices } = await import('$lib/server/prices');
-		// Through the public surface, with a handle that owns one London ticker:
-		// a GBp quote is re-scaled to GBP rather than dropped.
+		// A GBp quote is re-scaled to GBP rather than dropped.
 		const body = JSON.stringify({
 			chart: {
 				result: [

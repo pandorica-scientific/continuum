@@ -1,11 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-/**
- * The visa table, and the one thing it must never do.
- *
- * It must never answer "visa-free" for a pair nobody checked. The cost of a
- * wrong "you need a visa" is five minutes; the cost of a wrong "you do not" is
- * somebody turned round at a border.
- */
+// Must never answer "visa-free" for a pair nobody checked: a wrong "you need
+// a visa" costs five minutes; a wrong "you do not" costs a border turn-back.
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { isCoveredPassport, visaCaption, visaPosition, VISA_AS_OF } from '$lib/life/visa';

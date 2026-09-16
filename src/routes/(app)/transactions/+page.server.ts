@@ -48,8 +48,7 @@ function monthLabel(month: string): string {
 }
 
 export const load: PageServerLoad = async ({ url }) => {
-	// The filter needs the base currency before anything else can run; the module
-	// toggles need nothing, so they come along rather than costing a second wait.
+	// Module toggles need nothing, so they load alongside the filter's currency dependency.
 	const [baseCurrency, modules] = await Promise.all([getBaseCurrency(), getModules()]);
 	const filter = parseFilter(url.searchParams, baseCurrency);
 
@@ -61,9 +60,8 @@ export const load: PageServerLoad = async ({ url }) => {
 			.from(account)
 			.orderBy(account.createdAt, account.id),
 		loadCategoryGroups(),
-		// What a row can be recorded against: nothing at all when the module is
-		// off, and only loans with something left to pay — a settled mortgage is
-		// not something a debit this month went towards.
+		// Hidden entirely when the module is off; otherwise only loans with a balance
+		// left — a settled mortgage isn't something a debit could be paying towards.
 		modules.loans
 			? db
 					.select({ id: loan.id, name: loan.name, currency: loan.currency })
@@ -73,29 +71,20 @@ export const load: PageServerLoad = async ({ url }) => {
 			: Promise.resolve([])
 	]);
 
-	// Only the expanded month's transactions are read. The register lists a row
-	// per month and opens one at a time, so loading every row it lists a month
-	// for would mean fetching the whole ledger — with its splits, tags and
-	// receipts — to draw a table of totals.
-	// The newest month opens by itself when nothing names one: a register that
-	// landed on five closed rows and "open a month to read it" was a screen
-	// showing no transactions, on the screen that IS the transactions.
+	// Only the expanded month's transactions are read, or drawing the totals table
+	// would load the whole ledger. Newest month opens by default so rows are visible.
 	const openMonth = filter.month ?? months[0]?.month ?? null;
 	const page = openMonth ? await registerPage({ ...filter, month: openMonth }) : null;
 
 	const categoryName = new Map(categories.map((c) => [c.id, c.name]));
-	// A category's colour is its GROUP's: the dot on a row says which part of the
-	// waterfall the money went to, which is the distinction the charts are
-	// coloured by, so the two agree rather than each inventing a palette.
+	// A category's colour is its group's, so a row's dot matches the waterfall chart's palette.
 	const groupToken = new Map(groups.map((g) => [g.key, g.colorToken]));
 	const tokenFor = (categoryId: string | null) => {
 		const group = categoryId ? categories.find((c) => c.id === categoryId)?.groupKey : null;
 		return (group && groupToken.get(group)) || '--fg3';
 	};
 
-	// Empty with no month open, and each of these returns without touching the
-	// database on an empty id list — so a collapsed register costs one query for
-	// the known tags and nothing else.
+	// Empty with no month open — each of these short-circuits on an empty id list.
 	const rowIds = page?.rows.map((r) => r.id) ?? [];
 	const [splitsByTxn, tagsByTxn, splitTagsBySplit, knownTags, docsByTxn, loanPaymentByTxn] =
 		await Promise.all([
@@ -104,9 +93,7 @@ export const load: PageServerLoad = async ({ url }) => {
 			loadSplitTagsFor(rowIds),
 			db.select({ id: tag.id, name: tag.name }).from(tag).orderBy(tag.name),
 			loadTransactionDocuments(rowIds),
-			// Not gated on the module: what a row already IS stays true when the
-			// loans screens are hidden, and a chip that disappeared would read as
-			// the record having lost the link rather than as a setting.
+			// Not gated on the module — the link stays visible even when the loans screens are off.
 			loanPaymentByTransaction(rowIds)
 		]);
 
@@ -120,13 +107,7 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	const pageHref = (n: number) => href((params) => params.set('page', String(n)));
 
-	/**
-	 * Switching page size returns to page one.
-	 *
-	 * Staying put would be arithmetic nobody asked for: page 6 of 50 is page 26
-	 * of 10, and landing three hundred rows into the ledger is not what pressing
-	 * "10" means.
-	 */
+	/** Switching page size returns to page one, rather than landing on an arbitrary row offset. */
 	const sizeHref = (size: number) =>
 		href((params) => {
 			params.set('per', String(size));
@@ -138,13 +119,11 @@ export const load: PageServerLoad = async ({ url }) => {
 		href((params) => {
 			if (openMonth === month) params.delete('month');
 			else params.set('month', month);
-			// The inner pager belongs to the month it was paging. Carrying page 4
-			// into a month with one page would open it on nothing at all.
+			// Reset the inner pager — it belonged to whichever month was open before.
 			params.delete('page');
 		});
 
-	// Per currency, over every month listed. Two currencies in one month are two
-	// facts; adding them would invent a third that is true in neither.
+	// Per currency — summing across currencies would invent a total true in neither.
 	const byCurrency = new Map<string, { in: bigint; out: bigint; ceiling: bigint }>();
 	for (const m of months) {
 		for (const c of m.byCurrency) {
@@ -153,8 +132,7 @@ export const load: PageServerLoad = async ({ url }) => {
 			byCurrency.set(c.currency, {
 				in: running.in + c.inMinor,
 				out: running.out + c.outMinor,
-				// The widest month in this currency, so the bars compare months
-				// against each other rather than each against itself.
+				// Widest month sets the scale, so bars compare across months.
 				ceiling: volume > running.ceiling ? volume : running.ceiling
 			});
 		}
@@ -175,11 +153,7 @@ export const load: PageServerLoad = async ({ url }) => {
 			maxMinor: filter.maxMinor === null ? '' : formatMinor(filter.maxMinor, baseCurrency)
 		},
 		openMonth,
-		// A stage of the waterfall narrows the register by group, and the filter
-		// bar has no control that carries one — a group is a stage of a chart
-		// rather than a field. So the screen states it as a chip with a way out.
-		// The name comes from the groups themselves rather than from the grouped
-		// category list below, which drops a group holding no categories.
+		// No filter-bar control for a group, so it's shown as a removable chip instead.
 		groupLabel: filter.groupKey
 			? (groups.find((g) => g.key === filter.groupKey)?.label ?? filter.groupKey)
 			: null,
@@ -202,20 +176,14 @@ export const load: PageServerLoad = async ({ url }) => {
 		})),
 		rows: (page?.rows ?? []).map((r) => {
 			const splits = (splitsByTxn.get(r.id) ?? []).sort((a, b) => a.sort - b.sort);
-			// Carries what the rule would be about, so the editor opens describing
-			// this row rather than asking for what you were just looking at.
+			// Carries the row's context so the rule editor opens pre-filled.
 			const ruleParams = new URLSearchParams();
 			if (r.counterparty) ruleParams.set('counterparty', r.counterparty);
 			if (r.categoryId) ruleParams.set('category', r.categoryId);
-			// A claimed instalment counts as two lines in the totals above and
-			// below it — its interest under the group it is filed with, its
-			// principal under the savings one — so the row that opens has to be
-			// able to show the same two. Formatted the way a split line is,
-			// because that is what the panel draws them as.
+			// A claimed instalment shows as two lines (interest/principal), formatted
+			// like a split since that's how the panel renders them.
 			const claim = loanPaymentByTxn.get(r.id) ?? null;
-			// `key` is which half it is rather than its label: two halves can be
-			// labelled the same on a record that renamed the principal's category
-			// after the debit it names, and the list that draws them is keyed.
+			// Keyed by which half rather than label — two halves can share a label.
 			const half = (key: 'interest' | 'principal', amountMinor: bigint, label: string) => ({
 				key,
 				label,
@@ -224,10 +192,7 @@ export const load: PageServerLoad = async ({ url }) => {
 			});
 			return {
 				id: r.id,
-				// The day the money moved, which is the day this row is filed and
-				// bounded under. The booking date is carried alongside it only when
-				// the bank printed a different one, so the row can show what it is
-				// filed under without hiding what the statement said.
+				// Booking date only carried alongside when it differs from the filed (effective) date.
 				date: r.effectiveAt,
 				bookedDate: r.bookedAt === r.effectiveAt ? null : r.bookedAt,
 				merchant: r.counterparty ?? r.description ?? '—',
@@ -241,25 +206,19 @@ export const load: PageServerLoad = async ({ url }) => {
 				account: r.accountName,
 				isTransfer: r.isTransfer,
 				transferKind: r.transferKind,
-				// Only shown when the structure was worked out rather than declared:
-				// a row from a published format has nothing interesting to say here,
-				// and saying it on every row would be noise.
+				// Only shown when the source was inferred rather than declared, to avoid noise on every row.
 				readAs: INFERRED_SOURCES.includes(r.sourceMethod as never)
 					? sourceLabel(r.sourceMethod)
 					: null,
 				proofClass: r.proofClass,
 				ruleHref: `/rules?${ruleParams}`,
-				// The dialog works in the transaction's own currency and needs the
-				// raw figure to compute a remainder against.
+				// Raw currency figure the split dialog needs to compute a remainder.
 				currency: r.currency,
-				// Magnitudes: the dialog divides "how much", and the direction comes
-				// from the parent transaction on save.
+				// Magnitude only — direction comes from the parent transaction on save.
 				amountMajor: formatMinor(r.amount < 0n ? -r.amount : r.amount, r.currency),
 				tags: tagsByTxn.get(r.id) ?? [],
 				documents: docsByTxn.get(r.id) ?? [],
-				// The loan this row has already been recorded against, which is both
-				// what the chip says and what stops it being recorded twice — and
-				// the two lines it counts as, where the record can divide it.
+				// The loan this row is already recorded against, and the two lines it splits into.
 				loanPayment: claim && {
 					loanId: claim.loanId,
 					loanName: claim.loanName,
@@ -272,9 +231,7 @@ export const load: PageServerLoad = async ({ url }) => {
 				splits: splits.map((s) => ({
 					id: s.id,
 					amount: `${formatMinor(s.amountMinor, r.currency, { signed: true })} ${displayCurrency(r.currency)}`,
-					// Coloured like the transaction it divides: a split line reading in
-					// neutral grey under a red parent looks like a different kind of
-					// figure rather than a share of the same one.
+					// Coloured like the parent transaction it divides, not neutral.
 					negative: s.amountMinor < 0n,
 					amountMajor: formatMinor(s.amountMinor < 0n ? -s.amountMinor : s.amountMinor, r.currency),
 					categoryId: s.categoryId,
@@ -284,9 +241,7 @@ export const load: PageServerLoad = async ({ url }) => {
 				}))
 			};
 		}),
-		// Over every month listed, never the open one: this is the register's own
-		// footing, and a total that moved when a month was expanded would be
-		// answering a different question from the one its label asks.
+		// Over every listed month, not just the open one — the register's overall footing.
 		totals: [...byCurrency.entries()]
 			.sort((a, b) => (a[0] < b[0] ? -1 : 1))
 			.map(([currency, sums]) => ({
@@ -309,8 +264,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		})),
 		knownTags,
 		reviewStates: REVIEW_STATES,
-		// Offered as a filter because these are the readings whose structure was
-		// worked out rather than declared — the ones worth being able to review.
+		// Only inferred-source readings are offered as a filter — the ones worth reviewing.
 		sourceMethods: INFERRED_SOURCES.map((method) => ({
 			value: method,
 			label: SOURCE_LABELS[method] ?? method
@@ -333,22 +287,15 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const id = asRowId(form.get('id'));
 		const result = await fileTransaction(id, String(form.get('categoryId') ?? ''));
-		// The id travels with the failure so the screen can render the message
-		// against the row that produced it rather than in a banner at the top,
-		// where it read as unrelated to the button that was just pressed.
+		// The id travels with the failure so the error renders against the row, not a top banner.
 		if (!result.ok) return fail(result.status, { id, message: result.message });
 		return { ok: true };
 	},
 
 	/**
-	 * Attach a receipt to a transaction.
-	 *
-	 * Either a file, which becomes a document on the receipts shelf and is then
-	 * linked, or a document already in the household's files — through the
-	 * same visibility-checked `attachDocument` every other documents card
-	 * posts to, so a member cannot attach a document by id that their own
-	 * query would never have offered them. No schema work behind either path:
-	 * `document_link` targets any entity and a transaction is one.
+	 * Attach a receipt: either an uploaded file (becomes a document on the
+	 * receipts shelf) or an existing household document, via the same
+	 * visibility-checked `attachDocument` every other documents card uses.
 	 */
 	attachDocument: async ({ request }) => {
 		const form = await request.formData();
@@ -377,9 +324,7 @@ export const actions: Actions = {
 		await createDocument({
 			id: documentId,
 			name: file.name || 'Receipt',
-			// Continuum knows this is a receipt and what it evidences; it does not
-			// know where the household files receipts, so it lands in the inbox
-			// rather than being guessed onto a shelf.
+			// Filed to the inbox shelf — Continuum doesn't know where the household files receipts.
 			shelfId: await systemShelfId(SYSTEM_SHELF_KEYS.inbox),
 			type: 'receipt',
 			storedName,
@@ -388,32 +333,18 @@ export const actions: Actions = {
 			expiresOn: null,
 			expiryVerb: 'expires',
 			contentHash,
-			// Linked in the same aggregate the documents screen uses, so the file and
-			// its link commit together or not at all.
+			// Same aggregate the documents screen uses, so file and link commit atomically.
 			targetIds: [id],
-			// No subject: that used to be how a receipt reached the Documents
-			// screen at all, filing every one of them under a subject literally
-			// called "Receipts" whether or not the household ever had such a
-			// thing. The about-filter now groups a document by the transaction
-			// it is linked to, so the link above is enough on its own.
+			// No subject tag — the about-filter groups a document by its linked transaction instead.
 			tagNames: ['receipt']
 		});
 		return { ok: true };
 	},
 
 	/**
-	 * Remove a receipt from a transaction.
-	 *
-	 * This deletes the document, not just the link. Unlinking only left the file
-	 * on the Documents shelf with no way to reach it from the row it came from
-	 * and — until now — no way to delete it there either, so every removed
-	 * receipt became litter nobody could clear. `detachDocument` here is the
-	 * same visibility-checked unlink every documents card uses; what makes
-	 * this one different is what runs after it.
-	 *
-	 * The control says "Delete?" and asks twice, because this is not local to
-	 * the transaction: a receipt filed against something else as well goes
-	 * from there too.
+	 * Remove a receipt: deletes the document, not just the link, so it doesn't
+	 * become orphaned litter on the Documents shelf. Confirmed twice since a
+	 * receipt filed against something else too is removed from there as well.
 	 */
 	detachDocument: async ({ request }) => {
 		const form = await request.formData();
@@ -421,19 +352,13 @@ export const actions: Actions = {
 		const documentId = String(form.get('documentId') ?? '').trim();
 		if (!documentId) return fail(400, { id, message: 'Which receipt?' });
 
-		// Unlink first: if the document is already gone, the row must still end up
-		// without a dangling reference to it.
+		// Unlink first so the row never references a dangling document.
 		await detachDocument(id, documentId);
-		// The whole removal, not just the row: a receipt is rarely a payslip, but
-		// nothing stops one being filed against a transaction, and the salary
-		// month behind it must not be orphaned from here either.
+		// Full removal, not just the link — a receipt could also be a payslip tied to a salary month.
 		const outcome = await removeDocument(documentId);
-		// A 404 usually is "it was already gone", the state the unlink above was
-		// asking for anyway — but it is also what a member gets back from BOTH
-		// calls for a restricted receipt they cannot see: neither the unlink nor
-		// this delete does anything, and this still answers ok. That is fine only
-		// because a member is never offered the control that posts here for
-		// paper they cannot see; a 409 is a real refusal and has to be said.
+		// A 404 usually means already-gone, which is also what a member without
+		// visibility gets back for a restricted receipt — harmless since they're
+		// never offered this control for paper they can't see. A 409 is a real refusal.
 		if (!outcome.ok && outcome.status === 409) {
 			return fail(409, { id, message: outcome.message });
 		}
@@ -441,15 +366,8 @@ export const actions: Actions = {
 	},
 
 	/**
-	 * What "Attach existing" may offer for one transaction — asked for only
-	 * when its receipts dialog is open, and only for that transaction.
-	 *
-	 * The register can page fifty rows. Computing this for every one of them
-	 * the way `load` does for `documents` would mean handing the page a copy
-	 * of the household's whole visible document library once per row, for the
-	 * sake of the single dialog a person might open — so it is fetched on
-	 * demand instead, the same way the categories screen checks what a leaf
-	 * holds before it lets you delete it.
+	 * Documents this transaction could attach — fetched on demand when its
+	 * receipts dialog opens, rather than for every row on page load.
 	 */
 	candidates: async ({ request }) => {
 		const form = await request.formData();
@@ -476,8 +394,7 @@ export const actions: Actions = {
 						.split(',')
 						.map((name) => name.trim())
 						.filter(Boolean),
-					// Carries the stored row's id when this line is an edit of one,
-					// so its tags follow the line and not its position.
+					// Carries the stored line's id on edit, so tags follow the line, not its position.
 					id: lineIds[i] || null
 				}))
 				.filter((l) => l.raw !== '')
@@ -520,12 +437,8 @@ export const actions: Actions = {
 	},
 
 	/**
-	 * Record this row as an instalment paid towards a loan.
-	 *
-	 * Parsing only: which loan, which row, and whatever the statement said the
-	 * interest was. Everything that decides whether the two may be linked — a
-	 * debit, not a transfer, not already claimed — belongs to the mutation, which
-	 * holds the loan row while it decides.
+	 * Record this row as a loan instalment. Parsing only — eligibility checks
+	 * (debit, not transfer, not already claimed) live in the mutation.
 	 */
 	loanPayment: async ({ request }) => {
 		const form = await request.formData();
@@ -539,9 +452,8 @@ export const actions: Actions = {
 	},
 
 	/**
-	 * Take the recording back, so a row filed against the wrong loan can be
-	 * refiled. Nothing else in the app deletes a loan event, and the duplicate
-	 * guard above means without this there is no second chance at all.
+	 * Undo a loan-payment link so a misfiled row can be refiled — nothing else
+	 * in the app deletes a loan event.
 	 */
 	unlinkLoanPayment: async ({ request }) => {
 		const form = await request.formData();

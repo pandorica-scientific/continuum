@@ -5,8 +5,7 @@ import { detectCurrency, payslipCurrency } from '$lib/salary';
 const AVAILABLE = ['CZK', 'EUR', 'USD', 'PLN', 'GBP', 'CHF'];
 
 describe('reading a payslip’s currency', () => {
-	// The defect this exists for: a Czech slip filed by a household keeping its
-	// books in euro was stored as 135 887 EUR.
+	// Regression: a Czech slip was once stored as 135 887 EUR under a euro household.
 	it('reads a Czech slip printing Kč', () => {
 		const lines = ['Hrubá mzda 135 887,00 Kč', 'K výplatě 102 202,00 Kč'];
 		expect(detectCurrency(lines, AVAILABLE)).toBe('CZK');
@@ -46,8 +45,7 @@ describe('reading a payslip’s currency', () => {
 		expect(detectCurrency(['Gross EUR 4 200', 'Paid USD 4 200'], AVAILABLE)).toBeNull();
 	});
 
-	// A mark for a currency with no rate cannot be converted, so it must not be
-	// an answer either.
+	// A currency with no conversion rate cannot be a valid answer either.
 	it('never answers with a currency the app cannot convert', () => {
 		expect(detectCurrency(['Net pay 3 100,00 Kč'], ['EUR', 'USD'])).toBeNull();
 	});
@@ -69,13 +67,11 @@ describe('whose answer the currency field takes', () => {
 		expect(payslipCurrency('CZK', null)).toEqual({ currency: 'CZK', from: 'slip' });
 	});
 
-	// A job can change. What is printed on this month's paper is a fact; what was
-	// stated for last month's is a guess about an employer that has not changed.
+	// This month's printed currency is a fact and overrules a remembered guess.
 	it('lets the slip overrule what was remembered', () => {
 		expect(payslipCurrency('EUR', 'CZK')).toEqual({ currency: 'EUR', from: 'slip' });
 	});
 
-	// The reason this exists: plenty of payslips print no currency anywhere.
 	it('falls back to what was stated last time, and says so', () => {
 		expect(payslipCurrency(null, 'CZK')).toEqual({ currency: 'CZK', from: 'learned' });
 	});

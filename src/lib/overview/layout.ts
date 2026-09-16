@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// The Overview board's spatial arithmetic, kept pure: no DOM, no Svelte, no
-// imports from the rest of the app. Every subtle bug on this screen will be a
-// bug in here, so it has to be testable without a browser. Components call
-// these functions; they never do grid maths themselves.
+// The Overview board's spatial arithmetic, kept pure: no DOM, no Svelte.
+// Components call these functions; they never do grid maths themselves.
 
 /** One panel's place on the twelve-column grid. */
 export interface OverviewPlacement {
@@ -30,12 +28,10 @@ const whole = (value: unknown): number | null =>
 	typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : null;
 
 /**
- * Make a stored or posted layout safe to use.
- *
- * The layout lives in a jsonb column, which stores whatever it is handed, so
- * this is the trust boundary and runs on write as well as on read. It sanitises
- * only — module gating is `visible`'s job, because a gated panel's entry has to
- * survive in storage so that re-enabling the module restores its placement.
+ * Make a stored or posted layout safe to use. The layout lives in a jsonb
+ * column, so this is the trust boundary; it runs on write and read. Sanitises
+ * only — module gating is `visible`'s job, since a gated panel's entry must
+ * survive in storage so re-enabling the module restores its placement.
  */
 export function normalise(
 	layout: readonly OverviewPlacement[],
@@ -45,14 +41,12 @@ export function normalise(
 	const out: OverviewPlacement[] = [];
 
 	for (const placement of layout ?? []) {
-		// Own properties only. A plain lookup also finds everything on
-		// Object.prototype, so a posted key of "constructor" or "__proto__"
-		// passed this check, took `undefined` minimums, and wrote NaN geometry —
-		// which the next read then silently discarded.
+		// Object.hasOwn, not a plain lookup: a posted key of "constructor" or
+		// "__proto__" would otherwise pass via Object.prototype and take
+		// `undefined` minimums, writing NaN geometry.
 		if (!placement || !Object.hasOwn(known, placement.k)) continue;
 		const bounds = known[placement.k];
-		// A panel is placed once: a repeat would render twice and break every
-		// operation that addresses panels by key.
+		// A panel is placed once: a repeat would render twice.
 		if (seen.has(placement.k)) continue;
 
 		const x = whole(placement.x);
@@ -64,8 +58,7 @@ export function normalise(
 		const width = Math.min(COLUMNS, Math.max(bounds.minW, w));
 		out.push({
 			k: placement.k,
-			// Clamped after the width, so a wide panel is pulled back onto the
-			// grid rather than left hanging off its right edge.
+			// Clamped after width, so a wide panel is pulled onto the grid rather than hung off the edge.
 			x: Math.min(COLUMNS - width, Math.max(0, x)),
 			y: Math.max(0, y),
 			w: width,
@@ -78,11 +71,9 @@ export function normalise(
 }
 
 /**
- * The panels this person can actually see right now, closed up.
- *
- * Dropping a switched-off module's panel leaves a hole, and the board has
- * gravity, so the same compaction that runs after every edit closes it here
- * too — no special case for module gaps.
+ * The panels this person can actually see right now, closed up. Dropping a
+ * switched-off module's panel leaves a hole; the same compaction that runs
+ * after every edit closes it here too, so there's no special case for module gaps.
  */
 export function visible(
 	layout: readonly OverviewPlacement[],
@@ -93,10 +84,8 @@ export function visible(
 
 /**
  * Where a newly added panel of this size goes: the first cell it fits in,
- * scanning rows top to bottom and columns left to right.
- *
- * Add fills the board's holes before it extends the board — a half-width gap
- * beside an existing panel takes the new one rather than starting a fresh row.
+ * scanning rows top to bottom, columns left to right — fills holes before
+ * extending the board.
  */
 export function firstFreeSlot(
 	layout: OverviewPlacement[],
@@ -147,38 +136,25 @@ function packOnto(
 }
 
 /**
- * Lay the list out in the order given.
- *
- * This is what the narrow single-column view reorders with. Exchanging two
- * panels' cells cannot do it: a six-row panel traded with a nineteen-row one
- * overlaps it, and the board pushes the shorter one straight back below the
- * taller, so the order on screen never changes.
- *
- * Order-preserving on a board that is already well formed, and it does not
- * flatten the layout: two panels side by side do not obstruct each other, so
- * they keep their row.
+ * Lay the list out in the order given — what the narrow single-column view
+ * reorders with. Exchanging two panels' cells can't do it: a short panel
+ * traded with a tall one overlaps it and gets pushed straight back below.
+ * Order-preserving on a well-formed board, and doesn't flatten the layout —
+ * panels side by side that don't obstruct each other keep their row.
  */
 export function packInOrder(layout: readonly OverviewPlacement[]): OverviewPlacement[] {
 	return packOnto(layout, []);
 }
 
 /**
- * Pull the whole board up so it holds no empty rows.
- *
- * The board has gravity: a panel dropped below a gap rises to close it, and
- * whatever it was resting on rises behind it. Reading order — top to bottom,
- * then left to right — decides who gets each row, so a panel dropped above
- * another takes the higher slot regardless of array position.
- *
- * This reverses the rule the design started with, which kept a hole wherever
- * one was left on the grounds that the person's empty space was theirs. In use
- * it read as broken rather than deliberate.
+ * Pull the whole board up so it holds no empty rows. The board has gravity: a
+ * panel dropped below a gap rises to close it. Reading order (top to bottom,
+ * then left to right) decides who gets each row.
  *
  * `pinned` holds one panel at exactly its current cell and packs everything
- * else around it — what a drag in progress needs, since the panel under the
- * cursor must not be tugged off the pointer while the board rearranges beneath
- * it. It is an obstacle rather than a member of the packed list, because
- * packing starts every panel at row zero.
+ * else around it — needed during a drag, so the panel under the cursor isn't
+ * tugged off the pointer. It's an obstacle, not a member of the packed list,
+ * since packing starts every panel at row zero.
  */
 export function compact(
 	layout: readonly OverviewPlacement[],
@@ -200,6 +176,6 @@ export function compact(
 	if (pinned !== undefined) byIndex.set(pinned, held[0]);
 	ranked.forEach((entry, position) => byIndex.set(entry.index, packed[position]));
 
-	// Callers hold on to indices, so the result keeps the input's order.
+	// Callers hold indices, so the result keeps the input's order.
 	return layout.map((_, index) => byIndex.get(index)!);
 }

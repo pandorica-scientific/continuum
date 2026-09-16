@@ -2,15 +2,13 @@
 /**
  * How a shelf's own layout arranges the documents the list would have shown.
  *
- * Every decision here is a pure function over the SAME payload the list gets,
- * for the same reason `documents-view` exists: there is no browser suite in
- * this repository, so anything worth holding has to be reachable without a
- * page. A layout component is markup over these.
+ * Every decision here is a pure function over the SAME payload the list
+ * gets, reachable without a browser since this repo has no browser suite. A
+ * layout component is markup over these.
  *
- * `sectionsByPerson`, and `countryGroups` under it, are the only arrangement
- * built so far — the wallet's.
- * Health's timeline and Household's kit are specified and will add their own
- * beside it rather than growing this one into a switch.
+ * `sectionsByPerson` and `countryGroups` are the only arrangement built so
+ * far — the wallet's. Other views add their own rather than growing this
+ * into a switch.
  */
 import type { DocRow } from '$lib/documents/view';
 import type { EntityKind, EnumValue } from '$lib/enums';
@@ -54,16 +52,10 @@ export const NOBODY = 'Nobody';
 /**
  * One section per linked person, `Nobody` last.
  *
- * A document appears ONCE, under the first person it names. A joint document
- * shown under both halves of a couple is a wallet that says a household owns
- * four passports when it owns two, and the count beside the name is what makes
- * that wrong out loud.
- *
- * "First" is the load's own order — registry kind, then name — which is not the
- * order `groupDocuments` reads `entities` in, so the two can pick different
- * people for a document naming two. Both are stable and both show it once;
- * deriving one from the other would move the list's sub-line to suit the
- * wallet, which is a worse trade than this footnote.
+ * A document appears ONCE, under the first person it names — a joint document
+ * shown under both halves of a couple would make the per-person counts lie.
+ * "First" here (registry kind, then name) can differ from the order
+ * `groupDocuments` picks; both are stable and both show the document once.
  */
 export function sectionsByPerson<T extends LayoutRow>(rows: T[]): LayoutSection<T>[] {
 	return sectionsBy(rows, (row) => row.about.find((link) => link.kind === 'person') ?? null);
@@ -82,16 +74,12 @@ export interface CountryGroup<T> {
 /**
  * A person's cards, split by the country that issued them.
  *
- * The second axis of the wallet, under the person. Somebody holding paper from
- * two states holds two sets of it — a Polish licence is renewed in Poland and a
- * Czech one in the Czech Republic — and a single run of cards makes that a
- * thing you work out from the flags rather than something the screen says.
+ * The second axis of the wallet, under the person: paper from two states is
+ * two sets of it, not one run you have to work out from the flags.
  *
- * Ordered by CODE rather than by name: the code is what the card face shows and
- * what the caption reads, so ordering by the localised name would sort the
- * groups by a word that appears nowhere on the screen. Documents naming no
- * country come last, for the reason `NOBODY` does — an unfinished filing is
- * worth showing, and worth showing after the finished ones.
+ * Ordered by CODE rather than localised name, since the code is what the
+ * card face and caption actually show. No-country documents come last, same
+ * reasoning as `NOBODY`.
  */
 export function countryGroups<T extends LayoutRow>(items: T[]): CountryGroup<T>[] {
 	const groups = new Map<string, CountryGroup<T>>();

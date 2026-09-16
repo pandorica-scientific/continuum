@@ -39,14 +39,8 @@ function bilevelPage(width: number, height: number): Frame {
 const encodeJpeg = async () => new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
 
 /**
- * Real JPEG bytes, 20x30 and 30x20.
- *
- * Inlined rather than kept as fixture files, and generated rather than drawn:
- * `pdf-lib` PARSES what it embeds, so the four-byte stand-in above is enough
- * for a callback that is never meant to run and not enough for a page that is
- * actually embedded. Small enough to read past, real enough to survive
- * `embedJpg` — including its dimensions, which is what the landscape case
- * turns on.
+ * Real JPEG bytes, 20x30 and 30x20. `pdf-lib` PARSES what it embeds, so these
+ * must survive `embedJpg` — including their dimensions, for the landscape case.
  */
 const REAL_JPEG = Uint8Array.from(
 	Buffer.from(
@@ -86,8 +80,7 @@ describe('packBilevel', () => {
 	});
 
 	it('pads each row to a whole byte, because rows do not share bytes in PDF', () => {
-		// Three pixels per row, two rows: one byte EACH, not one byte total.
-		// Packing continuously shears the image by a pixel per row.
+		// One byte EACH row; packing continuously would shear the image by a pixel per row.
 		const packed = packBilevel(
 			frameFrom([
 				[1, 1, 1],
@@ -121,10 +114,7 @@ describe('deflate', () => {
 
 describe('assemblePdf', () => {
 	it('embeds an already-encoded page without encoding it again', async () => {
-		// The server renders and encodes ONCE, then stores the artefact. If
-		// assembly encodes a second time, the page is compressed twice at high
-		// quality — the exact compounding v0.8.5 had to raise both qualities to
-		// survive, and the reason `RenderedPage` grew this second shape.
+		// Regression: re-encoding an already-encoded page compresses it twice at high quality.
 		let encodes = 0;
 		const counting = async () => {
 			encodes++;
@@ -139,8 +129,7 @@ describe('assemblePdf', () => {
 	});
 
 	it('still turns the sheet to match an already-encoded landscape page', async () => {
-		// The orientation decision moves with the new shape: there is no `frame`
-		// to measure, so it has to come off the embedded image instead.
+		// No `frame` to measure here, so orientation comes off the embedded image instead.
 		const bytes = await assemblePdf(
 			[async () => ({ jpeg: REAL_JPEG_LANDSCAPE, mode: 'color' as const })],
 			{ title: 'Wide', encodeJpeg }
@@ -186,9 +175,7 @@ describe('assemblePdf', () => {
 	});
 
 	it('makes an A4 sheet regardless of how many pixels the capture had', async () => {
-		// Deriving the page size from the pixel count made the PHYSICAL page
-		// shrink with the capture resolution: a 1240px scan came out as a
-		// 105x148mm card. Resolution decides quality, not paper size.
+		// Resolution decides quality, not paper size.
 		for (const [w, h] of [
 			[2480, 3508],
 			[1240, 1754],
@@ -208,8 +195,7 @@ describe('assemblePdf', () => {
 	}, 60_000);
 
 	it('keeps a binarized A4 page well under 150 KB', async () => {
-		// The acceptance criterion, and the thing that silently breaks if anyone
-		// swaps the raw 1-bit stream for pdf-lib's embedPng.
+		// Breaks silently if the raw 1-bit stream is swapped for pdf-lib's embedPng.
 		const bytes = await assemblePdf(
 			[async () => ({ frame: bilevelPage(2480, 3508), mode: 'bw' as const })],
 			{

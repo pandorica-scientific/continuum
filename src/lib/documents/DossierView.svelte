@@ -4,16 +4,9 @@
 	// A dossier shelf: one card per unit, each holding lanes, each lane holding
 	// cells — and, at the end, the paper with no rhythm.
 	//
-	// The shape came from Income & Tax, where the shelf's failure is a payslip
-	// that never arrived and a list of forty slips looks the same whether or not
-	// February is among them. A car's road tax and a flat's boiler inspection
-	// fail the same way, so the same card draws all three.
-	//
-	// A lane's cells are the Statements ribbon's arithmetic pointed at a
-	// different question, and what a lane EXPECTS comes from when the
-	// relationship began rather than from the paper: a year before the first
-	// filed document still reads as missing, which is the whole reason a card
-	// carries a bound.
+	// What a lane EXPECTS comes from when the relationship began rather than
+	// from the paper: a year before the first filed document still reads as
+	// missing, which is why a card carries a bound.
 	import Icon from '$lib/components/Icon.svelte';
 	import PeriodListing from '$lib/statements/PeriodListing.svelte';
 	import { enhance } from '$app/forms';
@@ -82,10 +75,8 @@
 	/**
 	 * Where each cell starts, 1-based, as a CSS grid column.
 	 *
-	 * The running sum of the spans before it — not the index. A lane running
-	 * every two years has its second cell at column 3, and using the index put
-	 * every cell after the first one column too far left, overlapping its
-	 * neighbour.
+	 * The running sum of the spans before it, not the index — a lane running
+	 * every two years has its second cell at column 3.
 	 */
 	function columnStarts(lane: DossierLane): number[] {
 		let at = 1;
@@ -162,12 +153,9 @@
 	</header>
 
 	{#if proposals.length > 0}
-		<!-- What the lanes THINK, above what is settled. Proposed and not filed:
-		     a wrong link looks exactly like a right one and nobody re-reads it,
-		     so the guess stays visible until somebody agrees with it.
-
-		     Dismissing files nothing and costs the lane its standing — enough of
-		     those and it stops proposing, without anybody having to find it. -->
+		<!-- What the lanes THINK, above what is settled. Proposed and not filed,
+		     so a wrong guess stays visible until somebody agrees with it rather
+		     than being silently trusted. -->
 		<div class="proposals">
 			<div class="proposals-head">
 				<span class="eyebrow">Not filed against anyone yet</span>
@@ -226,9 +214,7 @@
 						: `${card.documentCount} ${card.documentCount === 1 ? 'document' : 'documents'}`}
 				</span>
 				{#if card.id !== null && dossier.canCreate}
-					<!-- Rename and archive live on the card, which is where the thing
-					     is. The rail used to carry them, one list away from the paper
-					     they are about. -->
+					<!-- Rename and archive live on the card, which is where the thing is. -->
 					<button
 						type="button"
 						class="card-chevron"
@@ -286,17 +272,15 @@
 
 			{#if !shut}
 				{#if card.meta}
-					<!-- The CURRENT role, and when the whole relationship began — which
-					     after a promotion are two different years, and both matter: the
-					     role says what somebody is, the date says what the lanes count
-					     from. -->
+					<!-- The CURRENT role, and when the whole relationship began — a
+					     promotion makes these two different years. -->
 					<p class="who">{card.meta}</p>
 				{/if}
 
 				{#if card.pinned}
 					{@const pinned = card.pinned}
 					<!-- The paper the relationship rests on: the contract, the lease,
-					     the purchase. One click from every cell it explains. -->
+					     the purchase. -->
 					<button type="button" class="pinned" onclick={() => onopen(pinned.id)}>
 						<Icon name="pin" size={14} />
 						<span class="pinned-name">{pinned.name}</span>
@@ -668,20 +652,14 @@
 	.lane-cadence {
 		font-size: var(--text-xs);
 	}
-	/* A slot is a cell with a name in it. A nameless square says nothing about
-	   WHICH paper is missing, which is the only thing a slot is for.
-
-	   `.slot.cell` and not `.slot`: `.cell` pins a ribbon square to 28px and is
-	   declared further down, so at equal specificity it won and the two-line
-	   face hung 16px out of its own lane — across the next lane's rule. */
+	/* `.slot.cell`, not `.slot`: `.cell` pins a ribbon square to 28px further
+	   down and wins at equal specificity otherwise. */
 	.slot.cell {
 		height: auto;
 	}
-	/* Two selectors deep on purpose: `.filled` and `.empty` are the RIBBON's
-	   cells — a 28px box with its contents centred — and they are declared after
-	   this. A slot is a cell with a name and a date in it, so it needs its own
-	   height and its own alignment, and (0,2,0) is what beats them. Without this
-	   the name sat centred in 28px and the date fell out below the box. */
+	/* Two selectors deep on purpose: beats `.filled`/`.empty`, the RIBBON's 28px
+	   centred cells, declared after this — a slot needs its own height and
+	   alignment for its name-and-date layout. */
 	.slot .slot-face {
 		display: flex;
 		flex-direction: column;
@@ -763,9 +741,8 @@
 		padding: var(--space-6) var(--space-7);
 		border-bottom: 1px solid var(--bd);
 	}
-	/* The card's own emoji in a 36px tile, the shape every other head on the
-	   product uses — a bare glyph put the name at a different left edge on
-	   every card, depending on how wide the emoji happened to render. */
+	/* A fixed-size tile, not a bare glyph, so the name sits at the same left
+	   edge regardless of how wide the emoji renders. */
 	.emoji {
 		display: grid;
 		place-items: center;
@@ -795,8 +772,7 @@
 		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
-	/* The relationship line as a chip in the blue tint, as the handoff draws
-	   it: a role and a date are a fact about the card, not a sentence in it. */
+	/* A chip, not a sentence: a role and a date are a fact about the card. */
 	.who {
 		margin: 8px 14px 0;
 		display: inline-flex;

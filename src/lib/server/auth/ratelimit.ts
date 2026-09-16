@@ -49,14 +49,12 @@ export class RateLimiter {
 	}
 
 	/**
-	 * One budget per (scope, address, subject) and no coarser tier above it.
-	 * `subject` narrows the budget to what is actually under attack — the
-	 * account id on the sign-in form. An address-wide tier on top of it looks
-	 * like defence in depth and is not: behind a reverse proxy the
-	 * whole household is one address, so a handful of failures against any
-	 * account refused every member's sign-in. Doors with no subject (api,
-	 * enroll) key on the
-	 * address alone, because the token in the request is the whole secret.
+	 * One budget per (scope, address, subject), no coarser tier above it.
+	 * `subject` narrows the budget to the account under attack — an
+	 * address-wide tier would let failures against one account lock out every
+	 * household member behind the same reverse proxy. Doors with no subject
+	 * (api, enroll) key on address alone, since the token there is the whole
+	 * secret.
 	 */
 	blockedForSeconds(scope: LimitScope, address: string, subject = ''): number {
 		const now = this.#now();

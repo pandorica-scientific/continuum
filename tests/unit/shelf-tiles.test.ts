@@ -2,13 +2,8 @@
 import { describe, expect, it } from 'vitest';
 import { archiveTiles, EMPTY_FACTS, shelfTiles } from '$lib/documents/shelf-tiles';
 
-/**
- * Three figures per shelf, chosen by engine rather than by shelf key.
- *
- * The banner chose them through a switch with a branch per seeded shelf, so a
- * shelf somebody made fell to a default trio. Keying on the engine gives a
- * household's own Boat shelf the same three figures Vehicles gets.
- */
+// Tiles are chosen by engine rather than by shelf key, so a household's own
+// shelf gets the same three figures a seeded one of the same kind gets.
 describe('shelf tiles', () => {
 	it('queue: waiting, oldest, proposed', () => {
 		const tiles = shelfTiles('queue', {

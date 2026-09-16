@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * What to open tonight.
- *
- * The reason is derived, not written: each suggestion carries the rule that
- * produced it, so a household can disagree with the reasoning rather than with
- * the taste. And a box with nothing to suggest is worse than no box.
+ * What to open tonight. Each suggestion carries the rule that produced it, so a
+ * household can disagree with the reasoning rather than with the taste.
  */
 import { describe, expect, it } from 'vitest';
 import { MOST_SUGGESTIONS, openTonight, type Candidate } from '$lib/life/collections/open-tonight';

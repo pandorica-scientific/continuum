@@ -21,24 +21,13 @@
 	let assignAccountId = $state('');
 
 	// Pre-answer the picker when the Statements ribbon sent you here from a gap.
-	//
-	// An effect rather than an initial value, because arriving by a client-side
-	// navigation never re-runs an initialiser — the link from the ribbon is one,
-	// so the initial-value version answered the picker on a full page load and
-	// silently did nothing on a click. Still only a starting point: the picker
-	// is yours to change afterwards, and nothing here reads it back.
+	// An effect, not an initial value, because a client-side navigation never
+	// re-runs an initialiser. Only a starting point — the picker is still yours to change.
 	$effect(() => {
 		if (data.prefill.accountId) assignAccountId = data.prefill.accountId;
 	});
 
-	/**
-	 * The month this upload was asked for, in words, or null.
-	 *
-	 * Only shown when the ribbon named one. Arriving from a gap and seeing an
-	 * ordinary upload box gives no sign the screen understood which month was
-	 * missing — and the answer matters, because filing the wrong one leaves the
-	 * gap exactly where it was.
-	 */
+	/** The month this upload was asked for, in words, or null when the ribbon named none. */
 	const askedFor = $derived.by(() => {
 		const { from, accountId } = data.prefill;
 		if (!from) return null;
@@ -51,11 +40,9 @@
 		return account ? `${month} · ${account.name}` : month;
 	});
 
-	// Categories picked since the page rendered, so Save can be disabled while
-	// there is nothing to save. Deliberately NOT bind:value with a seeded record:
-	// binding overrides the `selected` attributes below, and the server-rendered
-	// markup then has nothing selected, so the browser falls back to the first
-	// enabled option and an unguessed row reads as already filed with Salary.
+	// Deliberately NOT bind:value with a seeded record: binding overrides the
+	// `selected` attributes below, so the browser would fall back to the first
+	// enabled option and an unguessed row would read as already filed with Salary.
 	const ROLE_LABELS: Record<string, string> = {
 		income: 'Money in',
 		expense: 'Money out',
@@ -68,18 +55,11 @@
 	const picked = (r: { id: string; suggestedCategoryId: string | null }) =>
 		chosen[r.id] ?? r.suggestedCategoryId ?? '';
 
-	// The choice disambiguates the upload it was made for. Holding it across
-	// uploads forced every later batch into the same account, and resolveAccount
-	// now validates the statement's bank, currency and number against it — so an
-	// unrelated statement came back needsAccount with nothing imported, asking
-	// again for the very choice that caused it. Keep it only while some file
-	// still needs an answer.
-	//
-	// Scoped to the files THIS upload queued, which is what `form.queued` carries.
-	// Reading the whole queue instead brought the bug straight back: settled jobs
-	// linger for an hour, so one old `needsAccount` result kept the choice pinned
-	// to every batch dropped after it — the exact thing the paragraph above says
-	// was fixed.
+	// Cleared once none of THIS upload's files still need an account — keeping
+	// it held across uploads forced every later batch into the same account.
+	// Scoped to `form.queued` rather than the whole queue: settled jobs linger
+	// for an hour, and reading the whole queue kept the choice pinned to every
+	// batch dropped afterwards.
 	$effect(() => {
 		const batch = new Set(form?.queued ?? []);
 		if (batch.size === 0) return;
@@ -90,11 +70,8 @@
 		if (results.length > 0 && !results.some((result) => result.needsAccount)) assignAccountId = '';
 	});
 
-	// Watch the queue while it has work in it.
-	//
-	// The upload returns as soon as the files are accepted, so the page has to
-	// find out for itself when each one has been read. Polling stops the moment
-	// the queue empties — an idle import page should be as quiet as any other.
+	// Poll while the queue has work; the upload returns as soon as files are
+	// accepted, so the page must find out for itself when each is read.
 	const busy = $derived(data.queue.waiting + data.queue.running > 0);
 	$effect(() => {
 		if (!busy) return;
@@ -102,8 +79,8 @@
 		return () => clearInterval(timer);
 	});
 
-	// FileList from a browse or a drop, File[] from the scan engine, which
-	// builds its PDF in memory and has no FileList to hand over.
+	// FileList from a browse or drop; File[] from the scan engine, which
+	// builds its PDF in memory with no FileList to hand over.
 	async function uploadFiles(files: FileList | File[]) {
 		const body = new FormData();
 		for (const f of files) body.append('statements', f);
@@ -194,10 +171,8 @@
 								.rowsPaired} paired
 						{/if}
 					</span>
-					<!-- A read under way cannot be stopped from here, so the control says
-					     so rather than pretending. Anything else can go: a cancellation
-					     while it waits, a tidy-up once it has settled. A settled row also
-					     leaves on its own after ten minutes. -->
+					<!-- A read under way can't be stopped; anything else (cancel while
+					     waiting, tidy up once settled) can. Settled rows also expire after ten minutes. -->
 					<form method="POST" action="?/dismissJob" use:enhance class="inline-form">
 						<input type="hidden" name="jobId" value={job.id} />
 						<button
@@ -228,15 +203,8 @@
 			label="Map this layout"
 			caption="say what the columns are — the balances still decide whether it adds up"
 		/>
-		<!--
-			One question, asked of the person who has the statement in front of them:
-			what is each column? That is the one thing they know better than the file.
-
-			It is not permission to skip the proof. Whatever they confirm is read
-			back through the same arithmetic as any other statement, and a mapping
-			that produces movements contradicting the balances is refused exactly as
-			an inferred reading would be.
-		-->
+		<!-- Confirming a mapping does not skip the proof: it is still checked
+		     against the statement's own balances like any other reading. -->
 		<form method="POST" action="?/confirmMapping" use:enhance class="card wizard">
 			<input type="hidden" name="jobId" value={form.preview.jobId} />
 			<input type="hidden" name="source" value={form.preview.source} />
@@ -244,12 +212,8 @@
 			<input type="hidden" name="delimiter" value={form.preview.delimiter ?? ''} />
 
 			{#if form.preview.drift}
-				<!--
-					A layout we nearly know. Matching on labels rather than positions is
-					what turns "the bank added a column" from a silent shift of every
-					role into this: a named difference, with last time's answers already
-					filled in.
-				-->
+				<!-- Matched by label, not position, so an added column shows as a
+				     named difference instead of shifting every role silently. -->
 				<input type="hidden" name="supersedes" value={form.preview.drift.profileId} />
 				<p class="note">
 					This looks like <strong>{form.preview.drift.profileName}</strong>, changed since it was
@@ -336,14 +300,8 @@
 			label="Recent imports"
 			caption="what each statement was checked against"
 		/>
-		<!--
-			What each statement was checked against before its movements were filed.
-
-			The proof engine decided whether to accept these and then threw its
-			reasoning away, so a figure that later looked wrong could not be traced
-			to the reading that produced it. Showing the checks is what makes
-			"accepted" mean something a person can inspect rather than take on trust.
-		-->
+		<!-- Shows the checks that accepted each statement, so "accepted" is
+		     inspectable rather than taken on trust. -->
 		<div class="card imports">
 			{#each data.imports as file (file.id)}
 				<details class="import-row">
@@ -457,23 +415,17 @@
 					{:else}
 						<form method="POST" action="?/categorize" use:enhance class="cat-form">
 							<input type="hidden" name="id" value={r.id} />
-							<!-- Not a native select. Its popup is placed by the browser, and on
-						     this screen — a long queue of rows, each with a chooser — opening
-						     one near the bottom expanded downwards past the fold, so the
-						     categories were off-screen until you scrolled to find them.
-						     CategoryPicker measures the room it has and opens upwards when
-						     there is more above. Without a suggestion the value starts empty,
-						     so an unguessed row never looks as though it were already filed. -->
+							<!-- Not a native select: a long queue means the popup can open near
+						     the bottom of the viewport, so it measures its room and opens
+						     upwards when needed. -->
 							<CategoryPicker
 								name="categoryId"
 								groups={data.categories}
 								value={r.suggestedCategoryId}
 								onpick={(id) => (chosen[r.id] = id)}
 							/>
-							<!-- The one category that needs a second answer, and only when the
-						     account cannot give it: money into a JOINT account filed as
-						     salary belongs to somebody, and nothing here knows who. An
-						     account with an owner is never asked. -->
+							<!-- Only asked when the account can't say whose it is: a JOINT
+						     account gives no owner for salary money. -->
 							{#if picked(r) === 'salary' && r.accountIsJoint && data.people.length > 1}
 								<label class="whose">
 									<span>Whose?</span>
@@ -487,21 +439,15 @@
 									<span>Remember for “{r.merchant}”</span>
 								</label>
 							{/if}
-							<!-- Disabled until something is chosen: the placeholder posts an empty
-						     category, which the action rejects with a message that used to have
-						     nowhere to appear. The row read as an unresponsive button. -->
+							<!-- Disabled until something is chosen — the placeholder posts an
+						     empty category, which the action would reject as an unresponsive-looking button. -->
 							<button type="submit" class="btn" disabled={!picked(r)}>Save</button>
 						</form>
-						<!-- Reachable from the row that prompted it. Nothing fitting is felt
-					     here, not on a settings screen. -->
 						<button type="button" class="btn" onclick={() => (addingCategory = true)}>
 							➕ New category…
 						</button>
-						<!-- The second answer to the same question, so it is marked as an
-					     alternative rather than lined up as a fourth control. This is the
-					     case pairing cannot reach: money moved to an account whose
-					     statements never arrive, so there is no second leg to match and
-					     the row looks like unexplained spending. -->
+						<!-- For the case pairing cannot reach: a transfer whose other account's
+					     statements never arrive, so it looks like unexplained spending. -->
 						<form method="POST" action="?/markOneSided" use:enhance class="one-sided">
 							<input type="hidden" name="id" value={r.id} />
 							<InfoHint label="What “not spending” means">
@@ -738,10 +684,8 @@
 		padding: 9px 14px;
 		font-size: var(--text-md);
 	}
-	/* A taller, more prominent target than elsewhere — importing statements is
-	   what this screen is for — but still a ROW: the dropzone is a one-line
-	   control now, and a column layout drops its capture buttons onto a second
-	   line under the copy. */
+	/* Taller and more prominent, but still a ROW: a column layout drops the
+	   capture buttons onto a second line under the copy. */
 	.asked {
 		margin: 0 0 var(--space-5);
 		font-size: var(--text-base);
@@ -777,10 +721,9 @@
 	.w-columns {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-		/* Three bands — header, role, sample — owned by this grid rather than by
-		   each column. Every .w-col opts into them with subgrid instead of
-		   starting a grid of its own, which is what let one two-line header push
-		   its own select down and nobody else's. */
+		/* Three bands (header, role, sample) owned by this grid; each .w-col uses
+		   subgrid instead of its own grid, so a two-line header doesn't push only
+		   its own select down. */
 		grid-auto-rows: auto;
 		gap: 0.75rem;
 	}
@@ -825,9 +768,7 @@
 		gap: 1rem;
 		cursor: pointer;
 		padding: 0.35rem 0;
-		/* The same token .result-row uses for the queue above. Without it this
-		   inherited body's --text-xl, so one filename was 16px in the recent list
-		   and 13px in the queue. */
+		/* Same token .result-row uses for the queue above, so filename sizing matches. */
 		font-size: var(--text-md);
 	}
 
@@ -875,8 +816,7 @@
 		display: flex;
 		justify-content: space-between;
 		gap: var(--space-7);
-		/* A refused row carries a sentence and a button, not a word. Without this
-		   it stayed on one line and pushed the page 817px wide at 390px. */
+		/* A refused row carries a sentence and a button, not a word, so it needs to wrap. */
 		flex-wrap: wrap;
 		padding: 8px 0;
 		border-top: 1px solid var(--bd);
@@ -910,11 +850,8 @@
 	.r-meta {
 		color: var(--fg3);
 		font-size: var(--text-sm);
-		/* Was `white-space: nowrap`, which suits "waiting" and "12 added · 3 known
-		   · 1 paired" and is catastrophic for the other thing this holds: the
-		   reader's refusal sentence, followed by a "Map its columns" button. A
-		   flex item will not shrink below its content without min-width:0, so on
-		   a phone that single row became 1160px wide. */
+		/* This also holds a refusal sentence plus button, not just short status
+		   text, so nowrap overflows — needs min-width:0 to shrink on a phone. */
 		min-width: 0;
 		overflow-wrap: anywhere;
 	}
@@ -1009,9 +946,7 @@
 		border-top: 1px solid var(--bd);
 		padding-top: 10px;
 	}
-	/* Filing sits left, the transfer answer sits right. They answer the same
-	   question, and opposite ends say they are alternatives far better than five
-	   controls in one queue did. */
+	/* Filing sits left, the transfer answer sits right — opposite ends read as alternatives. */
 	.one-sided {
 		margin-left: auto;
 	}

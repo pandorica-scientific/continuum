@@ -40,10 +40,6 @@ describe('parseFilter', () => {
 	});
 
 	it('reads how a row was read, so a weaker reading can be looked at', () => {
-		// The ledger records per row whether it came from a bank adapter, a
-		// published format, page geometry, pixels, or a reading whose fields had
-		// to be rejoined. Those are not equally strong, and this is what lets
-		// someone ask to see one of them.
 		expect(parseFilter(params('source=pdf-rhythm'), 'CZK').sourceMethod).toBe('pdf-rhythm');
 		expect(parseFilter(params('source='), 'CZK').sourceMethod).toBeNull();
 	});
@@ -102,9 +98,8 @@ describe('parseFilter', () => {
 	});
 
 	it('bounds the page above, so an absurd one cannot reach SQL as an offset', () => {
-		// Number.isInteger(1e21) is true, so an integerness check alone let
-		// ?page=1e21 render as OFFSET 5e+22 and Postgres rejected the statement:
-		// a 500 from a hand-edited URL.
+		// Regression: Number.isInteger(1e21) is true, so an integerness check alone
+		// let ?page=1e21 render as OFFSET 5e+22 and Postgres reject the statement.
 		const huge = parseFilter(params('page=1e21'), 'CZK').page;
 		expect(Number.isSafeInteger(huge)).toBe(true);
 		expect(huge).toBeLessThanOrEqual(1_000_000);
@@ -117,16 +112,15 @@ describe('parseFilter', () => {
 		expect(parseFilter(params('category=none'), 'CZK').categoryId).toBe('none');
 	});
 
-	// A stage of the waterfall is a group, not a category, so clicking one has to
-	// be able to ask for every category inside it at once.
+	// A stage of the waterfall is a group, not a category, so it must ask for
+	// every category inside it at once.
 	it('reads the group filter, and treats a blank one as absent', () => {
 		expect(parseFilter(params('group=housing'), 'CZK').groupKey).toBe('housing');
 		expect(parseFilter(params('group='), 'CZK').groupKey).toBeNull();
 		expect(parseFilter(params(''), 'CZK').groupKey).toBeNull();
 	});
 
-	// Two questions, not one asked twice: a group narrows to its categories and a
-	// category narrows within them, so both have to survive parsing together.
+	// Two questions, not one asked twice: both must survive parsing together.
 	it('keeps a group and a category apart', () => {
 		const filter = parseFilter(params('group=housing&category=rent'), 'CZK');
 		expect(filter.groupKey).toBe('housing');
@@ -140,18 +134,15 @@ describe('parseFilter', () => {
 	});
 
 	it('falls back to the default for a size nothing offers', () => {
-		// The value reaches SQL as a LIMIT and the URL is the one part of this
-		// filter anybody can hand-edit, so membership is checked rather than range:
-		// ?per=1000000 must not be a request to render the whole ledger.
+		// The value reaches SQL as a LIMIT, so membership is checked rather than
+		// range: ?per=1000000 must not render the whole ledger.
 		for (const bad of ['1000000', '0', '-10', '49', 'lots', '25.5', '']) {
 			expect(parseFilter(params(`per=${bad}`), 'CZK').pageSize).toBe(DEFAULT_PAGE_SIZE);
 		}
 	});
 });
 
-// The register shows a review state as a pill and offers it in a filter. A
-// state with no entry here reached the screen as a blank one — `filed` did,
-// for as long as the map lived in the page and named three of the four.
+// A state with no entry here reaches the screen as a blank pill.
 describe('review state presentation', () => {
 	it('names and colours every state the schema allows', () => {
 		for (const state of REVIEW_STATES) {

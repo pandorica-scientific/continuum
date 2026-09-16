@@ -6,16 +6,8 @@
 	// year's gross: its foot is the tax, hatched, and what stands above is what
 	// was kept. In `rate`, the bars give way to one line per jurisdiction.
 	//
-	// Both are drawn by the shared LineChart now. This file used to carry its own
-	// letterboxed viewBox with HTML axis labels positioned in percentages over
-	// it, and SalaryYearChart carried a second copy of the same arrangement; the
-	// two had already drifted on bar width and readout placement. What is left
-	// here is what a TAX bar means — the hatched foot, the jurisdictions, and the
-	// blended rate that is the honest line whatever the currency.
-	//
-	// One SVG fact still governs the fills below: an SVG attribute does not
-	// resolve var(), so `fill` goes through `style` in the defs, and the bars
-	// refer to those defs by `url(#id)`, which IS legal as an attribute.
+	// SVG attributes don't resolve var(), so `fill` goes through `style` in the
+	// defs, and the bars refer to those defs by `url(#id)`.
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import Segmented from '$lib/components/Segmented.svelte';
 	import LineChart from './LineChart.svelte';
@@ -52,25 +44,15 @@
 		countries.filter((c) => years.some((y) => y.byCountry.some((b) => b.country === c.code)))
 	);
 
-	/**
-	 * All the tax first, then all the kept — so the hatched foot is one block
-	 * rather than interleaved with what was kept. Values are minor units; the
-	 * axis divides them down for its own labels.
-	 */
+	/** All the tax first, then all the kept, so the hatched foot is one block. */
 	const barSlots = $derived<BarSlot[]>(
 		mode === 'rate' ? [] : years.map((row) => ({ segments: taxBarSegments(row, hues) }))
 	);
 
 	/**
-	 * One line per jurisdiction, plus the household's blended rate.
-	 *
-	 * A null breaks the line rather than bridging it: a year somebody lived
-	 * elsewhere is not a year their rate quietly held steady — the rule
-	 * `rateRuns` was written for, now enforced by the engine's own null
-	 * handling.
-	 *
-	 * In `stack` mode only the blended line is drawn; four jurisdiction lines
-	 * over a stack of bars is two charts fighting for one band.
+	 * One line per jurisdiction, plus the household's blended rate. A null
+	 * breaks the line rather than bridging it — a year lived elsewhere isn't a
+	 * year the rate held steady. Only the blended line is drawn in `stack` mode.
 	 */
 	const series = $derived<LineSeries[]>([
 		...(mode === 'rate'
@@ -85,8 +67,7 @@
 			: []),
 		{
 			key: 'blended',
-			// Yellow, because that is the colour a rate wears everywhere else on
-			// this screen — the blended-rate tile and each row's own percentage.
+			// Yellow: the colour a rate wears everywhere else on this screen.
 			colorVar: '--yellow',
 			endLabel: 'all',
 			points: years.map((y) => ({ value: y.ratePct }))
@@ -171,8 +152,7 @@
 				{/each}
 			{/snippet}
 
-			<!-- One readout per year, not per mark: a per-mark tooltip cannot answer
-			     "which country is this AND what were the others that year". -->
+			<!-- One readout per year, not per mark, so it can answer "which country AND what were the others". -->
 			{#snippet readout(i)}
 				{@const row = years[i]}
 				<span class="r-year mono">{row.year}</span>
@@ -209,9 +189,7 @@
 						{c.name}
 					</span>
 				{/each}
-				<!-- Only where there are bars to describe. In rate mode the
-				     jurisdiction keys still mean the lines, but this one named a
-				     texture that is not on screen. -->
+				<!-- Only where there are bars to describe — a texture that isn't on screen in rate mode. -->
 				{#if mode === 'stack'}
 					<span class="key">
 						<span class="swatch dashed"></span>
@@ -257,8 +235,7 @@
 		line-height: 1.55;
 	}
 
-	/* The readout's and legend's own rows. `:global` because that markup is
-	   rendered inside LineChart, which scopes its own styles and not these. */
+	/* `:global` because this markup renders inside LineChart, which scopes its own styles. */
 	.chart :global(.r-year) {
 		display: block;
 		font-size: var(--text-xs);
@@ -280,8 +257,6 @@
 	.chart :global(.r-rate) {
 		font-size: var(--text-xs);
 	}
-	/* Indented under the country it belongs to, so a two-jurisdiction year is
-	   two blocks rather than four unattributed lines. */
 	.chart :global(.r-figures) {
 		padding: 0 0 var(--space-4) 22px;
 		font-size: var(--text-xs);
@@ -308,7 +283,6 @@
 		border-radius: var(--radius-xs);
 		flex: none;
 	}
-	/* The two keys that stand for a texture rather than a colour. */
 	.chart :global(.swatch.dashed) {
 		background: repeating-linear-gradient(45deg, var(--fg3) 0 2px, transparent 2px 5px);
 	}
@@ -325,8 +299,7 @@
 		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
-	/* At the end of the keys' own row where it fits, on its own line where it
-	   does not — `margin-left: auto` against a wrapping flex row does both. */
+	/* `margin-left: auto` in a wrapping flex row puts this at the row's end, or its own line. */
 	.chart :global(.footnote) {
 		margin-left: auto;
 		font-size: var(--text-xs);

@@ -1,16 +1,9 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	/**
-	 * Writing a bottle down.
-	 *
-	 * Typed, not scanned. The barcode column is in the schema from the first
-	 * release because the camera is coming, but nothing here reads one — a
-	 * half-working scanner in the middle of an add form is worse than no
-	 * scanner.
-	 *
-	 * Everything below the name is optional. A household that knows only "a
-	 * bottle of the Portuguese red" should be able to write that down and fill
-	 * the rest in when it opens one.
+	 * Writing a bottle down. Typed, not scanned (the barcode column is in the
+	 * schema for a future camera feature, but nothing here reads one yet).
+	 * Everything below the name is optional.
 	 */
 	import Modal from '$lib/components/Modal.svelte';
 	import Field from '$lib/components/Field.svelte';
@@ -58,10 +51,8 @@
 	} = $props();
 
 	/**
-	 * The stored price, as a decimal to edit.
-	 *
-	 * Minor units are how it is held and not how anybody types it. Blank stays
-	 * blank: a bottle whose price nobody recorded must not gain a nought.
+	 * The stored price, as a decimal to edit (stored as minor units).
+	 * Blank stays blank — an unrecorded price must not gain a nought.
 	 */
 	const price = $derived(
 		bottle?.boughtMinor === null || bottle?.boughtMinor === undefined
@@ -142,8 +133,7 @@
 				<input type="number" name="owned" value={bottle?.owned ?? 1} min="0" required />
 			</Field>
 		</div>
-		<!-- Said once, here, because it is the rule the rest of the screen keeps:
-		     a bottle with no window has no opinion about when to drink it. -->
+		<!-- A bottle with no window has no opinion about when to drink it. -->
 		<span class="hint">
 			Leave both years empty for anything that keeps — gin, rum, most spirits. Nothing will tell you
 			to drink it.
@@ -165,9 +155,8 @@
 				<span class="hint">In {displayCurrency(bottle?.boughtCurrency ?? baseCurrency)}.</span>
 			</Field>
 		</div>
-		<!-- Carried through the form rather than assumed: a bottle bought abroad
-		     keeps the currency it was paid for in, and an edit must not quietly
-		     redenominate it into what the household counts in. -->
+		<!-- A bottle bought abroad keeps its original currency; must not be
+		     silently redenominated to the household's base currency on edit. -->
 		<input type="hidden" name="boughtCurrency" value={bottle?.boughtCurrency ?? baseCurrency} />
 
 		<div class="actions">

@@ -1,8 +1,7 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
-	// The one place that maps a panel key to its component. Content components
-	// know nothing about the grid, and the board knows nothing about content —
-	// this is the seam between them.
+	// The one place that maps a panel key to its component — the seam between
+	// content components (which know nothing about the grid) and the board.
 	import AccountsPanel from './panels/AccountsPanel.svelte';
 	import ActivityPanel from './panels/ActivityPanel.svelte';
 	import BriefingPanel from './panels/BriefingPanel.svelte';
@@ -28,7 +27,6 @@
 		currency
 	}: {
 		panelKey: string;
-		// Each panel validates its own shape; the board carries it untyped.
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		data: any;
 		currency: string;
@@ -38,7 +36,6 @@
 {#if data === undefined}
 	<span class="missing">This panel has no data on this load.</span>
 {:else if data?.failed}
-	<!-- One panel failing must not take the board with it, so it reports here. -->
 	<span class="missing">This panel could not load. The rest of the board is unaffected.</span>
 {:else if panelKey === 'briefing'}
 	<BriefingPanel {data} />

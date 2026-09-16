@@ -152,8 +152,7 @@ describe('bars beside the line', () => {
 	});
 
 	it('scales the bars on their own axis, not the one the line uses', () => {
-		// The line tops out at 10 and the bars at 120; a shared axis would put
-		// the line flat on the floor.
+		// A shared axis would flatten the line against the floor.
 		const g = lineGeometry(line, 800, 300, { bars, barShare: 0.7 });
 		expect(g.barTicks.at(-1)!.value).toBeGreaterThanOrEqual(120);
 		expect(g.ticks.at(-1)!.value).toBeLessThan(120);
@@ -201,7 +200,6 @@ describe('the two protections a stacked bar needs', () => {
 	const line = [{ key: 'pct', colorVar: '--blue', points: [{ value: 5 }] }];
 
 	it('gives a figure two orders below the rest a hairline rather than nothing', () => {
-		// The €174 filing inside the €37 000 bar these charts were written for.
 		const g = lineGeometry(line, 800, 400, {
 			bars: [
 				{
@@ -229,8 +227,7 @@ describe('the two protections a stacked bar needs', () => {
 			],
 			barShare: 0.7
 		});
-		// A 1px border on a sub-pixel rect paints a band at full strength, which
-		// would make the least significant number the loudest thing in the bar.
+		// A 1px border on a sub-pixel rect would paint at full strength regardless.
 		expect(g.bars[0].segments[0].stroke).toBeUndefined();
 		expect(g.bars[0].segments[1].stroke).toBe('var(--teal)');
 	});

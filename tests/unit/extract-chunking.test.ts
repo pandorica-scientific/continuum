@@ -3,13 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { isExtractable, slicePlainText } from '$lib/server/documents/extract';
 import { MAX_CHUNK_BYTES } from '$lib/server/documents/extract/limits';
 
-/**
- * The tsvector wall applies to a big CSV exactly as it does to a scan.
- *
- * PostgreSQL refuses a `tsvector` over about 1 MB, and the index is built on a
- * chunk — so plain text is cut under the same cap as OCR output rather than
- * being written as one column nobody can index.
- */
+// PostgreSQL refuses a tsvector over about 1 MB, so plain text is cut under
+// the same cap as OCR output rather than written as one unindexable column.
 describe('slicing plain text', () => {
 	it('keeps every slice under the chunk cap', () => {
 		const chunks = slicePlainText('x'.repeat(250_000));

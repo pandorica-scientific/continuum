@@ -80,11 +80,8 @@ export const actions: Actions = {
 	},
 
 	/**
-	 * Taking a shelf away.
-	 *
-	 * Refused while anything stands on it. The foreign key would refuse too, but
-	 * as a database error nobody can act on — this says which shelf and how many
-	 * recipes, so the next move is obvious.
+	 * Refused while anything stands on the shelf — the foreign key would refuse
+	 * too, but as an unreadable database error rather than a clear message.
 	 */
 	deleteCategory: async ({ request }) => {
 		const form = await request.formData();

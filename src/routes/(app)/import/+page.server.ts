@@ -28,12 +28,7 @@ import { localToday } from '$lib/dates';
 import { displayCurrency, formatMinor } from '$lib/money';
 import type { Actions, PageServerLoad } from './$types';
 
-/**
- * A calendar day, or nothing.
- *
- * Shape AND validity: `2026-13-45` matches the pattern and is not a date, and a
- * month drawn from it would be a box the ribbon cannot place.
- */
+/** A calendar day, or nothing. Checks shape AND validity — `2026-13-45` matches the pattern but isn't a date. */
 function isoDay(value: string | null): string | null {
 	if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
 	const parsed = new Date(`${value}T00:00:00Z`);
@@ -47,8 +42,6 @@ export const load: PageServerLoad = async ({ url }) => {
 	monthStart.setDate(1);
 	const monthStartIso = monthStart.toISOString().slice(0, 10);
 
-	// Read before the queries so the account check below has something to test
-	// against, and so an absent parameter is null rather than the string "null".
 	const wantedAccount = url.searchParams.get('account');
 
 	const proposedPairs = await db
@@ -73,9 +66,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		people
 	] = await Promise.all([
 		queueStatus(),
-		// What each recent import was checked against. The proof engine decided
-		// whether to file these and used to discard its reasoning; keeping it
-		// means a statement can show its working.
+		// Keeps the proof engine's reasoning so a statement can show its working.
 		db
 			.select({
 				id: importFile.id,
@@ -89,8 +80,8 @@ export const load: PageServerLoad = async ({ url }) => {
 				reconciliation: importFile.reconciliation
 			})
 			.from(importFile)
-			// Acknowledged imports leave this list and nothing else — the record,
-			// its transactions, its stored file and its document all stay.
+			// Acknowledged imports leave this list only — the record, transactions,
+			// stored file and document all stay.
 			.where(isNull(importFile.acknowledgedAt))
 			.orderBy(desc(importFile.uploadedAt))
 			.limit(8),
@@ -119,8 +110,7 @@ export const load: PageServerLoad = async ({ url }) => {
 				suggestedCategoryId: transaction.suggestedCategoryId,
 				transferPairId: transaction.transferPairId,
 				accountId: transaction.accountId,
-				// Whether the account has an owner. A joint one cannot answer "whose
-				// salary is this?" by itself, so the screen has to ask.
+				// A joint account has no owner, so it can't answer "whose salary is this?" alone.
 				accountOwnerPersonId: account.ownerPersonId,
 				accountName: account.name
 			})
@@ -152,17 +142,10 @@ export const load: PageServerLoad = async ({ url }) => {
 	const total = readAgg[0].count;
 	const auto = autoAgg[0].count;
 
-	// Where each account's record stops. A statement is monthly for almost every
-	// bank, so a gap past a month and a few days of post is a statement that
-	// has not been imported — the one thing this screen exists to receive.
-	// Local calendar date, as a statement's own date is: the UTC day is a day
-	// behind Prague every evening, which read as "-1 days" on a fresh statement.
+	// Local calendar date: the UTC day reads a day behind Prague every evening.
 	const todayIso = localToday();
-	// Whether an account is overdue, and the word for its rhythm, both come
-	// from the same arithmetic the Overview's Statements panel uses — the gap
-	// between this account's own imports, with room for a late upload — so the
-	// two screens agree. An account never imported is not overdue: nothing
-	// was promised, so nothing is late.
+	// Same overdue arithmetic as the Overview's Statements panel, so the two
+	// screens agree. An account never imported is not overdue.
 	const uploads = await db
 		.select({ accountId: importFile.accountId, uploadedAt: importFile.uploadedAt })
 		.from(importFile)
@@ -190,8 +173,6 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	return {
 		statements,
-		// What the queue is doing, so the page can show depth and per-file
-		// progress rather than a spinner that says nothing.
 		queue: {
 			waiting: queue.waiting,
 			running: queue.running,
@@ -211,9 +192,8 @@ export const load: PageServerLoad = async ({ url }) => {
 			readAs: sourceLabel(file.sourceMethod),
 			proofClass: file.proofClass,
 			proofLabel: file.proofClass ? (PROOF_LABELS[file.proofClass] ?? null) : null,
-			// Only the checks that actually said something. "Unavailable" means the
-			// statement never printed that figure, which is not evidence and not a
-			// failure — listing it would bury the checks that did run.
+			// "Unavailable" means the statement never printed that figure — not
+			// evidence, not a failure — so it's dropped to avoid burying real checks.
 			checks: (file.reconciliation ?? []).filter((check) => check.status !== 'unavailable')
 		})),
 		stats: {
@@ -231,33 +211,24 @@ export const load: PageServerLoad = async ({ url }) => {
 			negative: r.amountMinor < 0n,
 			isTransfer: proposedLegIds.has(r.id),
 			account: r.accountName,
-			// So the "moved to my…" picker can leave out the account the money
-			// actually left, which is never the destination.
+			// Lets the "moved to my…" picker exclude the account the money left.
 			accountId: r.accountId,
 			accountIsJoint: r.accountOwnerPersonId === null,
-			// The engine's best guess, pre-selected below so a contested or
-			// unproven row arrives with a suggestion rather than nothing.
+			// The engine's best guess, pre-selected so the row arrives with a suggestion.
 			suggestedCategoryId: r.suggestedCategoryId
 		})),
 		accounts,
 		/**
-		 * Where an upload was asked for, when somewhere asked for it.
-		 *
-		 * The Statements ribbon links here with the account and the month already
-		 * known, so filing a gap does not mean re-answering what the screen that
-		 * sent you had already answered.
-		 *
-		 * Every value is checked rather than trusted. These arrive in the URL, so
-		 * a stale bookmark naming a deleted account must leave a usable upload
-		 * form and not a 500 — an unrecognised value is dropped, never refused.
+		 * Prefill from the Statements ribbon's link, so filing a gap doesn't mean
+		 * re-answering what sent you here. Every value is checked, not trusted —
+		 * a stale bookmark naming a deleted account is dropped, never refused.
 		 */
 		prefill: {
 			accountId: accounts.some((a) => a.id === wantedAccount) ? wantedAccount : null,
 			from: isoDay(url.searchParams.get('from')),
 			to: isoDay(url.searchParams.get('to'))
 		},
-		// Every group, including the empty ones: the modal needs somewhere to put a
-		// new category, and a group with nothing in it yet is exactly the case.
+		// Every group, including empty ones — the modal needs somewhere to put a new category.
 		groups: groups.map((group) => ({ key: group.key, label: group.label })),
 		groupRoles: ENUMS['category_group.role'],
 		people,
@@ -278,22 +249,18 @@ export const actions: Actions = {
 			.getAll('statements')
 			.filter((f): f is File => f instanceof File && f.size > 0);
 		if (files.length === 0) return fail(400, { message: 'Choose at least one statement file.' });
-		// Optional: an empty field means "work it out from the statement", which is
-		// not the same as an id that cannot exist.
+		// Optional: empty means "work it out from the statement", not an id that can't exist.
 		const accountId = asOptionalRowId(form.get('accountId'));
 
-		// Accept the files and return. Reading them is background work: a
-		// multi-page PDF is recovered from glyph coordinates by two assemblers and
-		// every candidate reading is proved before one is chosen, and nobody
-		// should sit in front of a spinner while that happens six times over.
+		// Accept the files and return; reading them is background work, since
+		// proving a multi-page PDF reading takes several passes.
 		const queued: string[] = [];
 		for (const file of files) {
 			queued.push(await enqueue(file.name, new Uint8Array(await file.arrayBuffer()), accountId));
 		}
 
-		// Start the worker without waiting for it. It claims one job at a time and
-		// stops when the queue is empty, so a second upload arriving mid-run does
-		// not start a second reader — it finds nothing to claim and returns.
+		// Started without waiting: the worker claims one job at a time and stops
+		// when empty, so a second upload mid-run just finds nothing to claim.
 		void runCpuQueue().catch((error) => {
 			console.error('Statement queue stopped unexpectedly.', error);
 		});
@@ -301,13 +268,6 @@ export const actions: Actions = {
 		return { queued };
 	},
 
-	/**
-	 * Show what the reader saw in a file it could not file.
-	 *
-	 * A refusal is the right answer for a layout that cannot prove itself, and on
-	 * its own it is a dead end — the person knows what their bank's columns mean
-	 * and has no way to say so. This is what they get to point at.
-	 */
 	/** Take a file out of the queue: a cancellation while it waits, a tidy-up
 	 *  once it has settled. Refused while it is being read. */
 	dismissJob: async ({ request }) => {
@@ -336,7 +296,7 @@ export const actions: Actions = {
 			: undefined;
 		const preview = await previewLayout(file.bytes, {
 			currency: into?.currency,
-			// Needed for drift: a layout we nearly know should arrive pre-filled.
+			// A layout we nearly know should arrive pre-filled.
 			profiles: () => loadProfiles(db)
 		});
 		if (!preview) {
@@ -348,13 +308,8 @@ export const actions: Actions = {
 		return { preview: { ...preview, jobId, filename: file.filename } };
 	},
 
-	/**
-	 * File a statement under a mapping a person confirmed.
-	 *
-	 * What they answer is "what are these columns" — the one question they are
-	 * better placed to answer than the file. Whether the movements add up is
-	 * still decided by the balances.
-	 */
+	/** File a statement under a mapping a person confirmed — "what are these
+	 *  columns"; whether the movements add up is still decided by the balances. */
 	confirmMapping: async ({ request }) => {
 		const form = await request.formData();
 		const jobId = String(form.get('jobId') ?? '');
@@ -394,10 +349,8 @@ export const actions: Actions = {
 	categorize: async ({ request }) => {
 		const form = await request.formData();
 		const id = asRowId(form.get('id'));
-		// Shared with the register, so a correction teaches the categoriser the
-		// same way wherever it is made.
-		// Whose salary it is, when the screen has just asked — only reached for a
-		// salary category on a joint account. An owned account answers it itself.
+		// Only reached for a salary category on a joint account; an owned
+		// account answers "whose salary" itself.
 		const salaryPersonId = asOptionalRowId(form.get('salaryPersonId'));
 		const result = await fileTransaction(
 			id,
@@ -407,19 +360,12 @@ export const actions: Actions = {
 				? { personId: salaryPersonId, remember: form.get('rememberWhose') === 'on' }
 				: undefined
 		);
-		// The id travels with the failure so the screen can render the message
-		// against the row that produced it rather than in a banner at the top.
+		// The id travels with the failure so the message renders against its row.
 		if (!result.ok) return fail(result.status, { id, message: result.message });
 		return { ok: true };
 	},
 
-	/**
-	 * Add a category, and a group to hold it, without leaving the review queue.
-	 *
-	 * The need is felt here — a row in front of you that nothing fits — and
-	 * sending someone to a settings screen, then back to find their place in the
-	 * queue again, is how a correction stops being worth making.
-	 */
+	/** Add a category, and a group to hold it, without leaving the review queue. */
 	addCategory: async ({ request }) => {
 		const form = await request.formData();
 		const newGroupLabel = String(form.get('newGroupLabel') ?? '').trim();
@@ -440,12 +386,8 @@ export const actions: Actions = {
 		return { ok: true };
 	},
 
-	/**
-	 * Say a row is a transfer to an account whose statements are not imported.
-	 *
-	 * The pairing machinery needs both legs; this is the case where only one
-	 * exists, which otherwise sits here looking like unexplained spending.
-	 */
+	/** Say a row is a transfer to an account whose statements aren't imported
+	 *  — the pairing machinery needs both legs, and only one exists here. */
 	markOneSided: async ({ request }) => {
 		const form = await request.formData();
 		const result = await markOneSidedTransfer(

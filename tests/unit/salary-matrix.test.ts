@@ -24,8 +24,7 @@ const years = [year({ year: 2024, deltaPct: null, baseDeltaPct: null }), year()]
 
 describe('the salary matrix', () => {
 	it('sums base and bonus to the gross it reports', () => {
-		// The breakdown columns add up to the total column, exactly as a tax
-		// year's jurisdictions add up to its year total.
+		// The breakdown columns must add up to the total column.
 		const [y] = years;
 		expect(BigInt(y.baseTotalMinor) + BigInt(y.bonusTotalMinor)).toBe(BigInt(y.grossTotalMinor));
 	});

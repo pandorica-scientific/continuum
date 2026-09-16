@@ -1,13 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * Read a payslip without filing it.
- *
- * The upload dialog calls this the moment a file is chosen, so the figures are
- * on screen to be checked before anything is written. Filing blind and then
- * correcting what landed is the workflow this replaces — and a correction
- * teaches the reader a label, so a wrong one taught it the wrong thing.
- *
- * Reads only: no document is stored and no entry is written.
+ * Read a payslip without filing it, so the figures can be checked on screen
+ * before anything is written. Reads only: no document stored, no entry written.
  */
 import { error, json } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
@@ -25,8 +19,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const file = form.get('file');
 	if (!(file instanceof File) || file.size === 0) error(400, 'Choose a payslip file.');
 
-	// Whose slip it is decides which learned labels the reader uses, so the
-	// preview has to be asked the same question the filing will be.
+	// Whose slip it is decides which learned labels the reader uses.
 	const personId = String(form.get('personId') ?? '').trim();
 	const [owner] = personId
 		? await db.select({ name: person.name }).from(person).where(eq(person.id, personId))
@@ -34,10 +27,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!owner) error(400, 'Pick whose payslip this is.');
 
 	const reading = await readPayslip(new Uint8Array(await file.arrayBuffer()), owner.name);
-	// The slip's own currency decides how its figures print — a koruna amount
-	// formatted as euro is a different number. Only the formatting falls back to
-	// the base currency when the slip did not say; `currency` still crosses as
-	// null so the dialog asks for it rather than filling one in.
+	// Only the formatting falls back to the base currency; `currency` still
+	// crosses as null so the dialog asks rather than silently filling one in.
 	const currency = reading.currency ?? (await getBaseCurrency());
 
 	return json({

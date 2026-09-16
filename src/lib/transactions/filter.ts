@@ -78,23 +78,17 @@ export const DEFAULT_PAGE_SIZE = 25;
 
 /**
  * The review states the schema allows; anything else in the URL is noise.
- *
- * Derived rather than listed. This was written out by hand and omitted `filed` —
- * a state the demo seed writes and `ingest.ts` treats as terminal beside
- * `confirmed` — so a filed transaction could not be selected by any filter on
- * the register, and the comment above claiming otherwise was simply false.
+ * Derived rather than listed, so a state added to the enum is never silently
+ * missing from the filter.
  */
 export const REVIEW_STATES = ENUMS['transaction.review_state'];
 
 type ReviewState = EnumValue<'transaction.review_state'>;
 
 /**
- * What each review state is called on screen.
- *
- * A complete Record, so a state added to the enum stops the build here rather
- * than showing up as a blank pill and an empty option in the filter — which is
- * exactly what `filed` did while this map lived in the page and named three of
- * the four.
+ * What each review state is called on screen. A complete Record, so a state
+ * added to the enum stops the build here rather than showing up as a blank
+ * pill and an empty option in the filter.
  */
 export const REVIEW_LABELS: Record<ReviewState, string> = {
 	auto: 'filed by rule',

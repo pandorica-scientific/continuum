@@ -1,30 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * Naming a country, and drawing its flag, from its two letters.
+ * Naming a country, and drawing its flag, from its two letters. Neither is a
+ * table (which would go stale and need translating):
+ * - NAME comes from `Intl.DisplayNames`, which already knows the awkward ones.
+ * - FLAG is arithmetic — the two letters as regional indicator symbols.
  *
- * Neither is a table. A list of 250 country names is a list that goes out of
- * date and that somebody has to translate; both of these are already in the
- * platform, on the server and in the browser alike.
- *
- * - The NAME comes from `Intl.DisplayNames`, which ships with the runtime and
- *   knows the awkward ones — Kosovo, Côte d'Ivoire, Eswatini, Timor-Leste —
- *   without being told. It is also what would let the app speak another
- *   language later without a second table being written.
- * - The FLAG is arithmetic: a flag emoji is the country's two letters as
- *   regional indicator symbols, which is a fact about Unicode rather than data
- *   about countries. No image, no sprite sheet, nothing fetched.
- *
- * The map's own dataset names countries too, in `geodata/manifest.json`, but
- * those are cartographic labels — "Bosnia and Herz.", "Dem. Rep. Congo" —
- * abbreviated to fit on a map. They are the wrong thing to print on a card.
+ * The map's own dataset names countries too (`geodata/manifest.json`), but
+ * those are abbreviated cartographic labels, wrong to print on a card.
  */
 
-/**
- * One instance, not one per call.
- *
- * Constructing an `Intl.DisplayNames` is not free, and a trip list asks for a
- * name per destination per row.
- */
+/** One instance, not one per call — constructing `Intl.DisplayNames` isn't free. */
 let display: Intl.DisplayNames | null = null;
 
 function displayNames(): Intl.DisplayNames | null {
@@ -33,8 +18,7 @@ function displayNames(): Intl.DisplayNames | null {
 		display = new Intl.DisplayNames(['en'], { type: 'region' });
 		return display;
 	} catch {
-		// A runtime built without full ICU. The code itself is a poor name but an
-		// honest one, and it is better than a screen that will not render.
+		// Runtime built without full ICU — fall back to the code itself.
 		return null;
 	}
 }
@@ -49,11 +33,8 @@ export function countryName(code: string): string {
 }
 
 /**
- * "PT" → 🇵🇹, by arithmetic on the two letters.
- *
- * Returns an empty string rather than a placeholder box for anything that is
- * not two letters: a card with no flag reads fine, and a card with a tofu
- * glyph reads as broken.
+ * "PT" → 🇵🇹, by arithmetic on the two letters. Returns empty string (not a
+ * placeholder box) for anything that isn't two letters.
  */
 export function countryFlag(code: string): string {
 	if (!ALPHA2.test(code)) return '';

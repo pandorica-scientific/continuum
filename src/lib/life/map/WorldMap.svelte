@@ -47,11 +47,9 @@
 	 * to find out which gesture this was. Without the wait, zooming in on Europe
 	 * navigates to whichever country was under the pointer.
 	 *
-	 * The zoom listens on the `<svg>` ALONE and lets the event bubble to it. It
-	 * was on the countries as well, and the two handlers ran in turn on one
-	 * gesture: the country zoomed in, the bubbled event saw a zoomed map and
-	 * zoomed straight back out. Nothing moved, and only the labels — which
-	 * counter-scale — showed anything had happened.
+	 * The zoom listens on the `<svg>` ALONE and lets the event bubble to it — a
+	 * listener on the countries too would fire both handlers on one gesture,
+	 * zooming in and then straight back out.
 	 */
 	const DOUBLE_CLICK_MS = 260;
 	let pending: ReturnType<typeof setTimeout> | null = null;

@@ -2,17 +2,12 @@
 /**
  * Which documents a read path is allowed to return, as SQL fragments.
  *
- * One question lives here now: is this document's subject still current. There
- * used to be a second — may this actor know the document exists — carried by a
- * `sensitivity` column that a member's reads filtered out. It is gone. On an
- * instance where anyone who can reach the address signs in as anyone, hiding a
- * document from a member while the admin they could sign in as reads it was a
- * lock on a door with no wall, and it cost an `actor` argument threaded through
- * two dozen read paths to enforce. Everyone in a household sees everything.
+ * One question lives here: is this document's subject still current.
+ * Everyone in a household sees everything — there is no per-actor permission
+ * check, since anyone who can reach the address can sign in as anyone.
  *
- * What survives is EXISTENCE. A write action still may not name a document that
- * is not there, and that check was tangled up with the permission one — so it
- * is kept here, deliberately, rather than deleted alongside it.
+ * What survives is EXISTENCE: a write action still may not name a document
+ * that is not there.
  */
 import { eq, inArray, sql, type SQL } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
@@ -58,11 +53,9 @@ export type VisibleDocument = { ok: true; id: string } | NoSuchDocument;
 /**
  * Is there such a document at all?
  *
- * A write may not name a row that is not there, and this is the one place that
- * is asked. It used to answer a second question as well — may this actor touch
- * it — and losing that must not lose this: five actions each spelling out their
- * own existence check is five places for one of them to be forgotten, which is
- * exactly how the Documents screen's write actions once ended up unguarded.
+ * A write may not name a row that is not there, and this is the one place
+ * that asks — one shared check rather than each action spelling out its own
+ * and risking one being forgotten.
  */
 export async function assertDocumentExists(
 	id: string,
@@ -79,9 +72,8 @@ export async function assertDocumentExists(
 /**
  * The same question for a selection: which of these are really there.
  *
- * A bulk edit drops the ids that are not rather than failing the whole bar,
- * because refusing forty documents over one stale id is a louder answer than
- * the question.
+ * A bulk edit drops the ids that are not rather than failing the whole batch:
+ * refusing forty documents over one stale id is a louder answer than the question.
  */
 export async function existingDocumentIds(
 	ids: readonly string[],

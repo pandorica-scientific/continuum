@@ -2,10 +2,8 @@
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	/**
 	 * A shelf in the cookbook: made, renamed, re-marked, moved or taken away.
-	 *
-	 * One dialog rather than two, because a shelf has only a name and a mark —
-	 * a separate "edit" screen would be the same two fields with a different
-	 * title.
+	 * One dialog, not two — a shelf has only a name and a mark, so a separate
+	 * edit screen would be the same fields with a different title.
 	 */
 	import { enhance } from '$app/forms';
 	import Modal from '$lib/components/Modal.svelte';
@@ -43,8 +41,7 @@
 
 <Modal title={category ? `Edit ${category.name}` : 'New category'} {onclose}>
 	<div class="body">
-		<!-- Enhanced, so a shelf can be changed without reloading the screen
-		     underneath and losing what else was open. -->
+		<!-- Enhanced so the screen underneath isn't reloaded. -->
 		<form
 			class="main"
 			method="POST"
@@ -77,9 +74,7 @@
 
 		{#if category}
 			<div class="more">
-				<!-- Order and removal are their own forms: they post a shelf, not the
-				     name being typed above, and submitting one must not carry the
-				     other's half-finished edit with it. -->
+				<!-- Own forms so posting these doesn't carry the name field's edit. -->
 				<form method="POST" action="?/moveCategory" use:enhance>
 					<input type="hidden" name="categoryId" value={category.id} />
 					<span class="what">Where it sits</span>
@@ -112,8 +107,6 @@
 						if (!confirm(`Take the ${category.name} shelf away?`)) cancel();
 						return async ({ update, result }) => {
 							await update();
-							// A refusal has something to say, so the dialog stays open to
-							// say it. A shelf that went has nothing left to show.
 							if (result.type === 'success') onclose();
 						};
 					}}

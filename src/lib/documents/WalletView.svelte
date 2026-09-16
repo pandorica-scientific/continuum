@@ -73,12 +73,11 @@
 	 *
 	 * The ONE place in this repository where a colour is written rather than
 	 * taken from a token, and it is deliberate: these are alpha over an unknown
-	 * image, not theme colours. Flipping the ink per image was tried and
-	 * dropped — the artwork has light and dark passages within a single card, so
-	 * no single text colour is safe anywhere on it, and every element carries
-	 * its own dark ground instead. There is no token for "readable over a
-	 * photograph", and adding one to `app.css` would invite it to be used where
-	 * a theme colour belongs.
+	 * image, not theme colours. The artwork has light and dark passages within
+	 * a single card, so no single text colour is safe anywhere on it, and every
+	 * element carries its own dark ground instead. There is no token for
+	 * "readable over a photograph", and adding one to `app.css` would invite it
+	 * to be used where a theme colour belongs.
 	 */
 	const SUPPORT = 'rgba(10, 13, 19, 0.62)';
 	const INK = '#f2f5fa';
@@ -183,9 +182,8 @@
 					{@const chip = dateChip(row)}
 					{@const number = maskedNumber(row.identity?.number ?? null)}
 					<!-- The card and its caption: the face is what is recognised, the
-					     line under it is what is read. The date sits ON the face, once —
-					     it used to appear in both places, which read as two dates until
-					     you noticed they were the same one. -->
+					     line under it is what is read. The date sits ON the face only,
+					     once — the same date in both places reads as two dates. -->
 					<article class="wallet-card">
 						<button
 							type="button"
@@ -437,10 +435,8 @@
 	.country-gap {
 		height: 1px;
 	}
-	/* Sized against the EU disc beside it rather than against the text ramp's
-	   idea of a label: a flag two steps smaller than the mark it sits next to
-	   reads as an afterthought, and a flag emoji is wider than it is tall, so it
-	   still comes out shorter than the 24px disc at this size. */
+	/* Sized against the EU disc beside it, not the text ramp: a flag two steps
+	   smaller than the mark it sits next to reads as an afterthought. */
 	.flag {
 		font-size: var(--text-2xl);
 		line-height: 1;

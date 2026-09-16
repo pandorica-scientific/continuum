@@ -222,10 +222,8 @@ describe('the view a shelf opens in', () => {
 	});
 
 	it('opens every other shelf on its own engine, not on the list', async () => {
-		// The v0.8.0 ruling: a shelf is one question, one unit, one template, and
-		// the list is a view it can OPEN rather than what it is. Before this,
-		// six of the eight fell through to the list because only three layouts
-		// had been built.
+		// A shelf is one question, one unit, one template; the list is a view it
+		// can OPEN rather than what it is.
 		for (const [shelf, engine] of [
 			['identity', 'wallet'],
 			['health', 'dossier'],
@@ -239,9 +237,7 @@ describe('the view a shelf opens in', () => {
 	});
 
 	it('opens a shelf the household made on its template, too', async () => {
-		// The whole point of moving this onto the row: a Boat shelf is as good as
-		// a seeded one. Before v0.8.0 a custom shelf had no profile and therefore
-		// no layout at all.
+		// A household-made shelf is as good as a seeded one.
 		await addShelf(
 			{ label: 'Boat', template: 'obligations', unit: 'subject', question: 'Is she seaworthy?' },
 			testDb
@@ -277,9 +273,8 @@ describe('the view a shelf opens in', () => {
 
 describe('what a shelf brings with it', () => {
 	it('groups the list by type on every shelf, because the list is not the shelf', async () => {
-		// One default for every shelf since v0.8.0. A per-shelf grouping for the
-		// FALLBACK view was a preference nobody expressed: what a shelf is for is
-		// its engine, and the list is what you open when you want the other thing.
+		// One default for every shelf: what a shelf is for is its engine, and the
+		// list is what you open when you want the other thing.
 		for (const shelf of ['income_tax', 'identity', 'inbox'])
 			expect((await loadDocuments(asAdmin, `?shelf=${shelf}&view=list`)).group, shelf).toBe('type');
 	});
@@ -344,8 +339,8 @@ async function fileAgainst(name: string, targetIds: readonly string[]): Promise<
 
 describe('the about filter', () => {
 	it('offers every kind the paper points at, under the heading it belongs to', async () => {
-		// A loan and a transaction, neither of which the four-kind list the screen
-		// used to keep could name — so neither could be filtered by.
+		// A loan and a transaction: both must be filterable even though only one
+		// is pickable.
 		await fileAgainst('Yearly mortgage statement', [RECORD.loan, RECORD.person]);
 		await fileAgainst('Alza receipt', [RECORD.transaction]);
 
@@ -396,9 +391,8 @@ describe('capture', () => {
 	}
 
 	it('files the new document against every kind the form posted', async () => {
-		// One field, several kinds. The per-kind inputs the action used to read —
-		// personIds, propertyIds, accountIds, subjectIds — could not carry a loan
-		// at all, because no screen ever wrote a `loanIds` input.
+		// One field, several kinds — rather than a separate input per kind, which
+		// could never carry a kind no screen had written an input for.
 		const { addedIds } = await capture({
 			name: 'Mortgage statement',
 			linkIds: [RECORD.person, RECORD.loan, RECORD.transaction]
@@ -467,8 +461,8 @@ describe('the Inbox queue', () => {
 	});
 
 	it('draws the queue on the shelf itself, oldest first', async () => {
-		// The Inbox IS the queue since v0.8.0: it was a shelf that showed the
-		// problem and a separate page for doing something about it.
+		// The Inbox IS the queue, not a shelf that shows the problem plus a
+		// separate page for doing something about it.
 		await makeDocument(testDb, {
 			name: 'Older',
 			shelfKey: 'inbox',

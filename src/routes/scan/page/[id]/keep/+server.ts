@@ -47,9 +47,8 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		previewWidth: DRAFT_WIDTH
 	});
 
-	// Keeping the same page a second time at a different mode leaves the first
-	// artefact behind — black-and-white is a PNG and everything else a JPEG — and
-	// the document reads whichever it finds. Only the mode just chosen survives.
+	// Re-keeping at a different mode would leave the old artefact behind, so only
+	// the mode just chosen survives.
 	await dropOtherArtefact(sessionId, pageId, body.mode);
 
 	return json({ kept: true, width: result.width, height: result.height });

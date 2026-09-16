@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // The whole server-side scan, end to end: upload, inspect, keep, assemble.
-//
-// The route handlers are called directly, as `document-file-route.test.ts`
-// does, so this exercises the real endpoints rather than a copy of their logic.
-// It needs no database — a scan in progress is files and nothing else, which is
-// the property that lets an abandoned one be swept.
+// Route handlers are called directly, exercising the real endpoints. No database needed —
+// a scan in progress is files and nothing else, which is what lets an abandoned one be swept.
 import { readFile, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -60,11 +57,8 @@ async function upload(): Promise<{ sessionId: string; pageId: string; outline: u
 
 describe('the scan endpoints', () => {
 	it('answers with an outline, which is what every later call sends back', async () => {
-		// The whole scan is one shape travelling in a circle: the server finds it,
-		// the client stores it and hands it back on every mode tap and corner
-		// drag. The two ends agreeing on its NAME is not a detail — a rename on
-		// one side alone leaves every re-render silently uncropped, because a
-		// missing outline is a legal value meaning "nothing was found".
+		// A missing outline is a legal value meaning "nothing was found", so a rename on
+		// either side would silently leave every re-render uncropped.
 		const { outline } = await upload();
 		expect(outline).toHaveProperty('corners.tl.x');
 	}, 60_000);
@@ -86,10 +80,9 @@ describe('the scan endpoints', () => {
 	}, 60_000);
 
 	it('serves the uncropped original for the corner screen', async () => {
-		// The fallback for a page whose blob the phone has released, and for a
-		// HEIC the browser will not decode. The decode happens in the child: doing
-		// it here would put libheif's never-shrinking heap in the web server, in
-		// the process the child exists to keep clean.
+		// Fallback for a page whose blob the phone has released, or a HEIC the browser
+		// can't decode. Decoding happens in the child so libheif's never-shrinking heap
+		// stays out of the web server.
 		const { sessionId, pageId } = await upload();
 		const ask = () =>
 			getOriginal(
@@ -102,16 +95,14 @@ describe('the scan endpoints', () => {
 		expect(original.status).toBe(200);
 		expect(original.headers.get('content-type')).toBe('image/jpeg');
 
-		// Asked for twice — cancelling out of the corner screen and going back in
-		// is one tap — and the second time it is a file, not another decode.
+		// Second call must be served from the file, not another decode.
 		const again = await ask();
 		expect((await again.arrayBuffer()).byteLength).toBeGreaterThan(1000);
 	}, 60_000);
 
 	it('answers a malformed id with a 400 rather than a 500', async () => {
-		// Traversal is refused deeper down and always was, but by throwing a plain
-		// Error — which SvelteKit reports as a server fault, with a stack trace in
-		// the log, for someone following a stale link.
+		// Traversal is refused deeper down, but via a plain Error, which SvelteKit
+		// would otherwise report as a 500 server fault.
 		await expect(
 			getPreview(
 				event({

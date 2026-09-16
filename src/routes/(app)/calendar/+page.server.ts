@@ -92,16 +92,12 @@ export const load: PageServerLoad = async ({ url }) => {
 	const seriesById = new Map(series.map((s) => [s.id, s]));
 
 	const occurrences = allOccurrences(series, exceptionsByEvent, start, end).map((o) => {
-		// The OCCURRENCE's zone, which is the series' unless this one overrides it.
-		// Reading the series' zone here ignored a "this event only" edit that moved
-		// one occurrence to another zone, and printed it at the wrong hour.
+		// Occurrence's own zone, which may override the series' (a "this event only" edit).
 		const tz = o.tz || HOUSEHOLD_TZ;
 		return {
 			...o,
-			// Read on the event's OWN clock, not UTC. `slice(0, 10)` put anything
-			// before the offset — an all-day event at local midnight, a 00:30
-			// alarm — on the previous day, so the dot, the agenda row and the
-			// per-cell count all disagreed with the time printed beside them.
+			// On the event's own clock, not UTC — slice(0, 10) on UTC put a
+			// near-midnight event on the wrong day across the dot/agenda/count.
 			date: localDate(o.startsAt, tz),
 			time: o.allDay
 				? null
@@ -119,10 +115,8 @@ export const load: PageServerLoad = async ({ url }) => {
 	// day's dot, because the grid answers "is anything happening", not "did the
 	// ledger write anything".
 	const lead = (first.getUTCDay() + 6) % 7;
-	// The household's today, not UTC's. Between local midnight and the offset the
-	// two are different days, and this one both highlights a cell and pre-fills
-	// the date on a new event — so a note made just after midnight was filed on
-	// the day before.
+	// Household's today, not UTC's — used to highlight a cell and pre-fill new
+	// events, so a note just after local midnight isn't filed on the day before.
 	const today = localDate(now, HOUSEHOLD_TZ);
 	const cells = [
 		...Array.from({ length: lead }, () => null),
@@ -173,10 +167,7 @@ export const load: PageServerLoad = async ({ url }) => {
 			failing: Boolean(account.lastError)
 		})),
 		// Edits sync discarded, and dates a calendar edit wrote into the ledger.
-		// Surfaced HERE and not only in the briefing, because the briefing raises
-		// them and this is the screen it sends people to — with nothing on it to
-		// clear them, the card stayed up forever and taught the household to ignore
-		// the briefing.
+		// Surfaced here too, not just in the briefing, since this is the screen it sends people to.
 		conflicts: conflicts.map((row) => ({
 			id: row.id,
 			detectedAt: row.detectedAt.toISOString(),
@@ -194,11 +185,9 @@ export const load: PageServerLoad = async ({ url }) => {
 /**
  * The instant at which the household's clock reads this date and time.
  *
- * `new Date('2026-08-17T09:00:00')` — no offset — is parsed in the SERVER's
- * zone, which in the shipped image is UTC. The row records tz: Europe/Prague and
- * every read path renders in Prague, so a 09:00 event was stored as 09:00Z and
- * read back as 11:00; saving it again stored 11:00Z and read back as 13:00, and
- * the event walked forward by the offset on every single edit.
+ * A naive `new Date(...)` (no offset) parses in the server's zone (UTC in the
+ * shipped image), not the household's — which would drift the stored instant
+ * forward by the offset on every edit.
  */
 function householdInstant(date: string, time: string): Date {
 	const [hour, minute] = time.split(':').map(Number);
@@ -218,7 +207,6 @@ function householdInstant(date: string, time: string): Date {
 	);
 }
 
-/** Read the event form into the shape the mutations take. */
 function readEvent(form: FormData) {
 	const text = (key: string) => String(form.get(key) ?? '').trim();
 	const allDay = form.get('allDay') === 'on';
@@ -232,19 +220,10 @@ function readEvent(form: FormData) {
 		rrule: text('rrule') || null
 	};
 
-	// AN ALL-DAY EVENT IS A DATE, NOT AN INSTANT, so it is anchored to UTC.
-	//
-	// Anchoring it to the household's wall clock stored "6 August, all day" as
-	// 2026-08-05T22:00:00Z, and every consumer that reads a date back off the
-	// instant then reported the fifth: the month grid (`startsAt.slice(0, 10)`),
-	// Google's `{ date }`, and iCalendar's `VALUE=DATE`. The event showed up a
-	// day early on screen before any calendar was even connected, and the first
-	// sync round trip wrote that wrong day back into the row.
-	//
-	// UTC midnight through end of day is also exactly how the ledger's own
-	// generated all-day events are held (see the sync engine's localItems), so
-	// authored and generated events now round-trip through both providers the
-	// same way instead of only one of them being right.
+	// An all-day event is a date, not an instant, so it's anchored to UTC — the
+	// household's wall clock would shift the date across every consumer that
+	// reads it back with slice(0, 10) (month grid, Google, iCalendar). This also
+	// matches how the ledger's own generated all-day events are held.
 	if (allDay) {
 		const valid = /^\d{4}-\d{2}-\d{2}$/.test(date);
 		return {

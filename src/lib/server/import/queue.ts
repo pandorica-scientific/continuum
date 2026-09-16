@@ -2,17 +2,14 @@
 /**
  * Statements are read in the background, one at a time.
  *
- * Reading is not always fast. A 140-movement statement spread over eight pages
- * is recovered from glyph coordinates by two independent assemblers, and every
- * candidate reading is proved before one of them is chosen. None of that
- * belongs on a request someone is waiting behind, and a person dropping six
- * files should see six of them queue rather than one long pause.
+ * Reading is not always fast — recovering a table from glyph coordinates and
+ * proving candidate readings does not belong on a request someone is waiting
+ * behind.
  *
- * ONE at a time, deliberately — and one across every CPU-bound kind, not one
- * per kind. The claim, the lease and the sweep now live in
- * `$lib/server/jobs/dispatcher`, which reading a statement shares with reading
- * a scanned document: on the sort of box this product is self-hosted on, two of
- * those at once starve the web server that is meant to stay responsive.
+ * ONE at a time, deliberately, and one across every CPU-bound kind, not one
+ * per kind: the claim, lease and sweep live in `$lib/server/jobs/dispatcher`,
+ * shared with document extraction, since two of those at once starve the web
+ * server on the sort of box this product is self-hosted on.
  *
  * What is left here is the import half: accepting a file, running one, and the
  * list a person watches while they wait.
@@ -82,10 +79,9 @@ export const runImportJob: JobHandler = async (claimed, handle) => {
 			bytes,
 			claimed.subjectId ?? undefined,
 			handle,
-			// This is the whole reason the queue exists. Reading a page as an
-			// image takes seconds per page, which is unacceptable on a request
-			// and perfectly acceptable here — and it is only ever reached when
-			// the text layer could not prove itself.
+			// This is the whole reason the queue exists: reading a page as an image
+			// takes seconds, fine here but not on a request, and is only ever
+			// reached when the text layer could not prove itself.
 			{ ocr: true }
 		);
 	} catch (error) {
@@ -96,9 +92,8 @@ export const runImportJob: JobHandler = async (claimed, handle) => {
 	return {
 		result: result ?? undefined,
 		error: failure,
-		// Kept when the file was NOT read: mapping it by hand needs the bytes, and
-		// asking someone to upload the same statement again because we could not
-		// read it the first time is a poor apology. Cleared once the job is swept.
+		// Kept when the file was NOT read: mapping it by hand needs the bytes.
+		// Cleared once the job is swept.
 		keepBlob: (result?.rowsAdded ?? 0) === 0
 	};
 };
@@ -119,10 +114,9 @@ export async function queueStatus(
 		// Newest first, so a fresh upload is never pushed off the end by settled
 		// work not yet swept up; reversed below into the order the files arrived.
 		//
-		// Named columns, deliberately. `payload` is the whole uploaded file in
-		// base64 and is retained for an hour on any job that could not be read;
-		// selecting it here pulled up to twenty files out of the database and threw
-		// them away on every poll of a page that polls every 1.5 seconds.
+		// Named columns, deliberately: `payload` is the whole uploaded file in
+		// base64, and selecting it here would pull up to twenty files out of the
+		// database on every poll of a page that polls every 1.5 seconds.
 		handle
 			.select({
 				id: job.id,
@@ -137,11 +131,9 @@ export async function queueStatus(
 			.where(
 				and(
 					eq(job.kind, 'import'),
-					// A settled job stops being news after ten minutes. It leaves the
-					// list on its own rather than sitting there until somebody sweeps
-					// it, and there is no timer: `finished_at` is already recorded, so
-					// the query simply stops asking for old ones. Anything still queued
-					// or running is listed however long it has been waiting.
+					// A settled job stops being news after ten minutes: the query
+					// simply stops asking for old ones. Anything still queued or
+					// running is listed however long it has been waiting.
 					or(isNull(job.finishedAt), gt(job.finishedAt, new Date(Date.now() - SETTLED_MS)))
 				)
 			)
@@ -167,9 +159,7 @@ export async function queueStatus(
  * The bytes of a job that has not been swept away yet.
  *
  * A file that could not be read is still in the queue with its payload intact,
- * which is what makes mapping it possible without asking for the upload again —
- * the person has already handed it over once, and being asked twice because we
- * could not read it the first time is a poor apology.
+ * which is what makes mapping it possible without asking for the upload again.
  */
 export async function jobBytes(
 	id: string,
@@ -194,10 +184,8 @@ export async function jobBytes(
  * it. Finished or failed: the reading is over and the row is a receipt, so
  * removing it clears the list.
  *
- * Running: refused. The read is happening now, in another worker, and there is
- * no way to stop it from here — deleting the row would leave that worker
- * finishing into nothing and could leave a statement half ingested. Saying so
- * is better than a control that pretends.
+ * Running: refused — deleting the row would leave that worker finishing into
+ * nothing and could leave a statement half ingested.
  */
 export async function dismissJob(
 	id: string,

@@ -45,12 +45,8 @@ export const load: PageServerLoad = async ({ params }) => {
 };
 
 /**
- * Put an uploaded picture on the data volume.
- *
- * Shared by the two upload actions, which differ only in the field they read and
- * the column they write. `saveUpload` refuses anything that is not a picture or
- * a PDF, and it throws to say so — caught here so a wrong file is a message
- * rather than a 500.
+ * Put an uploaded picture on the data volume. Shared by both upload actions;
+ * catches `saveUpload`'s throw so an invalid file is a message, not a 500.
  */
 async function storeUpload(
 	file: FormDataEntryValue | null
@@ -82,16 +78,9 @@ function flavoursFrom(form: FormData): string[] {
 
 export const actions: Actions = {
 	/**
-	 * One of the three ownership controls.
-	 *
-	 * The browser posts which control was pressed; the rule that turns that into
-	 * a new pair lives in `ownership.ts` and runs here. Posting the new numbers
-	 * instead would put a second implementation of `opened <= owned` in a place
-	 * nothing tests.
-	 *
-	 * The rule is handed to `moveCounts`, which reads the row and writes it back
-	 * under one lock — two people pressing a control at once otherwise lose one
-	 * of the two presses.
+	 * One of the three ownership controls. The rule that turns a press into a
+	 * new pair lives in `ownership.ts`; `moveCounts` reads and writes it back
+	 * under one lock, so two concurrent presses don't lose one.
 	 */
 	count: async ({ request, params }) => {
 		const id = asRowId(params.id);
@@ -114,16 +103,12 @@ export const actions: Actions = {
 		if (!tastedOn) return fail(400, { on: 'tasting', message: 'When was it opened?' });
 
 		const score = optionalInt(form.get('score'));
-		// Opening the bottle happens inside `logTasting`, under the same lock as
-		// the tasting row — the count it opens from is read there, not here.
+		// Opening the bottle happens inside `logTasting`, under the same lock as the tasting row.
 		const logged = await logTasting({
 			bottleId: id,
 			tastedOn,
 			personId: asOptionalRowId(form.get('personId')) ?? null,
-			// A score outside the scale is a typo, not an opinion. The scale
-			// starts at 1, which is what the CHECK on `tasting` says — clamping
-			// to 0 handed the database a number it refuses and the form came
-			// back a 500 rather than a saved tasting.
+			// Clamped to 1, matching the CHECK on `tasting` — 0 would fail the insert.
 			score: score === null ? null : Math.min(100, Math.max(1, score)),
 			note: String(form.get('note') ?? '').trim(),
 			flavours: flavoursFrom(form)
@@ -154,24 +139,15 @@ export const actions: Actions = {
 
 		await updateBottle(id, {
 			...read.fields,
-			// Lowering how many are owned cannot leave more open than exist — the
-			// CHECK would refuse it, and refusing an edit over a number the form
-			// does not show would be unexplainable.
+			// Lowering owned cannot leave more open than exist, or the CHECK refuses the update.
 			opened: Math.min(counts.opened, read.fields.owned)
 		});
 		return { edited: true };
 	},
 
 	/**
-	 * One photograph of the bottle, kept twice.
-	 *
-	 * The crop the household dragged the corners onto goes on the label plate,
-	 * which is what every card in the cellar draws. The whole frame it came out
-	 * of goes on this page. Same picture, two jobs — so nobody photographs the
-	 * same bottle twice, and the page never shows two bottles.
-	 *
-	 * The uncropped file is optional: a photograph that arrived without the
-	 * editor has no separate original, and then the one file is both.
+	 * One photograph, kept twice: the cropped label plate (used by every card)
+	 * and the uncropped original. The original is optional — falls back to the crop.
 	 */
 	photo: async ({ request, params }) => {
 		const id = asRowId(params.id);

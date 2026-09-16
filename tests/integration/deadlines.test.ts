@@ -10,14 +10,12 @@ import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harn
 import { makeDocument, makeLoan, makeProperty } from './fixtures';
 
 /**
- * D7: the record owns the deadline.
+ * The record owns the deadline: a lease contract's `expires_on` and the
+ * tenancy's own `ends_on` describe the same fact when they agree, so the
+ * document copy must not double the reminder.
  *
- * A lease contract's `expires_on` and the tenancy's own `ends_on` describe the
- * same fact twice when they agree — the demo seed used to ship exactly that,
- * and both the Overview and the calendar reminded twice for one lease ending.
  * `documentExpiry` (the briefing source) reads the module-level `db`
- * singleton, not a handle, so it has to be pointed at this harness the same
- * way `restricted-read-paths.test.ts` and `archive-scope.test.ts` do it —
+ * singleton, not a handle, so it must be pointed at this harness —
  * `generateEvents` takes an explicit handle and needs none of this.
  */
 vi.mock('$env/dynamic/private', () => ({
@@ -53,11 +51,8 @@ beforeEach(async () => {
 const soon = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
 const different = new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10);
 /**
- * Past the 120 days `leaseExpiry` looks, inside the 210 `documentExpiry` does.
- *
- * The window a record's own reminder watches is narrower than the document's,
- * so between the two there is a band where suppressing the document's copy
- * suppresses the only reminder there is.
+ * Past the 120 days `leaseExpiry` looks, inside the 210 `documentExpiry` does —
+ * a band where suppressing the document's copy suppresses the only reminder.
  */
 const beyondTheLeaseWindow = new Date(Date.now() + 150 * 86400000).toISOString().slice(0, 10);
 
@@ -143,12 +138,10 @@ async function seedRefixLetter(expiresOn: string, loanId: string): Promise<strin
 /**
  * The events on `soon` that this file is about.
  *
- * `generateEvents` also emits the schedule rules — the import reminder and the
- * quarterly report — which have no row behind them and land on the first
- * working day of a month. `soon` is derived from today, so roughly one run in
- * thirty it IS that day, and a test counting every event on the date fails on
- * a pair of reminders it never asked about. Filter to the two sides of the
- * duplicate under test, exactly as the briefing tests filter by kind.
+ * `generateEvents` also emits schedule rules (import reminder, quarterly
+ * report) with no row behind them, landing on the first working day of a
+ * month — `soon` can coincide with that day, so filter to the two sides of
+ * the duplicate under test rather than counting every event on the date.
  */
 function onDateFrom(
 	events: Awaited<ReturnType<typeof generateEvents>>,
@@ -246,11 +239,8 @@ describe('a re-fixation letter dated differently from the loan’s current fixat
 	});
 });
 
-/**
- * D7 suppresses a DUPLICATE. Where the owning reminder is never emitted there
- * is nothing to duplicate, and skipping the document's copy deletes the
- * household's only notice of the date.
- */
+// This suppresses a duplicate; where the owning reminder is never emitted,
+// skipping the document's copy would delete the only notice of the date.
 describe('a document whose owning record reminds about nothing', () => {
 	it('still reminds when the lease is further out than the tenancy source looks', async () => {
 		const { tenancyId } = await seedTenancy(beyondTheLeaseWindow);

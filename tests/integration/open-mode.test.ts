@@ -89,8 +89,7 @@ describe('open mode', () => {
 
 	it('can always be turned off, by anyone, with no credential', async () => {
 		await enableOpenMode(ADMIN, 'correct-horse-battery', testDb);
-		// Once the door is open anyone inside could close it anyway; demanding a
-		// credential to close it would only stop the honest.
+		// Requiring a credential to close it would only stop the honest.
 		expect((await disableOpenMode(testDb)).ok).toBe(true);
 		expect(await isOpenMode(testDb)).toBe(false);
 	});

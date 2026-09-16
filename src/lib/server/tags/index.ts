@@ -486,9 +486,8 @@ export async function tagTotals(handle: Queryable = db): Promise<
 			// still rendered on the row in the register.
 			.from(transaction),
 		handle.select().from(transactionSplit),
-		// `tag_link` holds links to every kind of record, so these two must say
-		// which kind they mean. They used to be separate tables, and the table name
-		// was carrying that meaning for free.
+		// `tag_link` holds links to every kind of record, so these two must
+		// join in the target's own table to say which kind they mean.
 		handle
 			.select({ transactionId: tagLink.targetId, tagId: tagLink.tagId })
 			.from(tagLink)

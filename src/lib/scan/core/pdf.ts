@@ -24,8 +24,8 @@ import type { Frame, PageMode } from './types.ts';
  *
  * The `jpeg` shape exists because the server renders and encodes ONCE, before
  * assembly ever runs. Handing pdf-lib a `Frame` there would decode the stored
- * artefact and re-encode it — two lossy passes over the same page, which is
- * precisely the compounding v0.8.5 had to raise both qualities to survive.
+ * artefact and re-encode it — two lossy passes over the same page, compounding
+ * the quality loss.
  *
  * Black-and-white keeps the `frame` shape and must: it is not a JPEG at all by
  * the time it reaches the document, it is a 1-bit DeviceGray stream, and

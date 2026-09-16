@@ -5,11 +5,9 @@ import type { EnumValue } from '$lib/enums';
 /**
  * The card faces, keyed by file name without extension.
  *
- * Read from the directory rather than listed here: a set that is written down
- * twice goes wrong the first time a country is added, and the failure — a card
- * drawing a blank — looks like a styling bug rather than a missing file. Vite
- * resolves and fingerprints each URL at build time, so this costs nothing at
- * run time and a renamed file is a build error rather than a 404.
+ * Read from the directory rather than listed here, so a set written down
+ * twice can't drift when a country is added. Vite resolves and fingerprints
+ * each URL at build time.
  */
 const CARDS = import.meta.glob<string>('$lib/assets/doc-placeholders/cards/*.webp', {
 	eager: true,
@@ -34,9 +32,8 @@ export const ART_KEYS: ReadonlySet<string> = new Set(byKey.keys());
 /**
  * Which artwork an identity kind is drawn on.
  *
- * Four faces were drawn per country, and the enum has five kinds: a residence
- * permit shares the generic identity face rather than getting a fifth drawing
- * of a document whose appearance varies by issuing country anyway.
+ * Four faces per country against five kinds: a residence permit shares the
+ * generic identity face rather than getting a fifth drawing.
  */
 const ART_KIND: Record<EnumValue<'document_identity.kind'>, string> = {
 	passport: 'passport',
@@ -52,11 +49,8 @@ export const GENERIC_ART = 'generic-document';
 /**
  * The face for a document, narrowing until something exists.
  *
- * `<country>-<kind>` is the drawing that was made for exactly this document;
- * `<country>-generic-id` keeps the country when the kind has no face of its
- * own; `generic-document` is the last step and always resolves. The chain
- * matters because the set covers thirty countries and the field accepts all of
- * them — a Brazilian passport gets a card, not a hole.
+ * `<country>-<kind>` is tried first; `<country>-generic-id` keeps the country
+ * when the kind has no face of its own; `generic-document` always resolves.
  */
 export function documentArtUrl(
 	country: string | null,

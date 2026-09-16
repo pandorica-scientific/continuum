@@ -2,10 +2,7 @@
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	/**
 	 * Every time somebody opened this bottle and said something about it.
-	 *
-	 * Newest first, because the last opinion is the one being checked against.
-	 * The flavour chips carry their own series colours so the same word is the
-	 * same colour here and on the radar above.
+	 * Newest first. Flavour chips share series colours with the radar above.
 	 */
 	import { enhance } from '$app/forms';
 	import PersonTag from '$lib/components/PersonTag.svelte';
@@ -85,9 +82,7 @@
 		margin: 0;
 		padding: 0;
 	}
-	/* Each occasion in its own box rather than divided rows: a tasting is a date,
-	   a person, a score and some words, and a rule between them does not say as
-	   clearly as a box does that they belong to one evening. */
+	/* Boxed per occasion rather than divided rows — reads more clearly as one evening. */
 	li {
 		display: flex;
 		flex-direction: column;

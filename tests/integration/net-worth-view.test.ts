@@ -5,12 +5,9 @@ import { makePerson } from './fixtures';
 import { ALL_MIGRATIONS, startPostgres, type Harness } from './harness';
 
 /**
- * Every valued thing in one place, with the liabilities-are-negative rule
- * applied once in the view rather than in each caller that has to remember it.
- *
- * The point of the view is not tidiness: it is that adding an asset type is one
- * table plus one UNION branch, and net worth picks it up without anyone editing
- * TypeScript. The last test here is that promise, tested rather than asserted.
+ * The liabilities-are-negative rule lives once in the view, not in each caller.
+ * Adding an asset type is one table plus one UNION branch, and net worth picks
+ * it up without any TypeScript change — the last test here asserts that.
  */
 let harness: Harness;
 
@@ -93,8 +90,8 @@ describe('computeNetWorth over the view', () => {
 	});
 
 	it('picks up an asset type that did not exist when the code was written', async () => {
-		// The whole promise of the view: a new table, one UNION branch, and net
-		// worth counts it. No TypeScript is edited between the two assertions.
+		// A new table plus one UNION branch, and net worth counts it — no
+		// TypeScript edited between the two assertions.
 		const before = await computeNetWorth(harness.db);
 
 		await harness.sql.unsafe(`

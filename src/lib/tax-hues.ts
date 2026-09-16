@@ -4,11 +4,10 @@
 /**
  * The four measured soft steps, then the ranked reserve.
  *
- * Assigned by order of appearance in the data rather than from a fixed country
- * table: a household that starts filing in Portugal should not need this file
- * edited. The soft four were measured together for colour-vision separation
- * (see scratch-workspace/v0.4.3/soft-token-contrast.md); past them the reserve
- * takes over, ranked as it is for the category palette.
+ * Assigned by order of appearance in the data rather than from a fixed
+ * country table, so a household filing in a new country needs no edit here.
+ * The soft four were measured together for colour-vision separation; past
+ * them the reserve takes over, ranked as for the category palette.
  */
 const SOFT = [
 	'--series-health-soft',

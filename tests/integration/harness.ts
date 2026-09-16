@@ -1,18 +1,5 @@
-// One embedded Postgres, started the same way for every integration suite.
-//
-// Each suite used to carry its own copy of this: its own hand-picked port, its
-// own scratch directory, its own migration loop. Eleven copies, and they had
-// silently drifted into six different ideas of what "the schema" means — three
-// ran every migration but one, one ran all of them, two stopped at 0027, two
-// applied a single file, and three hand-wrote CREATE TABLE that had to be kept
-// in step with schema.ts by hand and never was. A migration added today was
-// therefore exercised by whichever suites happened to be in the first group,
-// which is not a decision anyone made.
-//
-// So the lifecycle lives here once. There used to be a second thing suites
-// differed on — WHICH migrations to apply — and named filters for it; since the
-// squash to a single baseline there is only one migration, and nothing to
-// select among.
+// One embedded Postgres, started the same way for every integration suite, so
+// every suite runs against the same schema rather than its own drifted copy.
 
 import { readFileSync, readdirSync } from 'node:fs';
 import { createServer } from 'node:net';
@@ -55,14 +42,7 @@ export function statements(sqlText: string): string[] {
 		);
 }
 
-/**
- * A port nobody is listening on.
- *
- * Asked for rather than assigned by hand. The eleven copies this replaces held a
- * hand-maintained registry of ports, with two numbers already skipped where
- * someone had hit a collision and bumped past it — and nothing stopped the
- * twelfth suite from picking one that was taken.
- */
+/** A port nobody is listening on, asked for rather than assigned by hand. */
 async function freePort(): Promise<number> {
 	return new Promise((resolvePort, reject) => {
 		const server = createServer();
@@ -172,11 +152,9 @@ export async function startPostgres(
 			for (const file of migrationFiles().filter(keep)) {
 				await apply(readFileSync(resolve('drizzle', file), 'utf8'));
 			}
-			// What `boot()` does immediately after `runMigrations()`, for the same
-			// reason: fourteen columns carry a foreign key into `currency`, and the
-			// baseline seeds only the two codes it needed to attach them. A suite
-			// that writes a USD rate would otherwise fail on an empty table rather
-			// than on anything it was testing.
+			// What `boot()` does immediately after `runMigrations()`: the baseline
+			// only seeds the currency codes it needs, so a suite writing a different
+			// rate would otherwise fail on an empty table rather than on its own test.
 			await refreshCurrencies(db);
 		},
 		async stop() {

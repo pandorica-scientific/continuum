@@ -205,13 +205,10 @@ async function ingestStatement(
 
 		// V1 Revolut stored amount - fee but discarded the fee itself, so its
 		// current fingerprint cannot be reconstructed by a SQL migration.
-		// Replay supplies the missing fee: bind the v3 fingerprint to the
-		// exact legacy source facts and keep the historical row untouched.
+		// Replay supplies the missing fee, binding the v3 fingerprint to the
+		// legacy row without touching it.
 		if (statement.bank === 'revolut') {
 			const fee = row.feeMinor ?? 0n;
-			// The boundary between the reader's vocabulary and the schema's: a
-			// ParsedRow says `bookedAt` because that is what the bank printed, and
-			// the stored column says `booked_on`.
 			const key = legacyRevolutKey({
 				...row,
 				bookedOn: row.bookedAt,
@@ -290,27 +287,17 @@ async function ingestStatement(
 /**
  * A running balance chain proves everything except its own beginning.
  *
- * Every step follows from the one above it, so removing a movement from the
- * HEAD of a statement leaves a chain that still closes perfectly — and still
- * agrees with a printed closing balance, because the sum and the starting point
- * shift by the same amount. A printed OPENING balance catches it. Two of the
- * sampled banks print none: a Revolut export of 38 movements and a CaixaBank
- * statement of 140, which between them are most of the rows this product files
- * on chain proof alone.
+ * Removing a movement from the HEAD of a statement still closes the chain and
+ * still agrees with a printed closing balance, since the sum and the starting
+ * point shift together. A printed OPENING balance catches it; when there is
+ * none, only the account's last recorded balance can — the next statement
+ * must begin there.
  *
- * Nothing inside such a file can settle it. What can is the account: the balance
- * we last recorded is where the next statement must begin.
- *
- * The period cannot be used to establish adjacency, because a statement that
- * prints no opening balance usually prints no period either — both are then
- * derived from the rows, so deleting the first row moves the period start along
- * with it and the two always agree. The gap in TIME is what remains, and it is
- * measured from the last balance we hold to the first movement in the file.
- *
- * Beyond a month that gap is assumed to be a missing statement rather than a
- * missing row, and nothing is said. That is the honest limit of what an account
- * balance can prove: a hole in someone's statement history looks exactly like a
- * hole in one statement, and refusing the import would punish the wrong one.
+ * The period can't establish adjacency either, since a statement with no
+ * opening balance usually has no printed period, both being derived from the
+ * rows. So the check uses the time gap between the account's last balance and
+ * the file's first movement, and gives up past a month: beyond that a gap
+ * looks the same whether it's a missing statement or a missing row.
  */
 const ANCHOR_WINDOW_DAYS = 31;
 
@@ -325,7 +312,7 @@ function assertChainStartsWhereTheAccountLeftOff(
 
 	const dates = statement.rows.map((row) => row.bookedAt).sort();
 	const firstMovement = dates[0];
-	// A statement that starts on or before the balance we hold is history being
+	// A statement starting on or before the held balance is history being
 	// filled in behind us, not the next instalment.
 	if (firstMovement <= acct.balanceOn) return;
 	const days =
@@ -334,7 +321,7 @@ function assertChainStartsWhereTheAccountLeftOff(
 	if (days > ANCHOR_WINDOW_DAYS) return;
 
 	// The chain may be listed either way round, so both ends are candidates for
-	// its beginning; the proof engine has already established that one of them is.
+	// its beginning.
 	const net = (row: ParsedRow) => row.amountMinor - (row.feeMinor ?? 0n);
 	const openings: bigint[] = [];
 	for (const row of [statement.rows[0], statement.rows[statement.rows.length - 1]]) {
@@ -351,26 +338,12 @@ function assertChainStartsWhereTheAccountLeftOff(
 }
 
 /**
- * What a filed statement is called on the shelf.
- *
- * Built from what the statement proved about itself rather than from the file
- * name, because bank exports are named things like
- * `account-statement_2026-07-01_2026-07-31_en_38c41c.csv`. The file name is the
- * fallback for a reading that could not say.
- */
-/**
  * The span a filed statement covers, from the best evidence in the file.
  *
- * The STATED period wins wherever a reader found one: it is what the file says
- * about itself, and it is right even where the first week of it held no
- * movements. But `periodStart` and `periodEnd` are OPTIONAL on
- * `ParsedStatement` and most readers leave them undefined — an ABO export names
- * no period at all — so the movements are the fallback. An accepted import
- * always has movements, which is what makes every accepted statement datable.
- *
- * Safe as a fallback only because everything downstream works in whole months:
- * a statement covering all of April whose first movement lands on the 3rd
- * resolves to April either way.
+ * The STATED period wins wherever a reader found one. `periodStart` and
+ * `periodEnd` are optional on `ParsedStatement` and most readers leave them
+ * undefined (an ABO export names no period at all), so the movements are the
+ * fallback — safe only because everything downstream works in whole months.
  *
  * Widest across every statement in the file, since one CAMT or ABO file may
  * carry several months, and snapped out to whole months at both ends.
@@ -389,11 +362,9 @@ function statementPeriod(statements: ParsedStatement[]): { start: string; end: s
 		if (end) ends.push(end);
 	}
 	if (starts.length === 0 || ends.length === 0) return null;
-	// Snapped to month boundaries, because that is what the column MEANS:
-	// `document_period_first_of_month` has said so since the salary importer,
-	// and the coverage ribbon works in whole months regardless. A statement
-	// running the 15th to the 14th covers April and May, and storing the 15th
-	// would record a precision nothing reads.
+	// Snapped to month boundaries: the coverage ribbon works in whole months
+	// regardless, so a statement running the 15th to the 14th covers April and
+	// May and storing the 15th would record a precision nothing reads.
 	return {
 		start: firstOfMonth(starts.sort()[0]),
 		end: lastOfMonth(ends.sort()[ends.length - 1])
@@ -429,10 +400,9 @@ function statementDocumentTags(statements: ParsedStatement[]): string[] {
  * Ingest one uploaded statement file end to end.
  *
  * `handle` is `Db`, not the wider `Queryable` most of this module takes:
- * `enqueueExtraction` below runs after `inTransaction` returns, on the
- * strength of that having committed. A caller passing its own open
- * transaction here would make that call still be inside it — the type is
- * what keeps that from compiling rather than needing to be remembered.
+ * `enqueueExtraction` below runs after `inTransaction` returns, relying on
+ * that commit. The narrower type stops a caller passing its own open
+ * transaction, which would leave that call still inside it.
  */
 export async function ingestFile(
 	filename: string,
@@ -441,9 +411,8 @@ export async function ingestFile(
 	handle: Db = db,
 	/**
 	 * Allow the page to be read as an image when its text layer cannot be
-	 * proven. Rasterising and recognising a statement takes seconds per page, so
-	 * only a caller that is not holding a request open may ask for it — in
-	 * practice, the queue.
+	 * proven. Rasterising and recognising takes seconds per page, so only a
+	 * caller not holding a request open may ask for it — in practice, the queue.
 	 */
 	options: { ocr?: boolean } = {}
 ): Promise<IngestResult> {
@@ -467,18 +436,12 @@ export async function ingestFile(
 
 	let statements: ParsedStatement[];
 	try {
-		// Layouts this household has already confirmed. A saved profile is what
-		// stops the second statement from a bank asking the same question again.
-		// Fetched only if the file turns out to need one.
-		// The account states its currency, and when the person named one at upload
-		// we know it before a byte is parsed. That is the authority — the document
-		// is corroboration — and passing it here is what stops a statement whose
-		// figures name no currency being refused for want of one, or worse, read
-		// under a guess.
-		//
-		// Only the explicit case: an account resolved FROM the statement is not
-		// known until after parsing, and for a first import there is no account to
-		// ask. Both remain questions, which is the honest answer for them.
+		// A saved profile is what stops the second statement from a bank asking
+		// the same question again — fetched only if the file needs one.
+		// The account's stated currency is the authority over the document, so
+		// pass it when the person named an account at upload. An account resolved
+		// FROM the statement is only known after parsing, so that case stays a
+		// question.
 		const chosen = explicitAccountId
 			? await handle.select().from(account).where(eq(account.id, explicitAccountId))
 			: [];
@@ -501,9 +464,8 @@ export async function ingestFile(
 	const totalRows = statements.reduce((n, s) => n + s.rows.length, 0);
 
 	// A parse that found nothing is a parser problem, not an import. Recording
-	// it would store the content hash and make the correct re-import — after a
-	// sniffing or adapter fix — look like a duplicate forever, and resolving an
-	// account below would mint one for a bank the user may not even have.
+	// it would store the content hash and make the corrected re-import look like
+	// a duplicate forever.
 	if (totalRows === 0) {
 		return {
 			filename,
@@ -517,11 +479,9 @@ export async function ingestFile(
 		};
 	}
 
-	// An explicit account answers one question — "which account is THIS
-	// statement for" — so it can only apply when the file holds one. A CAMT
-	// export carrying three accounts must resolve each on its own evidence;
-	// applying the choice to all three would file two of them into the wrong
-	// account, which dedup cannot undo because the fingerprint is per account.
+	// An explicit account answers "which account is THIS statement for", so it
+	// only applies when the file holds one statement — a CAMT export with three
+	// accounts must resolve each on its own evidence.
 	const explicitAppliesTo = statements.length === 1 ? explicitAccountId : undefined;
 
 	// Validate a user selection before writing the original file. The same
@@ -551,9 +511,8 @@ export async function ingestFile(
 		storedName = null; // unexpected extension — the import still proceeds
 	}
 
-	// Set only on the path that actually files a document — never on the
-	// preflight duplicate return above the insert, and never on a path that
-	// throws, since a rollback takes the row this would point at with it.
+	// Set only on the path that files a document, never on a path that throws
+	// (a rollback would take the row this points at with it).
 	let filedDocumentId: string | null = null;
 
 	try {
@@ -585,8 +544,7 @@ export async function ingestFile(
 			const fileId = uuidv7();
 			// The file row must exist before any transaction references it. Its
 			// account is filled in once the first statement resolves one — a file
-			// holding several accounts has no single owner, and the transactions
-			// carry their own account anyway.
+			// holding several accounts has no single owner.
 			await tx.insert(importFile).values({
 				id: fileId,
 				filename,
@@ -596,10 +554,8 @@ export async function ingestFile(
 				contentHash,
 				storedName,
 				rowsRead: totalRows,
-				// Required since 0052: a filed statement must always carry a record of
-				// what read it and how strongly it was proven. What is known here is
-				// the first statement's own reading; the weakest across every statement
-				// in the file is written once they have all been filed, below.
+				// The first statement's own reading; the weakest across every
+				// statement in the file is written once they have all been filed.
 				currency: statements[0].currency,
 				sourceMethod: statements[0].provenance?.method ?? 'unknown',
 				proofClass: statements[0].provenance?.proofClass ?? 'P0'
@@ -624,15 +580,10 @@ export async function ingestFile(
 				tx,
 				pairingWindowAround(statements.flatMap((s) => s.rows.map((row) => row.bookedAt)))
 			);
-			// File-level evidence.
-			//
-			// A file usually holds one statement, and then this is simply that
-			// statement's reading. When it holds several — a CAMT export, a
-			// workbook — the figures belong to individual statements and recording
+			// File-level evidence: when a file holds several statements, recording
 			// any one of them at file level would assert something untrue, so only
-			// what is common to all of them is kept: how they were read, and the
-			// WEAKEST proof among them, because a file is only as well evidenced as
-			// its least evidenced part.
+			// what is common to all is kept — how they were read, and the WEAKEST
+			// proof among them.
 			const only = statements.length === 1 ? statements[0] : undefined;
 			const weakest = statements.reduce<ParsedStatement | undefined>(
 				(worst, candidate) =>
@@ -663,21 +614,12 @@ export async function ingestFile(
 				})
 				.where(eq(importFile.id, fileId));
 
-			// File the statement where it can be found again.
-			//
-			// The bytes were always kept — `storedName` above — but nothing ever
-			// surfaced them, so a statement you had imported was not a document you
-			// could open. This creates a row pointing at that same file; it does not
-			// copy anything.
-			//
-			// Only an ACCEPTED statement is filed. A refusal produced no ledger rows,
-			// and putting an unreadable file on a shelf with nothing to say about it
-			// is clutter rather than a record. A refusal never reaches this line: it
-			// throws out of the reader long before the transaction opens.
+			// File the statement where it can be found again. This creates a row
+			// pointing at the already-stored bytes; it does not copy anything. Only
+			// an ACCEPTED statement is filed — a refusal throws out of the reader
+			// long before the transaction opens.
 			if (storedName) {
 				filedDocumentId = uuidv7();
-				// What the ribbon draws. Before this the two dates were parsed and
-				// dropped, so a filed statement knew its account and not its month.
 				const period = statementPeriod(statements);
 				await insertDocumentAggregate(
 					{
@@ -690,9 +632,7 @@ export async function ingestFile(
 						addedOn: new Date().toISOString().slice(0, 10),
 						expiresOn: null,
 						expiryVerb: 'expires',
-						// The same bytes already fingerprinted for `importFile` above —
-						// the file and the document it is filed as are one upload, so
-						// they carry one hash between them.
+						// The same bytes already fingerprinted for `importFile` above.
 						contentHash,
 						periodOn: period?.start ?? null,
 						periodEndOn: period?.end ?? null,
@@ -702,13 +642,9 @@ export async function ingestFile(
 					tx
 				);
 
-				// Tie the import to the document just filed for it, in the same
-				// transaction. Before this, the two rows shared a file with nothing
-				// keying one to the other, so deleting the document from the
-				// Documents screen deleted the import's only original underneath it.
-				// The column is ON DELETE RESTRICT: once this is set, that delete is
-				// refused rather than silently losing the evidence behind every row
-				// this import wrote (see `deleteDocument`).
+				// Tie the import to the document just filed for it. The column is ON
+				// DELETE RESTRICT, so once set, deleting the document is refused
+				// rather than silently losing the evidence behind this import's rows.
 				await tx
 					.update(importFile)
 					.set({ documentId: filedDocumentId })

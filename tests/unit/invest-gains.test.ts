@@ -24,8 +24,7 @@ const WITH_TIME_TEST = { ratePct: 15, exemptLongHeld: true, exemptAfterYears: 3 
 describe('yearsHeld', () => {
 	it('counts whole years by the calendar, not by 365 days', () => {
 		expect(yearsHeld(at('2023-06-10'), at('2026-06-10'))).toBe(3);
-		// One day short of the anniversary is still two years, which is the whole
-		// point of a time test.
+		// One day short of the anniversary is still two years.
 		expect(yearsHeld(at('2023-06-10'), at('2026-06-09'))).toBe(2);
 		expect(yearsHeld(at('2023-06-10'), at('2026-06-11'))).toBe(3);
 	});
@@ -66,9 +65,7 @@ describe('realisedGains', () => {
 		expect(result.realisedMinor).toBe(0n);
 	});
 
-	// A loss is not a negative tax bill. What a loss really does — offsetting
-	// other gains, carrying forward — is a question about somebody's whole
-	// return, which this cannot see.
+	// A loss is not a negative tax bill; offsetting gains is a separate concern.
 	it('never reports a negative tax', () => {
 		const result = realisedGains(
 			[position({ purchaseValueMinor: 200_000n, saleValueMinor: 100_000n })],
@@ -87,8 +84,6 @@ describe('realisedGains', () => {
 		expect(result.taxableMinor).toBe(50_000n);
 	});
 
-	// Off by default and configurable, because a three-year time test is a fact
-	// about one country rather than about investing.
 	it('excludes a long-held disposal when the exemption is on', () => {
 		const result = realisedGains(
 			[
@@ -157,9 +152,7 @@ describe('parseGainsPolicy', () => {
 		});
 	});
 
-	// The reported fault: the threshold field is disabled while the exemption is
-	// off, a disabled field is not posted, and rejecting its absence threw away
-	// the rate typed beside it.
+	// A disabled threshold field is not posted; its absence must not reject the rate.
 	it('keeps the stored threshold when the field was not posted', () => {
 		expect(
 			parseGainsPolicy(form({ exemptAfterYears: null, exemptLongHeld: true }), {

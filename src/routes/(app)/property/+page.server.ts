@@ -79,9 +79,7 @@ export const load: PageServerLoad = async ({ url }) => {
 	if (current) {
 		const loanLabel = (linkedLoan: (typeof loans)[number]) =>
 			linkedLoan.lender ? `${linkedLoan.name} · ${linkedLoan.lender}` : linkedLoan.name;
-		// Refinancing and parallel secured facilities may leave several active
-		// loan links. Resolve and allocate every non-zero balance; `find` here used
-		// to make the metrics depend on database row order and omit the rest.
+		// Several active loan links can secure one property; resolve and allocate every non-zero balance.
 		const linkedLoans = links
 			.filter((link) => link.propertyId === current.id)
 			.flatMap((link) => {
@@ -155,9 +153,8 @@ export const load: PageServerLoad = async ({ url }) => {
 				value: formatMinor(current.valueMinor, current.currency),
 				color: 'var(--fg1)',
 				note: current.valuedOn ? `valued ${current.valuedOn.slice(0, 7)}` : 'set a value',
-				// Stored, so it gets a pencil. The raw figures are what the edit form
-				// starts from — a formatted one would have to be re-parsed to be
-				// edited, and the grouping separators differ by currency.
+				// Stored, so it gets a pencil; the edit form starts from the raw figure
+				// since grouping separators differ by currency.
 				edit: {
 					field: 'value',
 					amount: toMajorString(current.valueMinor, current.currency),
@@ -237,9 +234,8 @@ export const load: PageServerLoad = async ({ url }) => {
 		const propertyBills = bills
 			.filter((b) => b.propertyId === current.id)
 			.map((b) => {
-				// `docs` already carries the read rule, so a restricted bill scan
-				// simply is not in it — a member gets an amount with no id behind it,
-				// never the raw column, so there is nothing to build a link out of.
+				// `docs` already carries the read rule; a restricted bill's document id
+				// is simply absent, so a member gets an amount with nothing to link to.
 				const visible = b.documentId ? docs.some((d) => d.id === b.documentId) : false;
 				return {
 					id: b.id,
@@ -257,9 +253,8 @@ export const load: PageServerLoad = async ({ url }) => {
 		let lease = null;
 		if (currentTenancy) {
 			const days = currentTenancy.endsOn ? daysUntil(currentTenancy.endsOn) : null;
-			// How to reach the tenant now lives in the contacts module rather than in
-			// one free-text column, so a tenancy can carry a mobile, a landline and
-			// an agent without them being crammed into a single string.
+			// Tenant contacts live in the contacts module, not a free-text column,
+			// so a tenancy can carry a mobile, a landline and an agent separately.
 			const tenantContacts = await db
 				.select({ id: contact.id, name: contact.name, phone: contact.phone, email: contact.email })
 				.from(contactLink)
@@ -294,9 +289,8 @@ export const load: PageServerLoad = async ({ url }) => {
 					{ label: 'Since', value: currentTenancy.startsOn ?? '—' }
 				],
 				renewalNotice: currentTenancy.renewalNoticeOn,
-				// The lease contract is paper about the TENANCY, not the flat: a flat
-				// let out twice over the years should not show the first tenant's
-				// signed lease once the second one has moved in.
+				// Documents attach to the TENANCY, not the flat: an old tenant's lease
+				// should not resurface once a new one has moved in.
 				documents: await documentsAbout(currentTenancy.id),
 				documentCandidates: await candidateDocuments(currentTenancy.id),
 				addDocumentHref: `/documents?add=1&addShelfKey=tenancy&targetKind=tenancy&targetId=${currentTenancy.id}`
@@ -332,12 +326,9 @@ export const load: PageServerLoad = async ({ url }) => {
 			};
 		}
 
-		// The paper filed against this flat, through the one query every documents
-		// card uses (`document_link`, not a per-module foreign key). It carries
-		// both halves of the read rule in its `where`, so this card hides exactly
-		// what the Documents screen hides. Handed to `DocumentsCard` unchanged —
-		// the card computes its own expiry tone, so no `{file, meta, expired,
-		// amber}` reshaping happens here any more.
+		// Same `documentsAbout` query every documents card uses, so this card hides
+		// exactly what the Documents screen hides. Handed to `DocumentsCard`
+		// unchanged — it computes its own expiry tone.
 		const propertyDocs = await documentsAbout(current.id);
 		const propertyDocCandidates = await candidateDocuments(current.id);
 
@@ -346,9 +337,6 @@ export const load: PageServerLoad = async ({ url }) => {
 			.from(tagLink)
 			.innerJoin(tag, eq(tagLink.tagId, tag.id))
 			.where(eq(tagLink.targetId, current.id));
-		// What it has been worth, and what it cost to buy. Both were unreachable
-		// before: only the latest value was stored, and money-in was a single
-		// number somebody had to reconstruct.
 		const [history, opening] = await Promise.all([
 			valuationHistory(current.id),
 			db.select().from(propertyOpening).where(eq(propertyOpening.propertyId, current.id))
@@ -392,9 +380,7 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	return {
 		currencies: await availableCurrencies(),
-		// Names only, for the tenant field's suggestion list. Adding a tenant now
-		// files them in the address book, and seeing who is already there is what
-		// stops the same person being entered twice under two spellings.
+		// Names only, for the tenant field's suggestion list — helps avoid duplicate entries.
 		contactNames: (await db.select({ name: contact.name }).from(contact).orderBy(contact.name)).map(
 			(row) => row.name
 		),
@@ -606,11 +592,9 @@ export const actions: Actions = {
 	/**
 	 * Point the smart meter at a bill, or take it off again.
 	 *
-	 * Which line the meter feeds is the household's decision, not something to
-	 * infer: matching a label containing "energy" missed the app's own seeded
-	 * "Electricity advance", so the meter added a second line beside it and the
-	 * flat's bill total counted electricity twice. One meter-fed line per
-	 * property, so pointing it at a new bill releases the old one.
+	 * Which line the meter feeds is a household decision, not inferred from the
+	 * label. One meter-fed line per property, so pointing it at a new bill
+	 * releases the old one.
 	 */
 	setBillSource: async ({ request }) => {
 		const form = await request.formData();
@@ -681,9 +665,8 @@ export const actions: Actions = {
 
 	/**
 	 * File an existing document against the flat or one of its tenancies — the
-	 * "Attach" picker on either `DocumentsCard`. Both cards post here with their
-	 * own `targetId`, so one action serves both without knowing which kind it
-	 * was handed; the registry is what resolves that.
+	 * "Attach" picker on either `DocumentsCard`. One action serves both; the
+	 * registry resolves which kind `targetId` refers to.
 	 */
 	attachDocument: async ({ request }) => {
 		const form = await request.formData();

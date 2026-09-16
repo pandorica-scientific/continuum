@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * Creating and editing organisations and role periods.
- *
- * Every refusal here is one a SUBJECT already makes, and that is the assertion
- * worth making: two records a household creates by name should not behave
- * differently depending on which screen minted them.
+ * Every refusal here is one SUBJECT already makes: two records a household
+ * creates by name should not behave differently by which screen minted them.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { shelfIdByKey } from '$lib/server/documents/shelves';

@@ -2,17 +2,9 @@
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// Handles on the photograph, for when the detector was wrong.
 	//
-	// ScanPagePreview's own comment used to argue this screen should not exist:
-	// "dragging four handles on a phone is worse than taking the photo again",
-	// made safe by Original as a recovery. Two things overturned it. Original is
-	// not a recovery for a page you need CROPPED — it hands back the desk as
-	// well. And retaking does not help when detection fails for a reason the
-	// photograph cannot fix: a card too small in frame, an object with a strong
-	// band across it, a page the same brightness as the table. Those are not bad
-	// photographs, and they were unrecoverable.
-	//
-	// So this is the floor under the detector. However well it does, a person can
-	// always say where the page actually is.
+	// The floor under the detector: retaking doesn't help when detection fails
+	// for reasons the photo itself can't fix (a small card, a strong band
+	// across the page, a page the same brightness as the table).
 
 	import {
 		fullFrameCorners,
@@ -218,16 +210,10 @@
 	const clamp = (value: number, high: number) => Math.min(high, Math.max(0, value));
 
 	/**
-	 * Screen pixels to frame units, through the overlay's own transform.
-	 *
-	 * Not measured off the container. Sizing a box to the photograph's aspect
-	 * ratio and reading its rect looks simpler and was wrong: an aspect-ratio box
-	 * with `place-items: center` resolves its width from max-content, so on a
-	 * tall photograph it grew past the screen and took the bottom corners off the
-	 * side with it. The image is now letterboxed by `object-fit: contain` and the
-	 * overlay by `preserveAspectRatio`, which are defined to produce the SAME
-	 * rectangle — and `getScreenCTM` reports exactly what the browser did, so the
-	 * handles land on the picture whatever shape the screen is.
+	 * Screen pixels to frame units, through the overlay's own transform rather
+	 * than a measured container rect: `object-fit: contain` and the overlay's
+	 * `preserveAspectRatio` are defined to produce the same rectangle, and
+	 * `getScreenCTM` reports exactly what the browser did with it.
 	 */
 	function toFrame(event: PointerEvent): Point | null {
 		const matrix = overlay?.getScreenCTM();
@@ -261,7 +247,7 @@
 		const at = toFrame(event);
 		if (!at) return;
 		if (dragging in quad) {
-			// Corners only. An edge handle places a CURVE, and pulling it onto a
+			// Corners only: an edge handle places a curve, and snapping it onto a
 			// straight line would undo the one thing it exists to do.
 			quad = { ...quad, [dragging]: snapPoint(at) };
 			return;
@@ -306,17 +292,14 @@
 		event.preventDefault();
 		selected = handle;
 		const from = handleAt(handle);
-		// Deliberately NOT snapped. Arrow keys are the fine adjustment — the tool
-		// somebody reaches for when a corner is nearly right — and a pull onto a
-		// nearby line would take back the very pixel they pressed a key to move.
+		// Deliberately not snapped: arrow keys are the fine adjustment, and a pull
+		// onto a nearby line would take back the pixel they just moved.
 		const to = { x: clamp(from.x + delta.x, width), y: clamp(from.y + delta.y, height) };
 		if (handle in quad) {
 			quad = { ...quad, [handle]: to };
 			return;
 		}
-		// Nudging an edge bends it, which also means the keyboard can reach the
-		// curve at all — the whole screen is unusable without arrow keys on a
-		// laptop, and that applies to the new handles exactly as it did the old.
+		// Nudging an edge bends it, which is also how the keyboard reaches curves.
 		bends = { ...bends, [handle as Edge]: to };
 	}
 
@@ -374,16 +357,10 @@
 	/**
 	 * The curves, re-labelled onto the corners as `orderCorners` left them.
 	 *
-	 * Ordering can move a point from one role to another — dragging the top-left
-	 * past the top-right is the case it exists for — and a bend belongs to the
-	 * PAIR OF POINTS it was pulled between, not to the name that pair happened to
-	 * have at the time. Reading `bends.top` for the ordered top edge after a
-	 * reorder hands the model a curve for an edge nobody touched, and hands it in
-	 * the wrong direction as well, so the dewarp bows the page somewhere the
-	 * person never pulled.
-	 *
-	 * Matched by position and REVERSED when the ordered edge runs the other way
-	 * round, because `ENDS` is also the direction the mesh reads each edge in.
+	 * Ordering can move a point from one role to another (dragging top-left past
+	 * top-right), and a bend belongs to the pair of points it was pulled
+	 * between, not to the name that pair had at the time — so curves are
+	 * matched by position and reversed when the ordered edge runs the other way.
 	 */
 	function edgesFor(ordered: Corners): Record<Edge, Point[]> {
 		const out: Record<Edge, Point[]> = { top: [], right: [], bottom: [], left: [] };
@@ -400,13 +377,8 @@
 	}
 
 	/**
-	 * No crop at all: the boundary is the frame.
-	 *
-	 * The BENDS go with it. Left in place they would send the full frame out with
-	 * curved edges — `isStraight` false, so the renderer mesh-warps the
-	 * photograph — which is the opposite of what this button is for. It is the
-	 * escape hatch for a detection that went wrong, and an escape hatch that
-	 * quietly warps the picture is not one.
+	 * No crop at all: the boundary is the frame. Bends are cleared too, or the
+	 * full frame would go out mesh-warped instead of straight.
 	 */
 	function wholePhoto() {
 		quad = fullFrameCorners(width, height);
@@ -414,14 +386,12 @@
 	}
 
 	function apply() {
-		// Ordered on the way out: dragging the top-left past the top-right is a
-		// perfectly reasonable thing to do with a rotated photograph, and the warp
-		// downstream requires tl/tr/br/bl to mean what they say.
+		// Ordered on the way out: the downstream warp requires tl/tr/br/bl to mean
+		// what they say, even after a rotated photograph reorders them.
 		const ordered = orderCorners([quad.tl, quad.tr, quad.br, quad.bl]);
 		const edges = edgesFor(ordered);
 		const bent = EDGES.some((edge) => edges[edge].length > 0);
-		// A flat page hands back no edges at all, so nothing downstream has to
-		// decide whether four empty arrays mean "straight" or "not measured".
+		// A flat page hands back no edges, rather than four empty arrays.
 		onapply(bent ? { corners: ordered, edges } : { corners: ordered });
 	}
 </script>
@@ -430,10 +400,8 @@
 	<p class="hint">Drag the corners onto the page &middot; pull an edge to follow a curve</p>
 
 	{#if snappable}
-		<!-- Square, and in the corner, because it is a mode rather than an action:
-		     it changes what the next drag does and then stays changed. Only shown
-		     when the detector found edges — a switch over an empty pool would be a
-		     control that does nothing whichever way it is set. -->
+		<!-- A mode rather than an action, so it stays changed after the drag. Only
+		     shown when the detector found edges to snap to. -->
 		<button
 			type="button"
 			class="snap"
@@ -443,8 +411,7 @@
 			title={snapping ? 'Snapping to detected edges' : 'Snapping off'}
 			onclick={toggleSnap}
 		>
-			<!-- A corner meeting, with the point that lands on it. The glyph is the
-			     behaviour: two lines crossing, and a dot on the crossing. -->
+			<!-- Two lines crossing, with a dot on the crossing: the glyph is the behaviour. -->
 			<svg viewBox="0 0 24 24" aria-hidden="true">
 				<path d="M4 9 H20 M9 4 V20" />
 				<circle cx="9" cy="9" r="2.6" />
@@ -453,9 +420,8 @@
 	{/if}
 
 	<div class="stage">
-		<!-- A direct-manipulation surface, like the viewfinder: the pointer
-		     handlers live here rather than on each handle so a drag that runs off
-		     a dot still tracks. -->
+		<!-- Pointer handlers live here rather than on each handle, so a drag that
+		     runs off a dot still tracks. -->
 		<div
 			class="surface"
 			role="application"
@@ -464,11 +430,9 @@
 			onpointerup={release}
 			onpointercancel={release}
 		>
-			<!-- `draggable` off and pointer events through it: on a desktop the
-			     browser's own image drag starts the moment a press moves, and on
-			     iOS a press-and-hold over an <img> raises Save image / Copy image
-			     / Open image over the whole screen. Both fire on exactly the
-			     gesture this screen is for — press a corner, move it. -->
+			<!-- `draggable` off and pointer events through it: otherwise a desktop
+			     image drag or an iOS press-and-hold context menu fires on exactly
+			     the gesture this screen is for. -->
 			<img
 				src={imageUrl}
 				alt="The photograph, with the page corners marked"
@@ -476,13 +440,9 @@
 				onerror={() => onunavailable?.()}
 			/>
 			<svg viewBox="0 0 {width} {height}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-				<!-- Everything outside the quad, dimmed. `evenodd` over the frame and
-				     the quad is what makes the hole; a second shape would have to be
-				     kept in step with the first. -->
 				<!-- Everything outside the boundary, dimmed. `evenodd` over the frame
-				     and the page is what makes the hole; a second shape would have to
-				     be kept in step with the first. The page is a PATH rather than a
-				     polygon now, because a bowed edge is a curve. -->
+				     and the page path makes the hole, so a second shape need not be
+				     kept in step. A path rather than a polygon, since an edge can bow. -->
 				<path class="veil" fill-rule="evenodd" d="M0,0 H{width} V{height} H0 Z {shape}" />
 				<path class="edge" d={shape} stroke-width={stroke} fill="none" />
 				{#each CORNERS as handle (handle)}
@@ -495,10 +455,8 @@
 						stroke-width={stroke}
 					/>
 				{/each}
-				<!-- Edge handles are drawn smaller and hollow: they are an
-				     adjustment to a boundary that already exists, not one of the four
-				     points that define it, and a page that needs none of them should
-				     not look like it has eight things to place. -->
+				<!-- Smaller and hollow: an edge handle adjusts an existing boundary
+				     rather than being one of the four points that define it. -->
 				{#each EDGES as edge (edge)}
 					<circle
 						class="bend"
@@ -511,8 +469,8 @@
 					/>
 				{/each}
 			</svg>
-			<!-- The grab targets sit ABOVE the drawing, and are invisible: a thumb
-			     needs far more room than the dot it is placing. -->
+			<!-- Grab targets sit above the drawing, invisible: a thumb needs far
+			     more room than the dot it is placing. -->
 			<svg
 				class="targets"
 				bind:this={overlay}
@@ -575,9 +533,8 @@
 		   with the grab handles and the Copy bubble over the photograph. */
 		user-select: none;
 		-webkit-user-select: none;
-		/* iOS Safari resolves `inset: 0` against the LARGE viewport, so the panel
-		   ends up taller than the visible area and the page scrolls to make up the
-		   difference. See ScanCapture for the same fix. */
+		/* iOS Safari resolves `inset: 0` against the large viewport, so the panel
+		   scrolls unless height follows the dvh fallback below. */
 		height: 100vh;
 		height: 100dvh;
 		z-index: 41;
@@ -588,9 +545,8 @@
 		touch-action: none;
 		overscroll-behavior: none;
 	}
-	/* Over the hint rather than in the row with it: the hint is a sentence that
-	   wraps to two lines on a narrow phone, and a button in that flow moved with
-	   it. Pinned to the corner it stays where it was found. */
+	/* Pinned over the hint rather than flowed with it, since the hint text can
+	   wrap to two lines on a narrow phone. */
 	.snap {
 		position: absolute;
 		top: calc(var(--safe-top) + var(--space-4));
@@ -603,8 +559,7 @@
 		padding: 0;
 		border: 1px solid var(--bd2);
 		border-radius: var(--radius-md);
-		/* Opaque, not a tinted card: it floats over the photograph, and a
-		   translucent ground would let the picture through the glyph. */
+		/* Opaque: a translucent ground would let the photograph through the glyph. */
 		background: var(--bg2);
 		color: var(--fg3);
 		cursor: pointer;
@@ -639,9 +594,7 @@
 	}
 	.surface {
 		position: relative;
-		/* Fills the stage and lets the PICTURE letterbox inside it. Sizing this
-		   box to the photograph instead is what pushed a tall page off the side
-		   of the screen — see `toFrame`. */
+		/* Fills the stage and lets the picture letterbox inside it — see `toFrame`. */
 		width: 100%;
 		height: 100%;
 		display: block;
@@ -649,15 +602,14 @@
 	}
 	.surface img {
 		display: block;
-		/* See the element: the callout menu and the image drag both belong to the
-		   <img>, and neither is reachable if the pointer never lands on it. The
-		   handles are in the SVG above, so nothing is lost. */
+		/* The callout menu and image drag belong to the <img>; both are unreachable
+		   once the pointer can't land on it. Handles are in the SVG above. */
 		pointer-events: none;
 		-webkit-touch-callout: none;
 		width: 100%;
 		height: 100%;
-		/* `contain` and the overlay's `xMidYMid meet` are defined to produce the
-		   same rectangle, which is what keeps the handles on the picture. */
+		/* `contain` and the overlay's `xMidYMid meet` produce the same rectangle,
+		   which keeps the handles on the picture. */
 		object-fit: contain;
 	}
 	.surface svg {
@@ -685,9 +637,8 @@
 	.dot.active {
 		fill: var(--detect-stable);
 	}
-	/* Hollow and unfilled until it is used: an edge handle is an adjustment to a
-	   boundary that already exists, and a flat page should not look like it has
-	   eight points waiting to be placed. */
+	/* Hollow until used: an edge handle adjusts an existing boundary rather than
+	   being one of the points that define it. */
 	.bend {
 		fill: none;
 		stroke: var(--detect-stable);
@@ -735,8 +686,8 @@
 	.actions .btn {
 		flex: 1;
 	}
-	/* A thumb reaches the bottom band; on a short landscape phone the photograph
-	   gets whatever is left rather than pushing the buttons off-screen. */
+	/* On a short landscape phone, the photograph gets whatever is left rather
+	   than pushing the buttons off-screen. */
 	@media (orientation: landscape) and (max-height: 620px) {
 		.hint {
 			padding-top: calc(var(--safe-top) + var(--space-3));

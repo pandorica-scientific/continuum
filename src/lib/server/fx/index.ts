@@ -17,7 +17,45 @@ import { loadRateTable, missingRateCodes } from './table';
 
 // The Czech National Bank publishes a daily fixing of ~30 currencies against
 // CZK — free, no API key. All rates are stored as CZK per one unit; rates
-// between two non-CZK currencies are derived through CZK.
+// between two non-CZK currencies are derived through CZK. The koruna is a
+// pivot, not a home: a household whose base is the euro never sees it.
+export const RATE_PIVOT = 'CZK';
+/**
+ * What the fixing quotes, as of the source's own list. A format fact about
+ * the feed, used only before the first fetch has landed so an offline first
+ * boot can still offer a real choice of base currency; after that the rate
+ * table is the authority and a currency the bank adds appears on its own.
+ */
+export const SOURCE_QUOTES: readonly string[] = [
+	'AUD',
+	'BRL',
+	'CAD',
+	'CNY',
+	'DKK',
+	'EUR',
+	'GBP',
+	'HKD',
+	'HUF',
+	'IDR',
+	'ILS',
+	'INR',
+	'ISK',
+	'JPY',
+	'KRW',
+	'MXN',
+	'MYR',
+	'NOK',
+	'NZD',
+	'PHP',
+	'PLN',
+	'RON',
+	'SEK',
+	'SGD',
+	'THB',
+	'TRY',
+	'USD',
+	'ZAR'
+];
 const CNB_DAILY_URL =
 	'https://www.cnb.cz/en/financial-markets/foreign-exchange-market/central-bank-exchange-rate-fixing/central-bank-exchange-rate-fixing/daily.txt';
 // The same fixing, one file per calendar year, back to 1991. Also free and
@@ -150,10 +188,8 @@ async function storeRates(rates: CnbRate[], handle: Queryable): Promise<number> 
 
 /**
  * Fetch the fixings for every year the household has amounts in and no rate
- * for. Runs after the daily refresh; a fresh install with three years of
- * statements converts each of them at its own day's rate from the first boot
- * rather than at the day the app was installed, which is what "carried"
- * used to mean for good.
+ * for. A fresh install with three years of statements converts each of them
+ * at its own day's rate from the first boot rather than the install date.
  */
 export async function backfillRates(
 	fetchFn: typeof fetch = fetch,
@@ -193,10 +229,7 @@ export async function refreshRates(fetchFn: typeof fetch = fetch): Promise<numbe
 	const rates = parseCnbDaily(await res.text());
 	// `currency_rate.code` carries a foreign key into `currency`, so a code the
 	// runtime does not recognise would abort the whole refresh rather than cost
-	// one rate. Skipped here instead, which is also the older bug's fix: an
-	// unchecked code from the feed became selectable through
-	// `availableCurrencies`, which is how a column heading once offered itself
-	// as a currency.
+	// one rate. Skipped here instead.
 	const known = rates.filter((r) => isCurrencyCode(r.code));
 	for (const r of known) {
 		await db
@@ -211,12 +244,6 @@ export async function refreshRates(fetchFn: typeof fetch = fetch): Promise<numbe
 	return known.length;
 }
 
-/**
- * Currencies this household actually holds money in that have no exchange rate,
- * so their amounts appear at face value in every converted total. The app
- * layout names them in a banner: a missing rate has to be visible, because
- * every total that silently absorbs one is wrong by the size of the rate.
- */
 /** The earliest day any amount in any currency is dated, or null on an empty ledger. */
 export async function earliestCurrencyUse(handle: Queryable = db): Promise<string | null> {
 	const rows = await currencyUses(handle);
@@ -233,30 +260,23 @@ export async function missingRateCurrencies(
 }
 
 /** Every currency the household has an amount in, with the earliest day it is used. */
-async function currencyUses(handle: Queryable): Promise<{ currency: string; day: string }[]> {
-	// Everything that carries an amount in a currency of its own. Property and the
-	// portfolio snapshot were missing, which are the two largest figures on the
-	// net-worth screen — so a flat valued in EUR with no EUR rate was counted at
-	// face value, roughly 25x understated, while the banner raised to say exactly
-	// that stayed silent.
-	// The valued things come from `net_worth_component` rather than being listed
-	// one table at a time, so an asset type added to that view is covered here
-	// without a second edit — which is the only way the banner stays honest.
-	// Rates carry forward after their first fixing, so the earliest use of each
-	// currency is sufficient to prove whether any historical fallback occurred.
-	// Keep that aggregation in Postgres instead of returning the whole ledger on
-	// every app-layout load.
+export async function currencyUses(
+	handle: Queryable
+): Promise<{ currency: string; day: string }[]> {
+	// Valued things come from `net_worth_component` rather than being listed one
+	// table at a time, so an asset type added to that view is covered here
+	// without a second edit. Rates carry forward after their first fixing, so
+	// the earliest use of each currency is sufficient to prove whether any
+	// historical fallback occurred. Kept in Postgres rather than returning the
+	// whole ledger on every app-layout load.
 	const rows = (await handle.execute(sql`
 		select currency, min(day)::text as day from (
 			select currency, coalesce(valued_on, current_date) as day from ${netWorthComponent}
 			union all select currency, coalesce(value_on, booked_on) as day from ${transaction}
 			union all select currency, day from ${portfolioSnapshot}
-			-- Salary comes off the ENTRY, not off the payslip document: the document
-			-- is the file, while the figure and the currency it is stated in belong
-			-- to the month. period_month is 'YYYY-MM', so the day a rate is wanted
-			-- for is the first of the month the pay covers. The column has no
-			-- CHECK constraint, so guard the cast against a malformed value
-			-- instead of letting the whole scan fail on one bad row.
+			-- Salary comes off the ENTRY, not the payslip document: the figure and its
+			-- currency belong to the month. period_month has no CHECK constraint, so
+			-- guard the cast against a malformed value instead of failing the whole scan.
 			union all select ${salaryEntry.currency},
 				(${salaryEntry.periodMonth} || '-01')::date
 			from ${salaryEntry}

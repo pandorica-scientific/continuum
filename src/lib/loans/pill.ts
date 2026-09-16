@@ -1,15 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * What a loan's fixation says about itself, in the six words a pill holds.
+ * Shared between the Loans screen and the Overview's Debts panel so both say
+ * the same thing about the same loan.
  *
- * Lived inside the Loans screen's loader until the Overview grew a Debts panel
- * that has to say the same thing about the same loan. Two copies of "amber a
- * year out" is how one screen ends up warning about a re-fix while the other
- * still calls it settled.
- *
- * Pure, and told what day it is rather than reading the clock: the wording is
- * worth a test, and a function that asks `new Date()` for the answer can only
- * be tested on the day it happens to be.
+ * Pure, and told what day it is rather than reading the clock, so the wording
+ * is testable on any day.
  */
 import { periodForMonth, type FixationPeriod } from './amortise';
 import type { Hue } from '$lib/ui/hue';

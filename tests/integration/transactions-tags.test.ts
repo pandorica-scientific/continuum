@@ -33,9 +33,8 @@ const filter = (overrides: Partial<RegisterFilter> = {}): RegisterFilter => ({
 beforeAll(async () => {
 	harness = await startPostgres('transactions-tags');
 	testDb = harness.db;
-	// The real schema, not a hand-written subset of it. The subset that used to
-	// live here had to be kept in step with schema.ts by hand, and a test passing
-	// against a stale copy of a table says nothing about the real one.
+	// The real schema, not a hand-written subset: a test passing against a
+	// stale copy of a table says nothing about the real one.
 	await harness.applyMigrations(ALL_MIGRATIONS);
 
 	// A fault injector, not schema: it makes one specific tag name fail on
@@ -208,10 +207,8 @@ describe('register database aggregates', () => {
 });
 
 describe('tag persistence', () => {
-	// A tag is a filing decision the person made, not import provenance. When
-	// pairing later marks the transaction a transfer, dropping it from the tag
-	// left the total at zero while the register still rendered the chip on the
-	// row — two screens disagreeing with nothing to explain why.
+	// A tag is a filing decision, not import provenance: pairing a leg into a
+	// transfer later must not drop it from the tag's totals.
 	it('keeps a tagged leg in project totals after it becomes a transfer', async () => {
 		await harness.sql.unsafe(`
 			insert into "transaction"

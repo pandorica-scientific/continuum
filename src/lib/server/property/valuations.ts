@@ -2,9 +2,8 @@
 /**
  * What a property has been worth, and what it cost to buy.
  *
- * Two things the screen could not do before: plot a value over time, because
- * only the latest was stored; and record a flat bought years ago without
- * reconstructing its money-in from transactions that predate the ledger.
+ * Supports plotting value over time and recording money-in for a flat bought
+ * before the ledger existed.
  */
 
 import { and, asc, desc, eq } from 'drizzle-orm';
@@ -27,11 +26,9 @@ export interface RecordValuationInput {
 /**
  * Add a valuation, and keep `property.value_minor` as the latest of them.
  *
- * The column is not abandoned: every existing reader — net worth, the tiles, the
- * appreciation figure — goes on reading it, and it now means "the most recent
- * valuation" rather than "the only one". Writing a valuation dated in the past
- * therefore leaves today's figure alone, which is what makes entering history
- * safe.
+ * Existing readers (net worth, tiles, appreciation) keep reading that column;
+ * it now means "the most recent valuation" rather than "the only one". A
+ * valuation dated in the past leaves today's figure alone.
  */
 export async function recordValuation(
 	propertyId: string,
@@ -106,10 +103,9 @@ export interface OpeningInput {
 /**
  * What buying it actually cost, and what that makes money-in.
  *
- * Money-in is the household's own cash: the deposit plus the costs of buying.
- * The price itself is NOT money in — most of it is the bank's, and the part
- * that becomes the household's arrives slowly as the mortgage is repaid, which
- * the loan already records. Counting the whole price here would double it.
+ * Money-in is the household's own cash: deposit plus buying costs. The price
+ * itself is NOT money in — most of it is the bank's, and the part that
+ * becomes the household's is already tracked as the mortgage is repaid.
  */
 export function moneyInFromOpening(input: { costsMinor: bigint; depositMinor: bigint }): bigint {
 	return input.depositMinor + input.costsMinor;
@@ -164,9 +160,8 @@ export async function recordOpening(
 			.set({ moneyInMinor: moneyInFromOpening(input) })
 			.where(eq(property.id, propertyId));
 
-		// The purchase price is a valuation too — it is what somebody paid on a
-		// known date — so the value series starts where the ownership did rather
-		// than at whenever the household first typed an estimate.
+		// The purchase price is a valuation too, so the series starts at
+		// ownership rather than whenever an estimate was first typed.
 		if (input.purchasedOn && input.priceMinor > 0n) {
 			await tx
 				.delete(propertyValuation)

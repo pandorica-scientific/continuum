@@ -3,13 +3,9 @@
  * Every writer that files a document already holds the bytes behind it, so
  * every one of them can fingerprint the file and ask for its text to be read.
  *
- * Before this, two writers did both: `createDocument` (capture, receipts) and
- * nothing else. The four that go through `insertDocumentAggregate` — a bank
- * statement, a tax attachment, a property bill, a payslip — set neither, so
- * only a payslip could ever be recognised as "the same file uploaded twice",
- * and none of the four was ever full-text searchable. One test per writer,
- * checking the pair every filed document must now carry: a hash of its own
- * bytes, and exactly one queued `extract_text` job waiting to read them.
+ * One test per writer, checking the pair every filed document must carry: a
+ * hash of its own bytes, and exactly one queued `extract_text` job waiting to
+ * read them.
  */
 import { mkdir, readFile, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';

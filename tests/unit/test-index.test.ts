@@ -6,11 +6,8 @@ import {
 	resolveModule
 } from '../../scripts/test-index.mjs';
 
-/**
- * The coverage index answers "what already tests this module?", which is the
- * question that stops the suite growing by accretion. It is only trustworthy
- * if its parsing is, so the parsing is pinned here.
- */
+// The coverage index answers "what already tests this module?"; it is only
+// trustworthy if its parsing is, so the parsing is pinned here.
 describe('includePatterns', () => {
 	it('reads the globs out of a vite config rather than repeating them', () => {
 		const config = `export default {

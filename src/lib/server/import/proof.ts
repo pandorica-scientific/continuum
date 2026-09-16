@@ -2,11 +2,10 @@
 /**
  * How strongly a statement proves itself.
  *
- * The governing rule of this release is that a preset may make acceptance fast
- * but never makes it correct — acceptance is arithmetic. This module is that
- * arithmetic, and it is deliberately not a score. A statement either satisfies
- * a check, fails it, or the format never printed the evidence, and those three
- * outcomes are not interchangeable.
+ * A preset may make acceptance fast but never makes it correct — acceptance is
+ * arithmetic. This module is deliberately not a score: a statement either
+ * satisfies a check, fails it, or the format never printed the evidence, and
+ * those three outcomes are not interchangeable.
  *
  * Classes, strongest first:
  *
@@ -95,9 +94,7 @@ function testChain(statement: ParsedStatement): {
 	if (covered !== rows.length) return { holds: false, testable: true, covered };
 	// A chain needs somewhere to step FROM: a second balance, or a printed
 	// opening balance. One row with one balance and no opening figure is not a
-	// broken chain, it is no chain — and reporting it as "the running balance
-	// does not follow from the movements" says something false about a file
-	// that is perfectly consistent.
+	// broken chain, it is no chain.
 	if (rows.length < 2 && statement.openingBalanceMinor === undefined) {
 		return { holds: false, testable: false, covered };
 	}
@@ -312,22 +309,13 @@ export function proveStatement(statement: ParsedStatement, facts?: LexicalFacts)
 	checks.push(...lexical);
 	const lexicallyUnsound = lexical.some((c) => c.status === 'fail');
 
-	// Evidence that CONTRADICTS the rows is fatal, whatever else passed.
-	//
-	// A running chain closes over the rows it has, so it cannot see a movement
-	// missing from the END — every remaining step still follows. The printed
-	// closing balance can see it, and does. A real German statement read 9 of
-	// its 10 movements, closed its chain perfectly, disagreed with its own
-	// closing balance, and was rated P3: strong enough to file, with a
-	// transaction missing. Unavailable evidence is fine; contradicted evidence
-	// is not.
-	//
-	// The running balance belongs in this test as much as the endpoints do. It
-	// was the one failing check that did not appear here, so a statement whose
-	// own printed chain demonstrably did not follow from its movements — two
-	// amounts transposed, or a balance on some rows and not others — still
-	// reached P1 on endpoints that happened to survive, and auto-imported
-	// carrying a provenance record that said in words that the chain failed.
+	// Evidence that CONTRADICTS the rows is fatal, whatever else passed. A
+	// running chain closes over the rows it has, so it cannot see a movement
+	// missing from the END — every remaining step still follows — but the
+	// printed closing balance can. Unavailable evidence is fine; contradicted
+	// evidence is not, and the running balance must be included in this test:
+	// otherwise a chain that demonstrably fails to follow from its own movements
+	// could still reach P1 on endpoints that happened to survive.
 	const chainContradicts = chain.testable && !chain.holds;
 	const contradicted =
 		chainContradicts ||
@@ -355,38 +343,22 @@ export const PROOF_RANK: Record<ProofClass, number> = { P4: 4, P3: 3, P2: 2, P1:
 /**
  * Do these readings already account for every movement the file claims?
  *
- * Asked when one region of a document read into a statement and another failed:
- * is the failing region a PART that would go unimported, or the same money
- * counted a second way?
+ * Asked when one region of a document read into a statement and another
+ * failed: is the failing region a PART that would go unimported, or the same
+ * money counted a second way (e.g. a balance-by-date recap that reads as a
+ * movements table but fails its own arithmetic because its figures are
+ * balances)?
  *
- * Arithmetic answers it, so nothing here has to recognise what the failing
- * region was. When what read closes the chain against the statement's OWN
- * printed opening and closing balances, no movement can be missing from it, and
- * a further region cannot be a part — it is a recap, a summary, or furniture
- * that happened to carry a date beside a figure.
+ * Arithmetic answers it: when what read closes the chain against the
+ * statement's OWN printed opening and closing balances, no movement can be
+ * missing, so a further failing region cannot be a part of the same statement.
+ * If it does NOT close, money is unaccounted for and the failing region might
+ * be carrying it, so filing what read would import only part of the file.
  *
- * That case is ordinary rather than exotic. Komerční banka prints a
- * "Zůstatek podle data" block giving the balance on each date; it has a date
- * column beside an amount column and so reads as a table of movements, and it
- * fails on its own arithmetic because those figures are balances — differencing
- * them reproduces the movements that were already read. Sparkasse prints the
- * same thing, which is why `kontostande` is already in SUMMARY_TERMS. No
- * statement is obliged to mention its balances only once.
- *
- * The converse is what this protects, and it is why the test is closure rather
- * than a count of regions. If what read does NOT reach the printed closing
- * balance then money is unaccounted for and the failing region really might be
- * carrying it — so filing what read would import part of a document and record
- * the file's content hash, and the corrected re-upload would then be refused as
- * a duplicate. `frompdf.ts` calls that the worst outcome this system can
- * produce, and it stays refused.
- *
- * A reading with no printed endpoints answers nothing either way, so it counts
- * as not accounted for: silence is not evidence.
- *
- * The residual exposure is P1's own, documented at the top of this file — two
- * omitted movements that offset each other leave the endpoints intact. This
- * adds no exposure that filing a P1 statement did not already carry.
+ * A reading with no printed endpoints counts as not accounted for: silence is
+ * not evidence. The residual exposure here is P1's own (two omitted movements
+ * that offset each other leave the endpoints intact) — this adds none beyond
+ * filing a P1 statement already carries.
  */
 export function accountsForWholeFile(statements: ParsedStatement[]): boolean {
 	if (statements.length === 0) return false;
@@ -429,34 +401,17 @@ export function decideImport(
 	if (proof.proofClass === 'P4' || proof.proofClass === 'P3') {
 		return { autoImport: true, reason: 'every movement sits on a running balance that closes' };
 	}
-	// P0 is refused even for a layout someone confirmed.
-	//
-	// This branch used to sit ABOVE every proof check, which made a saved
-	// profile sufficient on its own: a statement with no opening balance, no
-	// closing balance, no totals and no running balance imported because a
-	// preset said the columns were right. That is the governing rule's exact
-	// counterexample — a preset was the reason the statement was accepted.
-	//
-	// Confirming a mapping says the columns mean what we think. It says nothing
-	// about whether the rows under them are all there, and P0 means nothing in
-	// the file can answer that question either.
+	// P0 is refused even for a layout someone confirmed: confirming a mapping
+	// says the columns mean what we think, not that all the rows are there, and
+	// P0 means nothing in the file can answer that question either.
 	if (proof.proofClass === 'P0') {
 		return { autoImport: false, reason: 'nothing in the statement could be checked' };
 	}
-	// P1 and P2 only: everything else has returned by now.
-	//
-	// The arithmetic here is real but partial, and a person who has checked this
-	// mapping against a preview of their own rows supplies what it is missing.
-	// That is the human check these classes demand, and it is the only thing
-	// that lifts them.
+	// P1 and P2 only: the arithmetic here is real but partial, so a person
+	// checking this mapping against a preview supplies what's missing.
 	if (context.verifiedProfile) {
 		return { autoImport: true, reason: 'this layout was confirmed for this bank already' };
 	}
-	// This branch used to return `autoImport: true` as well, differing only in
-	// its reason string — so the parameter above decided nothing and P1 and P2
-	// filed unattended, while this file's own docblock explained why they should
-	// not and `wizard.ts` said "decideImport enforces this". It did not.
-	//
 	// A refusal here is not a dead end: the reader hands back the table it
 	// worked out, the person names the date and amount columns once, and the
 	// saved profile means every later statement from that bank arrives already

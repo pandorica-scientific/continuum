@@ -1,11 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // The panel registry is the single source of truth for what can go on the
-// Overview board, in the same spirit as src/lib/modules/registry.ts for
-// screens. It holds no data and no arithmetic: adding another panel is one
-// entry here plus one component in ./panels/, and nothing else.
-//
-// A panel names an icon rather than carrying a glyph of its own, so the board's
-// eyebrows are drawn from the one set the rest of the app already uses.
+// Overview board. It holds no data and no arithmetic: adding another panel is
+// one entry here plus one component in ./panels/, and nothing else.
 
 import type { IconName } from '$lib/icons';
 import type { ModuleKey, ModuleToggles } from '$lib/modules/registry';
@@ -14,43 +10,30 @@ import type { OverviewPlacement, PanelBounds } from './layout';
 export interface PanelDefinition {
 	key: string;
 	/**
-	 * A control the panel's head row carries, beside "Open →".
-	 *
-	 * Declared here rather than rendered by the panel's content, because the
-	 * head belongs to `Panel` and a snippet cannot travel upward out of the
-	 * content it is rendered in. `period` is the flow panel's window control.
+	 * A control the panel's head row carries, beside "Open →". Declared here
+	 * rather than rendered by the panel's content, since the head belongs to
+	 * `Panel` and a snippet can't travel upward out of its own content.
+	 * `period` is the flow panel's window control.
 	 */
 	headControls?: 'period';
 	title: string;
 	icon: IconName;
 	/**
-	 * The panel's identity colour, worn by the tile before its title.
-	 *
-	 * Not the area's hue: a board is a page of panels rather than a screen
-	 * inside one area, and six teal tiles in a column say nothing. It is what
-	 * the panel is ABOUT — money teal, assets purple, a decision yellow — so a
-	 * person finds the panel they want by colour before reading a word.
+	 * The panel's identity colour, worn by the tile before its title. Not the
+	 * area's hue — it's what the panel is ABOUT (money teal, assets purple, a
+	 * decision yellow), so it can be found by colour before reading a word.
 	 */
 	hue: string;
 	/**
 	 * One line saying what the panel actually draws, for the first-run picker
-	 * and nowhere else — a placed panel has its own contents to speak for it.
-	 *
-	 * The titles are written to sit above a panel somebody already chose, so
-	 * several of them ("Paper", "Statements", "Kept each month") say almost
-	 * nothing to a person meeting all eighteen at once. This is the sentence
-	 * that lets them choose. Kept short and without a full stop, like every
-	 * other caption on the board; a test holds both.
+	 * only — a placed panel's own contents speak for it. Kept short and
+	 * without a full stop, like every other caption on the board.
 	 */
 	description: string;
 	/**
-	 * Where the header's "Open →" goes. Absent for the three panels that answer
-	 * a question no single screen owns — the briefing, what net worth is made of
-	 * and how it moved — because a link out has to land somewhere that says more
-	 * than the panel already does.
-	 *
-	 * A destination behind a module must be one this panel is gated on, or the
-	 * board offers a link into a 404. A test holds the two together.
+	 * Where the header's "Open →" goes. Absent for panels that answer a
+	 * question no single screen owns. A destination behind a module must be
+	 * one this panel is gated on, or the board offers a link into a 404.
 	 */
 	href?: string;
 	/** Size in columns and rows when the panel is first added. */
@@ -63,10 +46,8 @@ export interface PanelDefinition {
 	modules: ModuleKey[];
 }
 
-// V2 sets a floor of four columns by three rows for every panel. `flow` keeps
-// it deliberately: below about half width the waterfall's leaf labels get
-// genuinely small, which V2 records as an open question rather than a defect.
-// Raising this panel's minimum is the lever if it proves unusable in practice.
+// Floor of four columns by three rows for every panel. `flow` keeps it: below
+// about half width the waterfall's leaf labels get genuinely small.
 const MIN_W = 4;
 const MIN_H = 3;
 
@@ -78,20 +59,10 @@ export const PANELS: PanelDefinition[] = [
 		description: 'Whatever needs a decision today, and a quiet line on the days nothing does',
 		icon: 'bell',
 		defaultW: 12,
-		// One row of cards, and no more. At six rows (320px of grid plus the
-		// panel's own chrome) this owned the top third of the first screen
-		// whatever was in it — and what is in it is usually one line saying
-		// nothing needs a decision. It sits above everything else precisely
-		// because it is the first thing to read, which is the worst place to
-		// spend empty space: it pushed the cash-flow chart, the reason most
-		// people open the app at all, entirely below the fold.
-		//
-		// Four rows, which is what a full row of briefing cards actually needs:
-		// at three the panel is 152px all-in, and once the header and padding
-		// take their share the cards are clipped mid-sentence — a card whose
-		// last line is cut off is worse than the empty space this is trimming.
-		// A household with more than a row's worth can drag it taller, and that
-		// choice is stored against them.
+		// One row of cards, no more — sits above everything else as the first
+		// thing to read, which is the worst place to spend empty space. Four
+		// rows is what a full row of cards needs without clipping text; a
+		// household with more can drag it taller.
 		defaultH: 4,
 		minW: MIN_W,
 		minH: MIN_H,
@@ -134,9 +105,7 @@ export const PANELS: PanelDefinition[] = [
 		defaultH: 7,
 		minW: MIN_W,
 		minH: MIN_H,
-		// Gated deliberately. The panel links to /calendar, and pathDisabled
-		// makes that route 404 when the module is off — which the pre-V2 Overview
-		// did unconditionally, link and all.
+		// Gated deliberately: the panel links to /calendar, and pathDisabled 404s that route when the module is off.
 		modules: ['calendar']
 	},
 	{
@@ -175,8 +144,7 @@ export const PANELS: PanelDefinition[] = [
 		defaultH: 5,
 		minW: MIN_W,
 		minH: MIN_H,
-		// The reason this field is a list: equity against a mortgage means
-		// nothing unless both halves of the comparison exist.
+		// Both modules required: equity against a mortgage means nothing unless both halves exist.
 		modules: ['property', 'loans']
 	},
 	{
@@ -232,9 +200,6 @@ export const PANELS: PanelDefinition[] = [
 		modules: ['tax']
 	},
 	{
-		// Named `activity`, not `transactions`. V2 records a trap worth obeying:
-		// `cashSplit` was defined twice for different screens and the later
-		// definition silently won, so a panel rendered names with no figures.
 		key: 'activity',
 		hue: 'teal',
 		title: 'Recent activity',
@@ -313,9 +278,8 @@ export const PANELS: PanelDefinition[] = [
 		modules: ['loans']
 	},
 	{
-		// Named for the question rather than for the noun: "Budget" promises a
-		// figure somebody set, and nobody set one. What this shows is the month
-		// against what the months before it usually cost.
+		// Named for the question, not the noun: "Budget" implies a figure someone
+		// set, but nobody did — this shows the month against its own average.
 		key: 'budget',
 		hue: 'teal',
 		title: 'Month against its average',
@@ -351,19 +315,12 @@ export function panelAvailable(key: string, modules: ModuleToggles): boolean {
 
 /**
  * The board offered rather than imposed: what "Use the suggested board" on the
- * first-run picker puts down, and what Reset goes back to.
+ * first-run picker puts down, and what Reset goes back to. Briefing full
+ * width, the cash-flow chart full width, then composition and upcoming side
+ * by side.
  *
- * Briefing full width, the cash-flow chart full width, then composition and
- * upcoming side by side — the four that answer the questions the app is opened
- * for. Nobody is given it silently: a person with no stored arrangement gets
- * the picker and an empty board, and this is one press away from there.
- *
- * Only the ARRANGEMENT lives here. Every size is read from the panel's own
- * definition, because this list used to restate them — and the moment the
- * briefing panel's default height was reduced, the definition said three rows,
- * this said six, and the screen went on drawing six. A suggested board that
- * disagrees with the panels it is made of is the kind of thing that looks like
- * a rendering bug for a week.
+ * Only the ARRANGEMENT lives here — every size is read from the panel's own
+ * definition, so this list can never disagree with the panels it's made of.
  */
 export const SUGGESTED_LAYOUT: OverviewPlacement[] = (() => {
 	const stack: OverviewPlacement[] = [];

@@ -47,21 +47,18 @@
 	}: Props = $props();
 
 	const areas = $derived(visibleAreas(modules));
-	// An area is active when the screen you are on belongs to it, not when its
-	// own path matches — /loans lights up Assets.
+	// Active when the current screen belongs to the area, not when its own
+	// path matches — /loans lights up Assets.
 	const activeArea = $derived(areaForPath(page.url.pathname)?.key);
 
-	// Seeded from what the pre-paint script already applied, which came from the
-	// cookie the server wrote from this person's stored theme.
+	// Seeded from what the pre-paint script already applied (from the theme cookie).
 	let theme: Theme = $state(
 		browser && document.documentElement.dataset.ledgerTheme === 'light' ? 'light' : 'dark'
 	);
 
-	// Applied to the document first and persisted after, so the colours change on
-	// the click rather than on the round trip. The server owns the record — it
-	// stores the choice against the person and refreshes the cookie `app.html`
-	// reads before paint — so a failed write costs this tab's choice and nothing
-	// else: the next load paints what was last saved.
+	// Applied to the document first and persisted after, so colours change on
+	// click rather than waiting on the round trip; a failed write only costs
+	// this tab's choice.
 	function setTheme(next: Theme) {
 		theme = next;
 		if (next === 'light') {
@@ -69,9 +66,8 @@
 		} else {
 			document.documentElement.removeAttribute('data-ledger-theme');
 		}
-		// The browser paints its own regions — pull-to-refresh, the rubber band,
-		// a tablet's status bar — from this and not from any stylesheet, so it has
-		// to be moved by hand or those areas keep the old theme's colour.
+		// The browser paints pull-to-refresh/status-bar chrome from this meta tag,
+		// not any stylesheet, so it must be updated by hand.
 		document
 			.querySelector('meta[name="theme-color"]')
 			?.setAttribute('content', next === 'light' ? '#eeeae2' : '#0e1117');
@@ -82,20 +78,14 @@
 		});
 	}
 
-	// The Import badge counts transactions awaiting review. Import is a screen
-	// inside Money now, so the count surfaces on the area that holds it.
-	// /settings belongs to no area now, so nothing in the nav lights up for it —
+	// /settings belongs to no area, so nothing in the nav lights up for it —
 	// the gear does instead.
 	const onSettings = $derived(
 		page.url.pathname === SETTINGS_PATH || page.url.pathname.startsWith(SETTINGS_PATH + '/')
 	);
 
-	// The Money area, or wherever Import lives if the registry moves it. Not
-	// undefined when Import is switched off: the same dot says a rate is
-	// missing outright, and that is true of the totals whether or not anything
-	// is being imported. A rate merely carried back from its first fixing is
-	// noted in Settings › Money and lights nothing: every household's history
-	// predates its install, so that dot would never have gone out.
+	// The Money area, or wherever Import lives. Still resolves when Import is
+	// switched off, since the same dot also flags a missing exchange rate.
 	const badgeArea = $derived(
 		areas.find((area) => area.screens.some((screen) => screen.path === '/import'))?.key ??
 			areas.find((area) => area.key === 'money')?.key
@@ -108,10 +98,6 @@
 	<div class="brand">
 		<span class="brand-tile"><BrandMark size={18} /></span>
 		<span class="wordmark">Continuum</span>
-		<!-- Settings lives here rather than in the navigation. It used to share an
-		     "Admin" row with Documents, which put configuration somebody opens
-		     rarely behind the same click as paperwork somebody opens often. A gear
-		     beside the wordmark is where chrome belongs. -->
 		<a
 			class="settings"
 			href={SETTINGS_PATH}
@@ -125,23 +111,14 @@
 	</div>
 
 	{#if netWorth !== null}
-		<!-- The one lit surface in the product. It was a card among cards, which
-		     made the figure the whole app exists to move look like a statistic;
-		     v0.8.1 gives it the gradient and the only warm shadow, and puts white
-		     type on it in BOTH themes so the number reads the same either way. -->
+		<!-- The one lit surface in the product: white type in both themes so
+		     the number reads the same either way. -->
 		<div class="hero" class:down={!netWorthDeltaPositive}>
 			{#if netWorthDeltaShare !== null}
-				<!-- The month, as a tide along the foot of the panel. Green when it
-				     added and red when it took away, and it rises and darkens with the
-				     size of the month measured against the biggest on record — a share
-				     of net worth would say nothing, because a good month moves a
-				     fraction of a per cent of a six-figure total.
-
-				     Two near-circles far wider than the panel, turning slowly in
-				     opposite directions: what crosses the top of the band is a long,
-				     lazy arc that never repeats the same way twice. The reduced-motion
-				     block in app.css stops them after one frame, which leaves a still
-				     swell rather than a strobe. -->
+				<!-- The month as a tide: rises and darkens against the biggest month
+				     on record, since a share of net worth alone says nothing. Two
+				     circles turning slowly in opposite directions so the crest never
+				     repeats; app.css's reduced-motion block stops them after one frame. -->
 				<span class="tide" style:--share={netWorthDeltaShare} aria-hidden="true">
 					<span class="swell"></span>
 					<span class="swell alt"></span>
@@ -166,8 +143,7 @@
 
 	<nav>
 		{#each areas as area (area.key)}
-			<!-- An area opens on its first live screen, so a row never leads
-			     somewhere a switched-off module has emptied. -->
+			<!-- Opens on the first live screen, never a switched-off module. -->
 			<a
 				href={area.screens[0].path}
 				class="nav-item"
@@ -177,19 +153,13 @@
 				title={area.label}
 				style:--row-hue="var(--{area.hue})"
 			>
-				<!-- Not IconTile: an idle nav tile's ground is a SURFACE, not a mix of
-				     the row's hue, so the two states differ in kind rather than in
-				     strength and the shared primitive has nothing to share. -->
+				<!-- Not IconTile: an idle nav tile's ground is a surface, not a hue
+				     mix, so the two states differ in kind, not just strength. -->
 				<span class="nav-tile"><Icon name={area.icon} size={17} /></span>
 				<span class="label">{area.label}</span>
 				{#if area.key === badgeArea && (importBadge > 0 || approximateRates)}
-					<!-- A dot, not a count. The number was never acted on — it said
-					     "something is waiting", which is what a dot says in a tenth of
-					     the space, and the rail has no room for the digits at all.
-					     The count survives for anyone not looking at the screen.
-					     The same dot says an exchange rate is approximate: the banner
-					     that used to say so sat above every screen's title and was
-					     dismissed without being read; the note is in Settings › Money. -->
+					<!-- A dot, not a count — the rail has no room for digits. Also
+					     lights up when a currency's exchange rate is approximate. -->
 					{@const why = [
 						importBadge > 0
 							? `${importBadge} transaction${importBadge === 1 ? '' : 's'} waiting to be reviewed on Import`
@@ -200,8 +170,6 @@
 					]
 						.filter(Boolean)
 						.join('; ')}
-					<!-- The reason is on hover as well as for the screen reader: a dot
-					     with no way to ask "why" sent people hunting through every tab. -->
 					<span class="badge" role="status" aria-label={why} title={why}></span>
 				{/if}
 			</a>
@@ -239,15 +207,10 @@
 				<span class="name">{signedIn?.name ?? householdLabel}</span>
 				<span class="household">{householdLabel}</span>
 			</span>
-			<!-- Without this there is no way to switch accounts once a session
-			     exists. -->
 			<form method="POST" action="/logout">
 				<button type="submit" class="sign-out">Sign out</button>
 			</form>
 		</div>
-		<!-- What is running, and how. Deliberately the quietest thing on the panel:
-		     it is read once when something is wrong, and ignored the rest of the
-		     time. Settings → Self-hosting has the rest. -->
 		<a class="install" href="/settings" onclick={onNavigate}>
 			<span class="mono">v{version}</span>
 			<span aria-hidden="true">·</span>
@@ -264,13 +227,8 @@
 		display: flex;
 		flex-direction: column;
 		gap: 18px;
-		/* Fills whatever the wrapper gives it, which is the full screen height in
-		   both layouts — the sticky column on a wide screen and the fixed drawer on
-		   a narrow one. It used to set its own `100vh` and stick on its own, which
-		   made two nested scroll containers once the wrapper did the same, and the
-		   inner one overflowed wherever `vh` and `dvh` disagree.
-		   The background lives here, so this is the element that has to reach the
-		   bottom of the screen — otherwise the page shows beneath the navigation. */
+		/* Fills the wrapper's height rather than its own 100vh — this element
+		   must reach the bottom of the screen since the background lives here. */
 		height: 100%;
 		overflow-y: auto;
 		overscroll-behavior: contain;
@@ -327,10 +285,8 @@
 		border-radius: var(--radius-card);
 		background: var(--hero-bg);
 		box-shadow: var(--shadow-hero);
-		/* The tide is drawn to the panel's own edges and clipped by them. */
 		overflow: hidden;
-		/* Fixed white rather than --fg1: the gradient is dark in both themes, so
-		   a theme-following foreground would put near-black on navy in light. */
+		/* Fixed white rather than --fg1: the gradient is dark in both themes. */
 		color: #fff;
 	}
 	.hero-label {
@@ -356,9 +312,7 @@
 		opacity: 0.7;
 		margin-left: 5px;
 	}
-	/* Translucent white, not green or red: on this gradient a green pill is
-	   unreadable, and the sign is already in the number — and the colour of the
-	   month is the tide below it. */
+	/* Translucent, not green or red — the sign is already in the number. */
 	.hero-delta {
 		position: relative;
 		z-index: 1;
@@ -366,8 +320,6 @@
 		font-size: var(--text-xs);
 		padding: 2px var(--space-4);
 		border-radius: var(--radius-pill);
-		/* Dark glass rather than white: the pill sits on the tide, and a pale
-		   wash over a strong green left the figure hard to read. */
 		background: rgba(8, 12, 24, 0.42);
 		border: 1px solid rgba(255, 255, 255, 0.14);
 		backdrop-filter: blur(6px);
@@ -382,43 +334,32 @@
 		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 	}
 
-	/* The band the swells turn inside. Fixed height, so a quiet month is a low
-	   wave in the same strip rather than a differently shaped panel. */
+	/* Fixed height, so a quiet month is a low wave in the same strip rather
+	   than a differently shaped panel. */
 	.tide {
 		position: absolute;
 		inset: auto 0 0;
 		height: 46px;
 		overflow: hidden;
 		pointer-events: none;
-		/* From the two tide tokens, which app.css fixes in both themes for the
-		   reason the type above is fixed white: this panel is dark in both. */
 		--tide-ink: var(--tide-up);
-		/* Faint for a month that barely moved, strong for a record one — but
-		   never so faint it reads as a rendering fault; the floor is where a
-		   quiet month is still visibly a tide. */
+		/* Floor keeps a quiet month visibly a tide, not a rendering fault. */
 		opacity: calc(0.42 + 0.3 * var(--share));
 	}
 	.hero.down .tide {
 		--tide-ink: var(--tide-down);
 	}
-	/* Far wider than the panel on purpose: only the top of a very large circle
-	   crosses the band, so the edge reads as a swell and not as a bubble. */
+	/* Far wider than the panel: only the top of a large circle crosses the
+	   band, so the edge reads as a swell rather than a bubble. */
 	.swell {
 		position: absolute;
 		left: 50%;
 		width: 520px;
 		height: 520px;
 		margin-left: -260px;
-		/* Not 50%: a true circle turns without changing shape, and the wave is
-		   the difference between the radii. */
+		/* Not 50%: a true circle would turn without changing shape. */
 		border-radius: 44%;
-		/* Radial and centred, so the fade follows the wave's own curve rather
-		   than a flat line across the band — and because a gradient concentric
-		   with the circle it fills is the one kind that does not turn with it.
-		   `closest-side` puts 100% on the rim; without it the stops are measured
-		   to the corner and the edge never reaches transparent. */
-		/* A long fade, not a hard rim: the crest is deepest at the foot of the
-		   panel and thins out over most of the band it crosses. */
+		/* `closest-side` puts 100% on the rim so the edge reaches transparent. */
 		background: radial-gradient(
 			circle closest-side,
 			color-mix(in srgb, var(--tide-ink) 78%, transparent) 0 86%,
@@ -426,12 +367,10 @@
 			color-mix(in srgb, var(--tide-ink) 18%, transparent) 98%,
 			transparent 100%
 		);
-		/* Sunk so that between 10px and 40px of it shows, by the size of the
-		   month. */
+		/* Between 10px and 40px shows, by the size of the month. */
 		bottom: calc(-520px + 10px + 30px * var(--share));
-		/* Two motions on one element: the turn that makes the crest, and a slow
-		   drift across the band so the crest visibly travels rather than only
-		   changing shape in place — the difference between a tide and a stain. */
+		/* Turn plus a slow drift, so the crest visibly travels rather than
+		   just changing shape in place. */
 		animation:
 			tide-roll 9s linear infinite,
 			tide-drift 6.5s ease-in-out infinite alternate;
@@ -453,9 +392,8 @@
 			tide-roll 7s linear infinite reverse,
 			tide-drift 5s ease-in-out infinite alternate-reverse;
 	}
-	/* The drift moves the wrapper the swell turns inside, so the two
-	   transforms do not fight over one property: the swell rotates, its
-	   position slides. */
+	/* The drift and rotation don't fight over one property since they
+	   compose: the swell rotates, its position slides. */
 	.swell {
 		animation-composition: add;
 	}
@@ -509,9 +447,8 @@
 		flex: none;
 		transition: background-color var(--dur) var(--ease);
 	}
-	/* Tinted with the row's OWN colour rather than a neutral grey: the icon
-	   already carries that colour, so a grey wash underneath reads as a different
-	   element highlighting rather than this one. */
+	/* Tinted with the row's own hue rather than a neutral grey — the icon
+	   already carries that colour. */
 	.nav-item:hover {
 		background: color-mix(in srgb, var(--row-hue) 9%, transparent);
 		text-decoration: none;
@@ -640,8 +577,6 @@
 		align-items: baseline;
 		gap: 5px;
 		font-size: var(--text-xs);
-		/* The dimmest foreground the palette has: present when looked for, never
-		   competing with a navigation row. */
 		color: var(--fg3);
 		text-decoration: none;
 		letter-spacing: 0.01em;
@@ -652,14 +587,9 @@
 	}
 
 	/* ── Rail ───────────────────────────────────────────────────────────────
-	 * 720–1179px: a tablet, where 264px of navigation is a quarter of the
-	 * screen. The same markup with the words taken away — every row keeps its
-	 * `title`, so the label is a hover away and is still read aloud.
-	 *
-	 * A media query rather than a `variant` prop, deliberately: the layout is a
-	 * function of the viewport and nothing else, and a prop would mean the
-	 * server guessing a width it cannot know and hydrating into a correction.
-	 */
+	 * 720–1179px (tablet): same markup with words hidden — every row keeps
+	 * its `title`, so the label is a hover away and still read aloud. A media
+	 * query rather than a variant prop, since a server can't know the width. */
 	@media (min-width: 720px) and (max-width: 1179px) {
 		aside {
 			padding: 18px var(--space-5) 20px;
@@ -699,8 +629,7 @@
 			height: 44px;
 			border-radius: var(--radius-xl);
 		}
-		/* Pinned to the tile's corner rather than sitting in a column of its
-		   own, which the rail has taken away. */
+		/* Pinned to the tile's corner — no column for it in the rail layout. */
 		.badge {
 			position: absolute;
 			top: 4px;

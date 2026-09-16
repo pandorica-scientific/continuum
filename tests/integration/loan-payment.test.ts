@@ -7,14 +7,9 @@ import { makeAccount, makeLoan, makeTransaction } from './fixtures';
 import { rowId } from '../row-id';
 
 /**
- * T9b: the write that makes a loan payment's two halves reachable.
- *
- * `loan_event.transaction_id` is what the split reads, and nothing ever wrote
- * it — the split was code that could not fire on a real ledger. What the record
- * has to hold for it to fire honestly is what these cases assert: one event
- * carrying the transaction's own figures and its link, one claim per
- * transaction, money that arrived is never a payment out, and the interest
- * decided once here rather than worked out again by every reader.
+ * Asserts what a loan payment record must hold: one event per transaction
+ * carrying its own figures and link, money in is never a payment out, and
+ * interest is decided once here rather than re-derived by every reader.
  */
 
 let harness: Harness;

@@ -1,11 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // The projection's inputs, gathered from every corner of the household: cash,
-// portfolio, property, mortgages and rent.
-//
-// This lived inside the Retirement page loader until the Overview grew a
-// retirement panel. Two callers computing a forty-year amortisation from
-// slightly different copies of this logic is exactly the drift worth avoiding,
-// so it moved here and both call it.
+// portfolio, property, mortgages and rent. Shared so the Retirement page and
+// the Overview panel don't drift on their own copies of a 40-year amortisation.
 
 import { asc, desc } from 'drizzle-orm';
 import { db } from '$lib/server/db';

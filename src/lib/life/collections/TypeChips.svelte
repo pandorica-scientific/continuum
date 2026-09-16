@@ -1,11 +1,8 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	/**
-	 * The type filter above the bottle grid.
-	 *
-	 * Chips are derived from the rows that exist — see `types.ts` — so a chip
-	 * never leads to an empty screen. Beyond four the rest sit behind a dashed
-	 * `+n` that expands in place.
+	 * The type filter above the bottle grid. Chips are derived from the rows
+	 * that exist (see `types.ts`), so a chip never leads to an empty screen.
 	 */
 	import { splitChips, type TypeChip } from '$lib/life/collections/types';
 	import type { EnumValue } from '$lib/enums';

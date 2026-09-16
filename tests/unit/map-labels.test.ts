@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * Which region names the country map prints.
- *
- * The rules are the handoff prototype's, and they are all about not lying: a
- * name must fit the region it names, and must not sit on one already placed.
- * The world map has no names at all, which is why nothing here tests it.
+ * Which region names the country map prints: a name must fit the region it
+ * names and must not sit on one already placed. The world map has no names
+ * at all, so nothing here tests it.
  */
 import { describe, expect, it } from 'vitest';
 import { placeRegionLabels, wrapLabel, type RegionPlaceable } from '$lib/life/map/labels';
@@ -30,27 +28,20 @@ describe('wrapping a long name', () => {
 		expect(wrapLabel('Liechtensteinish')).toEqual(['Liechtensteinish']);
 	});
 
-	/**
-	 * The case France needs. Since v0.9.1 the map draws régions, and half of them
-	 * are hyphenated with no space at all — these stayed on one very wide line,
-	 * collided with their neighbours and were dropped, so four of France's
-	 * thirteen went unnamed.
-	 */
+	// Regression: hyphenated names with no space stayed on one wide line and got dropped for colliding.
 	it('breaks at a hyphen the name already has', () => {
 		expect(wrapLabel('Nouvelle-Aquitaine')).toEqual(['Nouvelle-', 'Aquitaine']);
 		expect(wrapLabel('Bourgogne-Franche-Comté')).toEqual(['Bourgogne-', 'Franche-Comté']);
 	});
 
-	// The hyphen stays with the fragment it ends, rather than floating at the
-	// start of the next line.
+	// The hyphen stays with the fragment it ends, not the start of the next line.
 	it('keeps the hyphen on the first line', () => {
 		expect(wrapLabel('Centre-Val de Loire')[0].endsWith('-')).toBe(false);
 		expect(wrapLabel('Nouvelle-Aquitaine')[0]).toBe('Nouvelle-');
 	});
 
 	it('prefers whichever break balances best', () => {
-		// A space here beats the hyphen: "Centre-Val" / "de Loire" is closer to
-		// even than "Centre-" / "Val de Loire".
+		// A space here beats the hyphen: "Centre-Val" / "de Loire" is more even.
 		expect(wrapLabel('Centre-Val de Loire')).toEqual(['Centre-Val', 'de Loire']);
 	});
 

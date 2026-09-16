@@ -43,9 +43,8 @@ export function parseFio(text: string): ParsedStatement {
 			currency = closing[2];
 			closingBalanceMinor = parseAmountToMinor(closing[1], currency);
 		}
-		// "Suma příjmů: +62652 CZK" / "Suma výdajů: -50050 CZK" — independent
-		// corroboration Fio prints but we previously discarded. Fio never prints a
-		// per-row running balance, so these are the only evidence beyond the two
+		// "Suma příjmů: +62652 CZK" / "Suma výdajů: -50050 CZK" — Fio never prints
+		// a per-row running balance, so these are the only evidence beyond the two
 		// endpoints that the row set is complete.
 		const credits = line.match(/Suma příjmů:\s*([-+\d\s,.]+) ([A-Z]{3})/);
 		if (credits) statedCreditTotalMinor = parseAmountToMinor(credits[1], credits[2]);

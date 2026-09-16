@@ -74,8 +74,8 @@ describe('lanes', () => {
 	});
 
 	it('does not seed a second set over a household that has edited theirs', async () => {
-		// `addOrganisation` is idempotent by name. Seeding again on the second call
-		// would put the app's guess back on top of the household's answer.
+		// addOrganisation is idempotent by name; reseeding would overwrite the
+		// household's edits with the app's guess.
 		const first = await addOrganisation(
 			{ shelfId: await incomeTaxShelf(db), name: 'Institute', kind: 'employer' },
 			db
