@@ -2,7 +2,7 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security
 
-## 0.9.3 — Unreleased
+## 0.9.3 — 2026-09-16
 
 > Open mode you can actually close, and a setup wizard that keeps what you typed.
 
