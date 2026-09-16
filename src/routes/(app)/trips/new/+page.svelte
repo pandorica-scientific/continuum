@@ -10,14 +10,7 @@
 	const idea = $derived(data.idea);
 	const entered = $derived(form?.entered);
 
-	/**
-	 * The country field, typed into rather than loaded.
-	 *
-	 * `$state` deliberately does NOT read `data` — it only captures the first
-	 * value, which is what the compiler warns about. The idea's country is the
-	 * field's starting point, applied once the loader has one, and left alone
-	 * afterwards so typing over it is not undone on the next render.
-	 */
+	// Seeded once from `data.idea?.country`, then left alone so typing over it isn't undone on rerender.
 	let country = $state('');
 	let seeded = false;
 	$effect(() => {
@@ -130,8 +123,7 @@
 		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
-	/* Typed lower case, stored upper case — the server upper-cases it, and this
-	   is so the field agrees with what will be saved. */
+	/* Server upper-cases the value on save; display agrees with it. */
 	input[name='country'] {
 		text-transform: uppercase;
 	}
@@ -142,8 +134,6 @@
 		font-size: var(--text-md);
 		color: var(--fg1);
 	}
-	/* Save and Cancel replace the control that opened the form — here that is
-	   the foot of the form itself, which is where the decision is made. */
 	.actions {
 		display: flex;
 		justify-content: flex-end;

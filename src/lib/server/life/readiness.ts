@@ -2,10 +2,10 @@
 /**
  * Reading the household's passports out of the archive.
  *
- * Nothing here asks a household to type a passport into a trip. Since v0.8.7 an
- * identity document already carries its kind, its issuing country and its
- * expiry, and it is already linked to the person it belongs to — so a trip can
- * simply look, and the one place a passport is recorded stays the one place.
+ * Nothing here asks a household to type a passport into a trip. An identity
+ * document already carries its kind, its issuing country and its expiry, and
+ * is already linked to the person it belongs to — so a trip can simply look,
+ * and the one place a passport is recorded stays the one place.
  */
 import { eq, sql } from 'drizzle-orm';
 import { db, type Db } from '$lib/server/db';

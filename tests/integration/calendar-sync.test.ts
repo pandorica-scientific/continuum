@@ -79,9 +79,8 @@ beforeEach(async () => {
 });
 
 describe('the push-loop guard', () => {
-	// THE failure this class of feature dies of. Insufficient hash normalisation
-	// makes every event compare as changed on every pass: push, remote echoes,
-	// push again — silently, showing up as rate-limit exhaustion, not an error.
+	// Regression: insufficient hash normalisation made every event compare as
+	// changed on every pass — silent rate-limit exhaustion, not an error.
 	it('issues zero writes on a second pass over unchanged state', async () => {
 		await createEvent(event(), null, testDb);
 		await sync();
@@ -155,10 +154,8 @@ describe('no resurrection', () => {
 		fake.deleteRemote(toRemoteId(created.id));
 		await sync();
 
-		// Gone here as well. The row is tombstoned when the deletion still has to
-		// reach another account, and reaped once no link references it — this being
-		// the only account, it is reaped in the same pass. Either way what matters
-		// is that nothing live remains.
+		// Tombstoned if the deletion still needs to reach another account, reaped
+		// once no link references it — either way, nothing live remains.
 		const [row] = await testDb
 			.select()
 			.from(schema.calendarEvent)
@@ -301,11 +298,9 @@ describe('write-back into the ledger', () => {
 	}
 
 	/**
-	 * The remote copy of the LOAN PAYMENT event specifically.
-	 *
-	 * The horizon also carries import reminders and quarterly-report events, which
-	 * are schedule rules with no row behind them — picking one of those by
-	 * accident tests the unbound path while claiming to test write-back.
+	 * The remote copy of the loan payment event specifically — the horizon
+	 * also carries schedule-rule events with no row behind them, which would
+	 * test the wrong path if picked by accident.
 	 */
 	function pushedLoanPayment(): { resourceId: string; series: EventSeries } {
 		const resourceId = [...fake.uids()].find((id) => fake.get(id)?.uid.includes('loanPayments'));
@@ -359,13 +354,9 @@ describe('write-back into the ledger', () => {
 		expect(written.length).toBeGreaterThan(0);
 	});
 
-	// The ledger owns a generated event's CONTENT. Retitling one in a phone
-	// calendar is not a fact about the amortisation schedule, so it is reverted
-	// rather than accepted — and it must not be mistaken for a date move.
-	// The link was never updated after a write-back, so the base hash still
-	// described the date BEFORE the move: the same move was rediscovered on every
-	// pass, writing the ledger again and filing another conflict row every fifteen
-	// minutes, without end.
+	// Regression: the link's base hash was never updated after a write-back, so
+	// the same remote move was rediscovered every pass, filing a duplicate
+	// conflict row every fifteen minutes forever.
 	it('does not write the same remote move back twice', async () => {
 		await seedLoan(15);
 		await sync();
@@ -547,12 +538,9 @@ describe('convergence', () => {
 // Every case below shipped broken. They are grouped by what went wrong rather
 // than by the function, because what makes them worth keeping is the failure.
 describe('regressions', () => {
-	// "Edited here, deleted there" is an ordinary outcome, and merge routes it to
-	// a conflict — where one side is genuinely null. `ours` and `theirs` are jsonb
-	// NOT NULL, so writing a JavaScript null raised 23502 INSIDE the single commit
-	// transaction and rolled the WHOLE pass back: no cursor, no links, everything
-	// re-pushed next time, failing in exactly the same place. One event was enough
-	// to wedge an account for good.
+	// Regression: writing a JS null into jsonb NOT NULL columns (`ours`/`theirs`)
+	// raised 23502 inside the commit transaction and rolled the whole pass
+	// back — one event was enough to wedge an account for good.
 	it('records a conflict whose other side is a deletion', async () => {
 		const created = await createEvent(event(), null, testDb);
 		if (!created.ok) throw new Error('setup failed');
@@ -579,10 +567,8 @@ describe('regressions', () => {
 		expect(account.lastSyncAt).not.toBeNull();
 	});
 
-	// A reset listing that reaches back ninety days says nothing whatsoever about
-	// what came before. Reading that silence as deletion is how one expired
-	// syncToken — routine and documented — destroyed every authored event older
-	// than the window, hard-deleted rather than tombstoned.
+	// Regression: reading a windowed reset's silence as deletion hard-deleted
+	// every authored event older than the window.
 	it('does not delete events older than a windowed reset', async () => {
 		const old = await createEvent(
 			event({
@@ -626,10 +612,8 @@ describe('regressions', () => {
 		expect(row?.deletedAt).not.toBeNull();
 	});
 
-	// CalDAV reports a deletion as a resource path and nothing else, because the
-	// body is gone. Filed under the path, it matched no local key and no link, so
-	// it merged to a no-op while the cursor advanced past it: the event stayed
-	// here for good and was never seen again.
+	// Regression: a path-only deletion matched no local key or link, merged to
+	// a no-op, and the event was never seen again.
 	it('applies a deletion the provider could only report by path', async () => {
 		const created = await createEvent(event(), null, testDb);
 		if (!created.ok) throw new Error('setup failed');
@@ -646,9 +630,8 @@ describe('regressions', () => {
 		expect(row?.deletedAt).not.toBeNull();
 	});
 
-	// A tombstone reaped in the same transaction that created it is a deletion
-	// nobody can undo. The row survives its grace period, so a mistaken remote
-	// deletion is still there to be found.
+	// The row survives its grace period, so a mistaken remote deletion can
+	// still be found and undone.
 	it('keeps a freshly tombstoned row rather than reaping it in the same pass', async () => {
 		const created = await createEvent(event(), null, testDb);
 		if (!created.ok) throw new Error('setup failed');
@@ -664,9 +647,8 @@ describe('regressions', () => {
 		expect(rows).toHaveLength(1);
 	});
 
-	// A link pointing at an event that no longer exists is not a cache, it is
-	// rubbish — and while it is there reapTombstones can never fire, so tombstones
-	// and links both accumulate with nothing able to clear either.
+	// A stale link blocks reapTombstones from ever firing, so tombstones and
+	// links both accumulate.
 	it('drops the link after successfully pushing a deletion', async () => {
 		const created = await createEvent(event(), null, testDb);
 		if (!created.ok) throw new Error('setup failed');
@@ -683,15 +665,11 @@ describe('regressions', () => {
 		expect(links).toHaveLength(0);
 	});
 
-	// A generated event that has aged past the trailing horizon is simply absent,
-	// and the engine took that to mean "authored, and deleted here" — so it pushed
-	// a deletion for every past mortgage payment out to the household's own
-	// calendar, one per loan per month, forever. The file's own header promises
-	// the opposite.
+	// Regression: an event aged past the horizon was mistaken for "authored and
+	// deleted here", pushing a deletion for every past payment forever.
 	//
-	// Modelled directly: a link and a remote copy for a `gen:` key that no ledger
-	// row currently produces, which is exactly what a payment past the horizon
-	// looks like.
+	// Modelled directly: a link and remote copy for a `gen:` key no ledger row
+	// produces, matching what an aged-out payment looks like.
 	it('never deletes a generated event that has aged out of the horizon', async () => {
 		const key = 'gen:loanPayments:loan:gone:paymentDay:2024-01';
 		const remoteId = toRemoteId(key);
@@ -722,11 +700,10 @@ describe('regressions', () => {
 		expect(links).toHaveLength(0);
 	});
 
-	// The advisory lock was taken on the pool handle outside any transaction, so
-	// its own implicit transaction committed as the statement returned and the
-	// xact-scoped lock was gone before the pull began. It excluded nothing.
+	// Regression: the advisory lock was taken outside any transaction, so it
+	// was released before the pull began and excluded nothing.
 	it('refuses a second pass while one is already running', async () => {
-		// The lease lives in `job` since 0051, one row per account, reused.
+		// The lease lives in `job`, one row per account, reused.
 		await testDb
 			.insert(schema.job)
 			.values({
@@ -792,9 +769,7 @@ describe('regressions', () => {
 			.select()
 			.from(schema.job)
 			.where(eq(schema.job.id, `calendar-sync:${ACCOUNT}`));
-		// Not still running: a pass that threw must give the claim up on the way out,
-		// or the account is locked out until the lease expires. The failure is
-		// recorded on the work rather than only on the account.
+		// The failure is recorded on the work, not only on the account.
 		expect(lease.state).toBe('failed');
 		expect(lease.error).toBeTruthy();
 	});

@@ -1,26 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * Open mode: sign-in without a credential, for the whole instance.
+ * Open mode: sign-in without a credential, for the whole instance. With it on,
+ * anyone who can reach the URL is any person on the instance, including the
+ * administrator.
  *
- * Requested explicitly, and the consequence is recorded here rather than
- * mitigated. With it on, anyone who can reach the URL is any person on the
- * instance — including the administrator — and can read every statement,
- * salary figure, mortgage balance and tax statement, use the API and export
- * everything. On a plain-HTTP LAN address that is everyone on the network.
- *
- * Three rules give it the shape it has:
- *
- *   - Only an administrator may turn it on, and only by re-entering their own
- *     password. That is the last moment a password can prove intent, so it is
- *     where the proof is taken.
- *   - Turning it OFF needs nothing. Once the door is open anyone inside could
- *     close it anyway, and demanding a credential to close a door that is
- *     already open would only stop the honest.
- *   - Passwords are never deleted. Turning it off restores normal sign-in with
- *     every existing credential intact.
- *
- * It governs interactive sign-in only. The /api boundary, calendar feed tokens
- * and enrollment tokens keep their own checks and are not routed around.
+ * Turning it on requires an administrator's password (proof of intent).
+ * Turning it off requires nothing — anyone already inside could do it anyway.
+ * Passwords are never deleted, so turning it off restores normal sign-in.
+ * The /api boundary, calendar feed tokens and enrollment tokens keep their own
+ * checks and are not routed around.
  */
 
 import { eq } from 'drizzle-orm';

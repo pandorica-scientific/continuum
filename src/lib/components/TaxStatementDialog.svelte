@@ -39,10 +39,8 @@
 		onclose: () => void;
 	} = $props();
 
-	// The draft is seeded from the props once and is the dialog's own after
-	// that: it is mounted fresh for each statement, and re-reading `existing`
-	// while someone is typing would overwrite what they had typed. Reading it
-	// inside untrack states that, rather than leaving it to look accidental.
+	// Seeded once; re-reading `existing` while someone is typing would
+	// overwrite what they had typed.
 	const start = untrack(() => ({
 		personId: existing?.personId ?? (people[0]?.id || ''),
 		year: String(existing?.year ?? new Date().getFullYear() - 1),
@@ -68,15 +66,14 @@
 	let fileNames = $state<string[]>([]);
 	let fileKind = $state<string>('statement');
 
-	// A statement saved in a currency the rate source no longer quotes must still
-	// show its own currency selected, rather than silently becoming another one.
+	// A statement in a currency the rate source no longer quotes must still
+	// show that currency selected, not silently switch to another one.
 	const currencyOptions = $derived(
 		currencies.includes(currency) ? currencies : [currency, ...currencies]
 	);
 
-	// Prefill applies while creating, and stops the moment the gross field is
-	// touched. Editing an existing statement never prefills: a saved figure is
-	// never re-derived. That rule is what the E2E reload test pins.
+	// Prefill only while creating; editing an existing statement never
+	// re-derives a saved figure.
 	let grossTouched = $state(untrack(() => existing !== null));
 	const suggestion = $derived(prefillTotals[`${personId}|${Number(year)}`] ?? null);
 	$effect(() => {
@@ -90,9 +87,8 @@
 		action="?/save"
 		enctype="multipart/form-data"
 		onchange={(event) => {
-			// The change event bubbles up from the dropzone's own input.
-			// fileNames is not merely a display: it gates the kind select and
-			// the document picker below, so it has to keep being written.
+			// Bubbles up from the dropzone's own input; fileNames also gates the
+			// kind select and document picker below.
 			const target = event.target as HTMLInputElement;
 			if (target?.type === 'file') fileNames = [...(target.files ?? [])].map((f) => f.name);
 		}}
@@ -124,9 +120,6 @@
 			</label>
 			<label>
 				<span>Currency</span>
-				<!-- Was free text, which accepted anything: a display symbol, a
-				     misspelling, a currency nothing can convert. The list is the same
-				     one the accounts and property screens offer. -->
 				<select class="tax-currency" name="currency" bind:value={currency}>
 					{#each currencyOptions as c (c)}
 						<option value={c}>{currencyLabel(c)}</option>
@@ -157,10 +150,6 @@
 		{#each lines as line, i (i)}
 			<div class="line">
 				<input name="lineLabel" placeholder="Social insurance" bind:value={line.label} />
-				<!-- The remove button shares the amount's column rather than taking one
-				     of its own: a third column would move the split between label and
-				     amount away from the split between the two fields below the moment
-				     a second line existed. -->
 				<div class="line-amount">
 					<input name="lineAmount" placeholder="0" inputmode="decimal" bind:value={line.amount} />
 					{#if lines.length > 1}
@@ -185,11 +174,8 @@
 		<span class="section-label">The paperwork</span>
 		<div class="grid">
 			<label>
-				<!-- Uploading files these on the Finance shelf against this person, so
-				     the documents exist because the statement does — no separate trip to
-				     the documents screen first. A year's filing is several pieces of
-				     paper, so several files at once; one kind per batch, and a mixed
-				     batch is two saves. -->
+				<!-- Several files at once, since a year's filing is several papers;
+				     one kind per batch, so a mixed batch is two saves. -->
 				<span>Upload the paperwork</span>
 				<UploadDropzone
 					name="file"
@@ -249,12 +235,8 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 		gap: var(--space-5) var(--space-6);
-		/* Controls line up along their BOTTOM edge, not their top.
-		   "Gross income · from 12 payslips" wraps to two lines where "Whose" and
-		   "Year" take one, and with the fields stretched from the top that pushed
-		   the last input a whole line below the four beside it — a row of controls
-		   that no longer read as a row. Aligning at the end lets a label be as
-		   tall as it needs to be while every input still sits on one line. */
+		/* Align at the bottom edge so a two-line label ("Gross income · from 12
+		   payslips") doesn't push its input below the row. */
 		align-items: end;
 	}
 	label {
@@ -264,11 +246,7 @@
 		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
-	/* Only what the base control layer cannot know: these live in 1fr grid
-	 * tracks and have to be allowed to be narrower than their content. The look
-	 * and the height come from the base layer — restating them here is what gave
-	 * the file field 8px of padding on top of its button and made it half again
-	 * as tall as the select beside it. */
+	/* Allow narrower than content — these live in 1fr grid tracks. */
 	.tax-form input,
 	.tax-form select {
 		min-width: 0;
@@ -281,9 +259,8 @@
 		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
-	/* Same two columns and the same gap as `.grid` above and below, so the split
-	 * between label and amount lands on the split between the two fields in the
-	 * section under it rather than 100px to the right of it. */
+	/* Same two columns and gap as `.grid`, so the label/amount split lines up
+	 * with the fields in the sections around it. */
 	.line {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);

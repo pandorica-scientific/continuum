@@ -1,14 +1,5 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
-	/**
-	 * One bottling, opened.
-	 *
-	 * Two columns, as the handoff draws it. On the left the things that happened
-	 * to this bottle — the photograph somebody took of it, what it cost, and
-	 * every time it was opened. On the right what it IS: the facts as a row of
-	 * small tiles, how many are in the house, and the shape its tasting notes
-	 * make.
-	 */
 	import { enhance } from '$app/forms';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import Icon from '$lib/components/Icon.svelte';
@@ -50,12 +41,7 @@
 		[bottle.producer, [bottle.region, flag].filter(Boolean).join(' ')].filter(Boolean).join(' · ')
 	);
 
-	/**
-	 * How many tastings mentioned each flavour word.
-	 *
-	 * Counted here rather than in SQL: the radar needs them normalised against
-	 * each other, and the list is already loaded.
-	 */
+	/** How many tastings mentioned each flavour word — counted here, not SQL, since the list is already loaded. */
 	const mentions = $derived.by(() => {
 		const counts: Record<string, { count: number; series: string }> = {};
 		for (const one of bottle.tastingList) {
@@ -72,12 +58,7 @@
 			.sort((a, b) => b.count - a.count || a.note.localeCompare(b.note));
 	});
 
-	/**
-	 * The facts, as tiles. Only the ones this bottle actually has.
-	 *
-	 * An empty tile reading "—" is a question the screen is asking the household,
-	 * and a bottle of gin has no vintage to answer with.
-	 */
+	/** The facts, as tiles — only the ones this bottle actually has (a gin has no vintage). */
 	const facts = $derived(
 		[
 			{ label: 'Type', value: typeWord(bottle.type), mono: false },
@@ -118,10 +99,7 @@
 
 <div class="columns">
 	<div class="stack">
-		<!-- ONE photograph, shown WHOLE.
-		     The crop the corners were dragged onto goes on the label plate in the
-		     cellar; this is the frame it came out of. Cutting the neck off to fill
-		     a box is exactly what the person did not photograph. -->
+		<!-- Whole photo, not the cropped label plate (which is shown separately below). -->
 		<div class="card photo" class:empty={!bottle.photo && !changingPhoto}>
 			{#if bottle.photo}
 				<img src="/files/{bottle.photo}" alt="{bottle.name}, photographed" />
@@ -211,9 +189,6 @@
 	</div>
 
 	<div class="stack">
-		<!-- Tiles rather than a list of rows: these are seven short facts read at
-		     a glance, and a right-aligned column of them makes the eye travel the
-		     width of the card for every one. -->
 		<dl class="facts">
 			{#each facts as fact (fact.label)}
 				<div class="fact">
@@ -232,9 +207,6 @@
 				<TastingRadar {mentions} size={280} />
 			</div>
 
-			<!-- The window at the foot of the card that shows what the household
-			     said about it: the two facts belong together. A bottle with no
-			     window says nothing at all rather than drawing an empty row. -->
 			{#if phase !== 'keeps'}
 				<div class="drink-by">
 					<span class="when">
@@ -299,29 +271,22 @@
 		position: relative;
 		display: grid;
 		place-items: center;
-		/* Wide, as the handoff draws it. Taller would give a portrait photograph
-		   more height, but an empty slot half a screen deep is what somebody sees
-		   first and it is not the point of the page. */
+		/* Wide, not tall — an empty slot half a screen deep isn't the point of the page. */
 		aspect-ratio: 3 / 2;
 		overflow: hidden;
 	}
-	/* Dashed while empty: it reads as a slot waiting for something rather than
-	   as a card that failed to load. */
+	/* Dashed while empty, so it reads as a waiting slot, not a card that failed to load. */
 	.photo.empty {
 		border-style: dashed;
 		background: none;
 	}
-	/* `contain`, never `cover`. A photograph of a bottle is a tall thing in a
-	   wide box, and cropping it to fill would cut off the neck — which is most of
-	   what makes a bottle recognisable. */
+	/* contain, never cover — cropping a bottle to fill a wide box cuts off the neck. */
 	.photo img {
 		width: 100%;
 		height: 100%;
 		object-fit: contain;
 	}
-	/* The controls float over the photograph, painted with an OPAQUE token:
-	   `--card` is translucent in the dark theme, and a floating surface painted
-	   with it looks right until somebody switches. */
+	/* Opaque `--bg2`, not `--card`, which is translucent in the dark theme. */
 	.over {
 		position: absolute;
 		right: var(--space-5);

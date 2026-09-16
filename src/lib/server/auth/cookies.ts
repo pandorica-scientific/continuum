@@ -1,16 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// One place decides whether an auth cookie locks itself to HTTPS.
-//
-// The answer belongs to the request, not to the instance. The same server can
-// be reached over https through a proxy and over plain http on the LAN at
-// once, and a `Secure` cookie set on an http response is silently dropped by
-// the browser — so deciding from a configured https address alone would lock
-// every LAN sign-in out the moment one was configured. The app
-// itself only ever speaks http; whether the browser used https is what the
-// proxy in front says in `X-Forwarded-Proto`, and a request without that
-// header came straight to the container's port.
-//
-// One place, so a second cookie can never disagree with the first.
+// One place decides whether an auth cookie locks itself to HTTPS, per request
+// rather than per instance: the same server can be reached over https through
+// a proxy and over plain http on the LAN at once, and a `Secure` cookie set on
+// an http response is silently dropped by the browser. Https is detected from
+// the proxy's `X-Forwarded-Proto`, since the app itself only ever speaks http.
 
 import { AsyncLocalStorage } from 'node:async_hooks';
 

@@ -1,18 +1,8 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
-	/**
-	 * A person's name, in that person's colour.
-	 *
-	 * The colour is the household's, not the screen's — see `personHues` in
-	 * $lib/people — so the same person is the same colour on Salary, Tax and
-	 * Documents alike. That is the whole point of it: a tag whose colour changes
-	 * per screen is decoration, and reading a table by colour then teaches
-	 * something untrue.
-	 *
-	 * The name is always printed. Colour is a second channel on top of it, never
-	 * the only one: a household of two whose members cannot tell the two hues
-	 * apart still has to be able to read the row.
-	 */
+	// The colour is the household's (see `personHues` in $lib/people), so the
+	// same person is the same colour on every screen. Name is always printed;
+	// colour is a secondary channel, never the only one.
 	import { initialsFor } from '$lib/people';
 
 	let {
@@ -44,15 +34,10 @@
 		align-items: center;
 		gap: 5px;
 		border: 1px solid color-mix(in srgb, var(--tag) 45%, transparent);
-		/* Tinted from the person's own colour rather than from a fixed token, so
-		   one rule covers every hue and both themes. */
 		background: color-mix(in srgb, var(--tag) 12%, transparent);
-		/* Carried towards the theme's own ink rather than printed in the raw hue.
-		   The `--series-…` tokens were measured as chart FILLS, where 3:1 is the
-		   bar; at 11px on a 12% wash of themselves the greens fell to 2.8:1 on
-		   the light theme. The dot below stays the exact colour, so the identity
-		   is still shown at full strength — it is only the lettering that has to
-		   clear AA. */
+		/* Mixed towards --fg1 rather than the raw hue: some --series-… greens
+		   fall below 2.8:1 contrast at full saturation on the light theme. The
+		   dot keeps the exact colour; only the lettering needs to clear AA. */
 		color: color-mix(in srgb, var(--tag) 70%, var(--fg1));
 		border-radius: var(--radius-xl);
 		padding: 1px 8px;

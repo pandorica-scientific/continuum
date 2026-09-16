@@ -36,14 +36,10 @@ function rateAt(table: RateTable, code: string, day: string): { rate: number; ba
 	if (!list || list.length === 0) return { rate: 0, basis: 'none' };
 	const hit = list.find((r) => r.day <= day);
 	if (hit) return { rate: hit.rate, basis: 'exact' };
-	// refreshRates only ever fetches the current fixing and the CNB publishes
-	// forward, so a day before this installation's first fetch can never gain a
-	// rate of its own — importing three years of statements into a new instance
-	// puts every one of them here. The oldest rate on record is stale but the
-	// right order of magnitude, where face value would read 10 000 EUR as
-	// 10 000 CZK; it also keeps cross-currency transfer pairing working, which
-	// silently stops proposing when a conversion comes back null. `basis` keeps
-	// the approximation labelled rather than hiding it.
+	// A day before this installation's first fetch can never gain a rate of its
+	// own. The oldest rate on record is stale but the right order of magnitude
+	// (better than face value reading 10 000 EUR as 10 000 CZK), and keeps
+	// cross-currency transfer pairing working. `basis` labels the approximation.
 	return { rate: list[list.length - 1].rate, basis: 'carried' };
 }
 
@@ -117,15 +113,11 @@ export interface ApproximateRates {
 /**
  * Which currencies are being converted approximately, and WHY.
  *
- * The two reasons are genuinely different and want different advice. `none`
- * means the rate table has nothing for that currency, which usually is a
- * connectivity or refresh problem worth acting on. `carried` means a rate
- * exists but this particular figure is older than the earliest fixing on
- * record — which happens to every instance that imports history, is not a fault
- * of any kind, and cannot be fixed by checking the internet.
- *
- * They used to be collapsed into one list under one message telling people to
- * check their connection, which was wrong advice for the far more common case.
+ * The two reasons want different advice. `none` means the rate table has
+ * nothing for that currency, usually a connectivity or refresh problem worth
+ * acting on. `carried` means a rate exists but this figure predates the
+ * earliest fixing on record — normal for any instance that imports history,
+ * and not fixable by checking the internet.
  */
 export function missingRateCodes(
 	table: RateTable,
@@ -152,20 +144,11 @@ export function missingRateCodes(
 /**
  * Convert, or fall back to the amount's face value when no rate is known.
  *
- * `convertMinorSync` returns null for "no rate is known", and the `?? amount`
- * this replaces read that as "1:1" — so on an installation whose rate table is
- * still empty (the first CNB fetch is fire-and-forget and its failures are
- * swallowed by design) a 10 000 EUR movement counted as 100 CZK, understating
- * income and spending roughly 25-fold with nothing to show for it.
- *
- * Face value is still the least-bad arithmetic — dropping the amount would
- * understate the total too — but it must not be silent. `missingRateCurrencies`
- * drives a banner in the app layout that names every currency being shown this
- * way, so an unconverted figure is labelled rather than quietly wrong.
- *
- * Since `rateAt` carries the oldest fixing backwards, this now only falls back
- * for a currency with no stored fixing at all. A day that merely predates the
- * first fetch converts at the carried rate and is labelled by the same banner.
+ * Face value is the least-bad arithmetic when a currency has no stored
+ * fixing at all — dropping the amount would understate the total too — but
+ * it must not be silent: `missingRateCurrencies` drives a banner naming every
+ * currency shown this way. A day that merely predates the first fetch
+ * converts at the carried rate instead, via `rateAt`.
  */
 export function convertOrFace(
 	table: RateTable,

@@ -20,9 +20,7 @@ const entry = (over: {
 const same = (amount: bigint) => amount;
 
 describe('monthlyTotals', () => {
-	// Two employers in one month are two rows, and what the person earned that
-	// month is both of them. Taking either one would report one job and silently
-	// drop the other.
+	// Two employers in one month are two rows; both must be summed, not just one.
 	it('adds a month evidenced twice into one month', () => {
 		const months = monthlyTotals(
 			[
@@ -42,8 +40,7 @@ describe('monthlyTotals', () => {
 		]);
 	});
 
-	// Null is "nobody said", and it is not zero. Summing it as zero would turn a
-	// month with no net stated into a month that earned nothing net.
+	// Null means "nobody said" and must not be summed as zero.
 	it('leaves a figure nobody stated as null rather than as zero', () => {
 		const [month] = monthlyTotals(
 			[entry({ periodMonth: '2026-07', grossMinor: 6_000_000n })],
@@ -54,8 +51,7 @@ describe('monthlyTotals', () => {
 		expect(month.bonusMinor).toBeNull();
 	});
 
-	// A 2019 payslip restated at this morning's rate is a different number every
-	// morning, so each month is converted at its OWN first day.
+	// Each month is converted at its OWN first day, not at today's rate.
 	it('converts each month at its own date', () => {
 		const seen: { from: string; to: string; day: string }[] = [];
 		const convert = (amount: bigint, from: string, to: string, day: string) => {

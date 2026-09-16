@@ -74,17 +74,11 @@ export function normalise(raw: string): string {
 }
 
 /**
- * Whole-word match over normalised text. Both sides go through `normalise`:
- * the haystack has its diacritics stripped and its punctuation collapsed, so a
- * needle that keeps either can never match it. Rules the app writes itself
- * (learned ones) were already folded, but a hand-typed one was stored
- * with only `.toLowerCase()`, so every rule containing an accent or a hyphen
- * saved cleanly, listed cleanly, reported a confidence — and never once fired.
- * "Rohlík" missed ROHLIK.CZ, "T-Mobile" missed T-MOBILE, "Česká pošta" missed
- * CESKA POSTA. In a Czech household that is most of the rules a person writes.
- *
- * Normalising here rather than only on save also repairs rules already in the
- * database, and `normalise` is idempotent so pre-folded values are unaffected.
+ * Whole-word match over normalised text. Both sides go through `normalise`,
+ * so a needle stored only with `.toLowerCase()` (a hand-typed rule) still
+ * matches a haystack with its diacritics stripped and punctuation collapsed.
+ * Normalising here rather than only on save also repairs rules already in
+ * the database; `normalise` is idempotent so pre-folded values are unaffected.
  *
  * The match is deliberately whole-word despite the operator being called
  * "contains": a counterparty can be as short as "pre", "o2" or "cez", and a

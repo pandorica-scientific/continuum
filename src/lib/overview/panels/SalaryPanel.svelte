@@ -1,12 +1,9 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// The last month each person was paid for, against the month before it.
-	//
 	// The arrow is drawn here rather than through charts/Delta.svelte because
-	// the comparison is already settled: the builder decides whether the month
-	// is being read on net or on gross, and hands over the percentage and the
-	// colour. Delta.svelte takes the two figures and decides for itself, which
-	// would mean the panel making that choice a second time.
+	// the builder already decided net-vs-gross and hands over the percentage
+	// and colour directly.
 	interface Row {
 		id: string;
 		name: string;
@@ -37,8 +34,6 @@
 			</div>
 			<div class="figures">
 				<span class="mono net">{row.net ?? '—'}</span>
-				<!-- Gross is the second figure, and quiet: what reaches the account
-				     is the one a household checks a month against. -->
 				<span class="mono gross">{row.gross ? `${row.gross} gross` : ''}</span>
 				<span
 					class="mono delta"

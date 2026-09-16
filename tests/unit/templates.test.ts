@@ -8,15 +8,9 @@ import {
 	unitsForTemplate
 } from '$lib/documents/templates';
 
-/**
- * Seven template names, four engines.
- *
- * The plan the old `PlannedShelfLayout` type carried — gallery, timeline, kit —
- * never shipped, because each name was going to be a component of its own and
- * three more components is three more things to keep consistent. They are the
- * dossier with a different seed and a different history order, which is a
- * difference a household can see and the code barely notices.
- */
+// Seven template names, four engines: timeline/kit/obligations are the
+// dossier engine with a different seed and history order, not separate
+// components — a difference a household can see and the code barely notices.
 describe('shelf templates', () => {
 	it('every template has an engine, a label and a unit list', () => {
 		for (const template of ENUMS['shelf.template']) {

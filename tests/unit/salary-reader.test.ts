@@ -2,9 +2,8 @@
 import { describe, expect, it } from 'vitest';
 import { detectBonus, extractCandidates, pickGross, pickNet } from '$lib/salary';
 
-// readPayslip needs a PDF and a database, so its PARTS are tested here and its
-// wiring is covered by the integration tests. What matters is that a single
-// slip yields three independent figures, none of them borrowing another.
+// readPayslip needs a PDF and a database, so its PARTS are tested here;
+// wiring is covered by the integration tests.
 describe('a payslip yields three figures', () => {
 	const slip = [
 		'Mzdový list 08/2026',

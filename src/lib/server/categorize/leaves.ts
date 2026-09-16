@@ -1,11 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * The categories, in the one order every screen shows them in.
- *
- * Four screens each wrote `orderBy(category.groupKey, category.sort)` for
- * themselves, which was fine while there was only one rule. There are two now —
- * a household's own order, and a catch-all pinned beneath it — and a rule
- * spelled out in four places is a rule that will hold in three.
+ * The categories, in the one order every screen shows them in: a household's
+ * own order, with a catch-all pinned beneath it.
  */
 
 import { asc, sql } from 'drizzle-orm';

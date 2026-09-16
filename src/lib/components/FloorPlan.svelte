@@ -42,8 +42,7 @@
 			{@const bounds = roomBounds(room)}
 			{@const cx = (bounds.x + bounds.w / 2) * cell}
 			{@const cy = (bounds.y + bounds.h / 2) * cell}
-			<!-- A room is the gallery's index: press it and its photos open. The
-			     group is the target, so the name and the count are part of it. -->
+			<!-- A room is the gallery's index: press it and its photos open. -->
 			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 			<g
 				class="room-group"
@@ -91,9 +90,7 @@
 		height: 100%;
 		display: block;
 	}
-	/* A room is a tile in the area's hue, as the handoff draws it, not an
-	   outline on paper: the plan is read as rooms, and a filled shape reads
-	   as a room where a stroked one reads as a diagram. */
+	/* A filled shape reads as a room; a stroked outline reads as a diagram. */
 	.room {
 		fill: color-mix(in srgb, var(--purple) 10%, var(--surface));
 		stroke: color-mix(in srgb, var(--purple) 40%, transparent);

@@ -11,18 +11,11 @@
 
 	const fmt = (v: number) => formatMinor(fromMajor(v, currency), currency);
 	const unit = $derived(displayCurrency(currency));
-	// "In", "Out" and "Saved" are magnitudes by construction. "Kept" is not: a
-	// month that spent more than it earned reported its shortfall in the colour
-	// of a gain.
+	// "Kept" can go negative (a shortfall), unlike In/Out/Saved, so its tone
+	// must come from the sign rather than being fixed.
 	const keptTone = $derived(signTone(flow.totals.kept));
 
-	/**
-	 * Which direction is the good news, for each of the four totals.
-	 *
-	 * Spending more is the only one where the arrow up is the bad answer, and it
-	 * is written down here rather than inferred from the sign because nothing in
-	 * the number itself says which kind of figure it is.
-	 */
+	/** Which direction is good news, per total — spending up is the one exception. */
 	const GOOD_WHEN_UP: Record<keyof FlowData['totals'], boolean> = {
 		in: true,
 		out: false,
@@ -32,15 +25,7 @@
 
 	const stageByKey = $derived(new Map(flow.input.stages.map((stage) => [stage.key, stage])));
 
-	/**
-	 * What a head of the breakdown strip is compared against — null when there is
-	 * no window behind this one to compare it with.
-	 *
-	 * The previous window's figures are looked up by the key the head is drawn
-	 * under, so a group and its comparison are the same group by construction.
-	 * A group the window before did not touch comes back as zero, which is a
-	 * comparison the arithmetic itself declines to make.
-	 */
+	/** What a breakdown-strip head is compared against; null with no previous window. */
 	function versus(key: string) {
 		const previous = flow.previous;
 		if (!previous) return null;
@@ -49,21 +34,13 @@
 			return {
 				current: stage.amount,
 				previous: previous.byGroupKey[key] ?? 0,
-				// Putting more aside is good news; spending more is not.
 				goodWhenUp: stage.role === 'savings',
 				against: previous.caption
 			};
 
-		// Anything that is not a stage is the row closing the strip: the cash the
-		// window kept, drawn as a shortfall when it kept none. A shortfall is
-		// compared as the magnitude it is drawn as, and against the window
-		// before's own shortfall — which is a negative `kept`, so a window that
-		// ended in the black leaves nothing to compare against.
-		//
-		// Tested against the same dust threshold the loader chose the head with,
-		// and not against zero: a hundredth of a crown short is drawn as "Kept in
-		// cash" up there, and a comparison that read it as a shortfall would
-		// negate both sides of a row the strip had already called a surplus.
+		// Not a stage: this is the closing row (cash kept / shortfall). Use the
+		// same ROUNDING dust threshold as the loader used to label it, so this
+		// comparison agrees with what the strip already called a surplus.
 		const shortfall = flow.totals.kept < -ROUNDING;
 		const sign = shortfall ? -1 : 1;
 		return {
@@ -81,10 +58,7 @@
 	color: string | undefined,
 	wash: string | undefined
 )}
-	<!-- A wash tile per total, as the handoff draws them: the hue that the
-	     figure means, mixed faintly into the ground, so In is green before it
-	     is read and Kept is red when it is a shortfall. Out has no hue: money
-	     leaving is not bad news, it is what money is for. -->
+	<!-- Out has no wash hue: money leaving isn't bad news, it's what money is for. -->
 	<div class="total" style:--wash={wash ?? 'var(--surface)'}>
 		<span class="t-name">{name}</span>
 		<span class="t-line">
@@ -111,11 +85,6 @@
 			{@render total('Saved', 'saved', 'var(--teal)', 'var(--teal-wash)')}
 			{@render total('Kept', 'kept', `var(${keptTone})`, `var(${keptTone}-wash)`)}
 		</div>
-		<!--
-			Said once, under the row, rather than on every arrow: the card carries a
-			delta on every total and every group head, and repeating the window on
-			each of them would crowd out the figures they are about.
-		-->
 		{#if flow.previous}
 			<span class="against">against {flow.previous.caption}</span>
 		{/if}

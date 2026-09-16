@@ -8,7 +8,7 @@
  * the lot and the typed pages come back worse than they went in; trust the text
  * layer and the signed page is blank.
  *
- * WHAT THIS NEVER DOES (handoff §4.3): no PDF rewriting, no field extraction
+ * WHAT THIS NEVER DOES: no PDF rewriting, no field extraction
  * into metadata, no writes to a document's name, dates or amounts. Text goes
  * into chunks and nowhere else. Grabbing the invoice number "while we are in
  * there" is explicitly out of scope, and a reader who adds it here will have

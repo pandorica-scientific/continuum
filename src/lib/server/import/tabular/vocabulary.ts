@@ -12,16 +12,10 @@
  *   Revolut (en), CaixaBank (es), Nickel (es), Sparkasse (de), UK/US (en).
  */
 
-/** Lowercase and strip diacritics so "Částka" and "castka" are one key. */
 /**
- * Letters NFD cannot take apart.
- *
- * A stroke is part of the glyph rather than a combining mark, so `ł` survives
- * decomposition untouched. Every Polish term in this file is written plainly —
- * `lacznie`, `oplata` — so without this substitution none of them could ever
- * match the `Łącznie` total line or the `Opłata` fee column they were written
- * for, and a Polish summary line could be filed as a movement.
- *
+ * Letters NFD cannot take apart: a stroke is part of the glyph rather than a
+ * combining mark, so `ł` survives decomposition untouched and needs an
+ * explicit substitution to match the plain `l` terms in this file.
  * Lowercase first, so the map only needs its lowercase keys.
  */
 const STROKED: Record<string, string> = { ł: 'l', đ: 'd', ø: 'o', ħ: 'h', ŧ: 't' };
@@ -110,15 +104,8 @@ export const HEADER_TERMS: Record<ColumnRole, string[]> = {
 		'stav uctu'
 	],
 	/**
-	 * A charge stated beside the movement rather than folded into it.
-	 *
-	 * `ParsedRow` has carried `feeMinor` since it was written, and the proof
-	 * engine has always netted it out — `amount - fee` is what a balance chain
-	 * steps by. There was simply no ROLE for it, so the generic reader could
-	 * never populate it, and a bank that states its fees separately had a chain
-	 * that would not close by exactly the fees. That is one of the three layouts
-	 * still needing a hand-written parser, and it needed a word rather than an
-	 * algorithm.
+	 * A charge stated beside the movement rather than folded into it —
+	 * `ParsedRow.feeMinor`, which the proof engine nets out as `amount - fee`.
 	 */
 	fee: [
 		'fee',

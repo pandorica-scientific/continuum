@@ -24,10 +24,9 @@ describe('what the hash ignores', () => {
 		expect(hash({ updatedAt: '2027-01-01T00:00:00.000Z' })).toBe(hash());
 	});
 
-	// THE PUSH LOOP. We send "🏥 Dentist · Continuum"; the remote hands it back
-	// decorated. If decoration reached the hash, every event would compare as
-	// changed on every pass — push, echo, push — and it fails silently, as
-	// rate-limit exhaustion rather than an error.
+	// Guards against a push loop: the remote hands back the decorated title we
+	// sent, and if decoration reached the hash every event would compare as
+	// changed on every pass, silently exhausting the rate limit.
 	it('ignores the marker and source tag we added on the way out', () => {
 		expect(hashSeries({ ...base, title: '🏥 Dentist · Continuum' }, '🏥')).toBe(hash());
 	});
@@ -114,12 +113,9 @@ describe('what the hash notices', () => {
 	});
 });
 
-// The three per-occurrence override fields were added to an exception long after
-// events had been pushed and their hashes stored as the merge base. Writing them
-// into the canonical form unconditionally would have changed the hash of every
-// series that has ever been synced, so on the first pass after the upgrade no
-// stored hash would match, both sides would read as changed, and the household's
-// whole calendar would arrive as conflicts.
+// The three per-occurrence override fields were added after hashes were already
+// stored as the merge base; writing them unconditionally would change every
+// stored hash and turn the whole calendar into conflicts on the first sync.
 describe('canonical form across the upgrade that added per-occurrence overrides', () => {
 	const inherits = { recurrenceId: base.startsAt, cancelled: false, title: 'Moved' };
 

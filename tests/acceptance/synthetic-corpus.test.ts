@@ -4,31 +4,19 @@ import { describe, expect, it } from 'vitest';
 import { detectAndParseAll } from '$lib/server/import/detect';
 
 /**
- * The synthetic corpus: 60 statements, 24 locales, 20 currencies, 16 layout
- * archetypes, each emitted in up to ten formats.
+ * Synthetic corpus (60 statements, 24 locales, 20 currencies, 16 layout
+ * archetypes) so reader competence isn't measured only against the real
+ * samples it was tuned on.
  *
- * It exists because the real samples are the ones the reader was DEVELOPED
- * against, and a reader measured only on those cannot tell competence from
- * memory. When this corpus was first run, eleven of nineteen real files worked
- * and 37 of 294 synthetic ones did.
+ * Every file must appear in exactly one place: matching its ground truth, or
+ * listed in KNOWN_GAPS with a reason. A gap that starts passing also fails,
+ * since that means its recorded reason is stale.
  *
- * Every file is named, and named in one of two lists: it either reproduces its
- * ground truth exactly — same movements, same currency — or it appears in
- * KNOWN_GAPS with the reason. Both directions fail. A gap that starts working
- * is a failure, because the reason recorded here has become false and someone
- * should say so; that is deliberate, and it is how the list stays honest
- * instead of decaying into an alibi.
+ * Scored on `amount - fee`, not `amountMinor`, because ground truth keeps fee
+ * separate while several parsers fold it into the amount.
  *
- * Scored on `amount - fee`, not `amountMinor`: the ground truth records a fee
- * as a separate field and several parsers fold it in. The ledger effect is what
- * must agree.
- *
- * The currency is supplied the way production supplies it — from the account —
- * because that is the authority, and reading it off the page is what filed a
- * euro statement as koruna.
- *
- * Synthetic throughout: no real financial data, so unlike the private samples
- * this can live in the repository and run in CI.
+ * Currency is supplied from the account, as production does, not read off
+ * the page.
  */
 const ROOT = resolve('tests/fixtures/synthetic');
 const present = existsSync(ROOT);
@@ -94,8 +82,7 @@ const ledgerEffect = (rows: { amountMinor: bigint; feeMinor?: bigint }[]) =>
 
 describe.skipIf(!present)('the synthetic corpus', () => {
 	it('has a ground truth that agrees with itself', () => {
-		// If the corpus does not add up, nothing measured against it means
-		// anything. Statements with no movements print no balances, by design.
+		// Statements with no movements print no balances, by design.
 		for (const file of readdirSync(join(ROOT, 'expected'))) {
 			const statement = expectationFor(file.replace('.json', ''));
 			if (statement.rows.length === 0) continue;

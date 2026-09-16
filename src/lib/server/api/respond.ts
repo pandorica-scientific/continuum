@@ -29,14 +29,11 @@ export function readBearerToken(request: Request): string | null {
 /**
  * Null when the caller is authorised, otherwise the response to return.
  *
- * Failed attempts are rate limited: an endpoint that lets a caller try tokens
- * without limit is a guessing oracle. The budget is the API's own, not the
- * sign-in form's — a dashboard left polling with a revoked token would
- * otherwise spend the household's login attempts and lock them out of the app,
- * and behind a reverse proxy every client shares one address.
- *
- * Successful calls deliberately do NOT clear the counter: that would let a
- * caller reset their guessing budget by interleaving one valid request.
+ * Failed attempts are rate limited under the API's own budget, not the
+ * sign-in form's, so a dashboard polling with a revoked token can't lock the
+ * household out of the app. Successful calls deliberately do not clear the
+ * counter, or a caller could reset their guessing budget by interleaving one
+ * valid request.
  */
 async function requireToken(request: Request, address: string): Promise<Response | null> {
 	const wait = blockedForSeconds('api', address);
@@ -58,12 +55,9 @@ function isApiPath(pathname: string): boolean {
  * Apply bearer authentication once for the whole API boundary, and return null
  * for anything outside it so the caller needs no prefix test of its own.
  *
- * The boundary is `/api`, not `/api/v1`. PUBLIC_PATHS exempts the whole `/api`
- * tree from the redirect to /login, so scoping authentication to the versioned
- * prefix meant an `/api/health` or an `/api/v2` added later would ship with no
- * session check and no bearer check — public and unauthenticated. Each endpoint
- * used to call requireToken itself; that per-endpoint backstop is gone, so this
- * has to cover exactly what the exemption covers.
+ * The boundary is `/api`, not `/api/v1`: PUBLIC_PATHS exempts the whole `/api`
+ * tree from the /login redirect, so authentication has to cover exactly that
+ * same prefix or a route added later ships unauthenticated.
  */
 export async function authorizeApiRequest(
 	pathname: string,

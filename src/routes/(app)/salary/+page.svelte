@@ -1,11 +1,5 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
-	// Band of filters, chart, table — the Tax screen's shape, applied to what was
-	// earned rather than what was paid on it.
-	//
-	// It used to be one repeated block per person: a chart, then a flat list of
-	// payslips, once per person, stacked. A second person grew a second
-	// everything and there was no way to see the household at all.
 	import { untrack } from 'svelte';
 	import { enhance } from '$app/forms';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
@@ -15,6 +9,7 @@
 	import SummaryBand from '$lib/components/SummaryBand.svelte';
 	import { salarySummaryTiles } from '$lib/salary-tiles';
 	import PayslipDialog from '$lib/components/PayslipDialog.svelte';
+	import GrantDialog from '$lib/components/GrantDialog.svelte';
 	import BulkPayslipDialog from '$lib/components/BulkPayslipDialog.svelte';
 	import PersonTag from '$lib/components/PersonTag.svelte';
 	import SalaryYearChart from '$lib/charts/SalaryYearChart.svelte';
@@ -39,6 +34,10 @@
 	// quick-add menu is the only thing that opens it from outside.
 	let adding = $state(untrack(() => data.openAdd));
 	let addingMany = $state(false);
+	// Grants are entered here, on the salary they are part of, and only the
+	// asset side of them lives on Investments.
+	let addingGrant = $state(untrack(() => data.openGrant));
+	let editingGrant = $state<string | null>(null);
 
 	const peopleOptions = $derived([
 		{ value: 'both', label: 'Both' },
@@ -58,17 +57,13 @@
 	);
 	const slipsFor = (year: number) =>
 		payslips.filter((s) => Number(s.periodMonth.slice(0, 4)) === year);
+	const grantsFor = (year: number) =>
+		data.grants.filter(
+			(g) => (selected ? g.personId === selected.id : true) && g.vestYears.includes(year)
+		);
 
-	/**
-	 * How many payslips a month holds, so a month holding two can say so.
-	 *
-	 * Two rows carrying the same month are what two jobs look like, and also what
-	 * a mistaken re-upload looks like. Unmarked they read as a duplicate, which is
-	 * the wrong conclusion in the first case and an invisible one in the second.
-	 *
-	 * Counted over EVERY person's slips, not the filtered view, so the count does
-	 * not change when the person filter does.
-	 */
+	// How many payslips a month holds, so a month holding two can say so. Counted
+	// over every person's slips, not the filtered view, so it does not change with the filter.
 	const slipsPerMonth = $derived(
 		data.history.reduce((held, p) => {
 			for (const slip of p.payslips) {
@@ -78,13 +73,7 @@
 			return held;
 		}, new Map<string, string[]>())
 	);
-	/**
-	 * Which of its month's payslips a row is, and how many there are.
-	 *
-	 * Both fall out of the one pass above. Re-deriving the position by scanning
-	 * `data.history` per rendered row gave the count and the ordinal two ways of
-	 * answering the same question, which is two ways of disagreeing.
-	 */
+	// Which of its month's payslips a row is, and how many there are — both from the one pass above.
 	const slipPlace = (personId: string, periodMonth: string, entryId: string) => {
 		const held = slipsPerMonth.get(`${personId}|${periodMonth}`) ?? [];
 		return { n: held.indexOf(entryId) + 1, of: Math.max(held.length, 1) };
@@ -101,6 +90,9 @@
 	caption="What was earned each month — read from payslips and from the ledger."
 >
 	{#snippet actions()}
+		<button type="button" class="btn" onclick={() => (addingGrant = !addingGrant)}>
+			Add grant
+		</button>
 		<button type="button" class="btn" onclick={() => (addingMany = !addingMany)}>
 			Add several
 		</button>
@@ -116,6 +108,31 @@
 		currencies={data.currencies}
 		onclose={() => (addingMany = false)}
 	/>
+{/if}
+
+{#if addingGrant}
+	<GrantDialog
+		people={data.people}
+		engagements={data.engagements}
+		currencies={data.currencies}
+		defaultPersonId={selected?.id ?? data.people[0]?.id ?? ''}
+		editing={null}
+		onclose={() => (addingGrant = false)}
+	/>
+{/if}
+
+{#if editingGrant}
+	{@const g = data.grants.find((x) => x.id === editingGrant)}
+	{#if g}
+		<GrantDialog
+			people={data.people}
+			engagements={data.engagements}
+			currencies={data.currencies}
+			defaultPersonId={g.personId}
+			editing={{ id: g.id, ticker: g.ticker, totalUnits: g.totalUnits, currency: g.currency }}
+			onclose={() => (editingGrant = null)}
+		/>
+	{/if}
 {/if}
 
 {#if adding}
@@ -152,20 +169,27 @@
 >
 	{#snippet detail(year)}
 		{@const slips = slipsFor(year)}
+		{@const grants = grantsFor(year)}
+		{#if grants.length > 0}
+			<ul class="grants">
+				{#each grants as g (g.id)}
+					<li>
+						<span class="mono">{g.ticker}</span>
+						<span class="quiet">{g.label ?? 'grant'} · {g.totalUnits} units</span>
+						<button type="button" class="btn" onclick={() => (editingGrant = g.id)}>
+							Edit schedule
+						</button>
+					</li>
+				{/each}
+			</ul>
+		{/if}
 		<div class="slips">
 			{#if slips.length > 0}
 				{#each slips as s (s.id)}
 					{@const place = slipPlace(s.personId, s.periodMonth, s.id)}
-					<!-- On the table's own grid, so a month's figures sit directly under
-					     the column each one belongs to. They used to be laid on a
-					     three-column grid with six children in it, which wrapped them
-					     onto two lines and stretched the bonus across a whole fraction. -->
 					<div class="slip">
 						<span class="month">
 							<span class="mono">{s.periodMonth}</span>
-							<!-- The word "slip" said nothing the paperclip does not: every row
-							     in this table IS a slip. The icon is the link, and whose month
-							     it is takes the space the word had. -->
 							{#if s.documentId && s.fileExt}
 								<a
 									href={documentFileHref(s.documentId)}
@@ -193,11 +217,7 @@
 							{/if}
 						</span>
 
-						<!-- Base is gross with the award taken out. It was read-only for
-						     that reason — a derived figure has to decide which input it
-						     writes — and being unable to correct the one figure a person
-						     actually knows was worse than deciding. It writes gross and
-						     leaves the award alone. -->
+						<!-- Base is gross minus bonus; correcting it writes gross and leaves the bonus alone. -->
 						<span class="f-slot">
 							{#if editing === `${s.id}|base`}
 								<form
@@ -285,9 +305,7 @@
 							</span>
 						{/each}
 
-						<!-- A month has no monthly average of its own, so the column that
-						     holds one on a year row holds this month's actions instead —
-						     behind a ⋯, the same gesture the Tax screen uses. -->
+						<!-- A month has no average of its own, so that column holds this month's actions instead. -->
 						<span class="f-slot">
 							<div class="menu-wrap">
 								<button
@@ -299,12 +317,7 @@
 								>
 								{#if confirming === s.id}
 									<div class="menu">
-										<!-- Correcting the currency, not converting it: the figures
-										     are the digits printed on the slip and only the name
-										     attached to them was wrong. Every month filed before
-										     v0.5.1 carries the household's base currency rather than
-										     what the slip said, and the file it was read from may be
-										     long gone — so this has to be fixable without one. -->
+										<!-- Corrects the currency label, not a conversion — the digits stay as printed. -->
 										<form
 											method="POST"
 											action="?/setPayslipCurrency"
@@ -340,12 +353,7 @@
 										class="menu menu-lower"
 									>
 										<input type="hidden" name="entryId" value={s.id} />
-										<!-- Names what is going, and what is not. A payslip takes
-										     its own statement of the month with it; a bank credit
-										     that had been merged into it is money that arrived and
-										     stays, as the net-only row it was before the slip
-										     claimed it. A row with no slip behind it is that credit
-										     or a typed figure, and there is nothing but the row. -->
+										<!-- A merged bank credit stays as the net-only row it was before the slip claimed it. -->
 										{#if s.documentId}
 											<button type="submit" class="menu-item danger">
 												Delete {s.periodMonth} — the payslip and its figures
@@ -401,9 +409,7 @@
 				{/each}
 
 				<div class="slips-foot">
-					<!-- Behind an ⓘ, like the upload form's explainer: it is read once and
-					     skipped on every expand after, and a paragraph that repeats under
-					     each open year is noise the table has to be read around. -->
+					<!-- Behind an ⓘ so it isn't repeated noise on every expand. -->
 					<button
 						type="button"
 						class="icon-btn"
@@ -445,15 +451,28 @@
 		display: flex;
 		justify-content: center;
 	}
+	.grants {
+		list-style: none;
+		margin: 0;
+		padding: var(--space-4) var(--space-6);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+		font-size: var(--text-sm);
+	}
+	.grants li {
+		display: flex;
+		align-items: center;
+		gap: var(--space-5);
+		flex-wrap: wrap;
+	}
 	.hint {
 		font-size: var(--text-xs);
 		color: var(--fg3);
 		margin: 0;
 	}
-	/* The expanded year's payslips, indented under its row the way the Tax
-	   matrix indents a year's statements. */
-	/* The expanded year's payslips, on the table's own grid rather than indented
-	   inside a card — so the columns line up with the year row above them. */
+	/* On the table's own grid rather than indented inside a card, so columns line
+	   up with the year row above. */
 	.slips {
 		background: var(--card2);
 		border-bottom: 1px solid var(--bd2);
@@ -477,9 +496,7 @@
 		color: var(--fg3);
 		white-space: nowrap;
 	}
-	/* Same grid as the table above. `--row-cols` and `--row-min` are set on the
-	   matrix and inherit down to here, so a month's figures land under the column
-	   each belongs to and cannot fall out of step with the header. */
+	/* `--row-cols`/`--row-min` are set on the matrix and inherit down, keeping columns aligned. */
 	.slip {
 		display: grid;
 		grid-template-columns: var(--row-cols);
@@ -499,8 +516,7 @@
 		gap: var(--space-3);
 		min-width: 0;
 	}
-	/* The one rule down the table, kept in step with the matrix header above:
-	   centred in the gutter, not pulled to its far edge. */
+	/* Centred in the gutter, not pulled to its far edge. */
 	.f-slot.divide {
 		border-left: 1px solid var(--bd2);
 		padding-left: calc(var(--space-5) / 2);
@@ -557,9 +573,7 @@
 	.menu-form select {
 		min-width: 0;
 	}
-	/* The month, then what it was read from and whose it is. Wrapping rather
-	   than stacking: the tag is a chip on the same line as the paperclip when
-	   there is room for it, and drops under the month when there is not. */
+	/* Wraps rather than stacks: the tag chip shares the line with the paperclip when there's room. */
 	.month {
 		display: flex;
 		align-items: center;
@@ -593,22 +607,15 @@
 	.s-file:hover {
 		color: var(--fg1);
 	}
-	/* The unit beside every figure on a slip row, the way the Tax screen prints
-	   a statement's. Dimmer and smaller than the number it belongs to: it is the
-	   same on all four figures in the row, so it must not compete with the one
-	   thing that differs between them. */
+	/* Dimmer/smaller than its figure: the unit is the same on all four figures in the
+	   row, so it must not compete with the one thing that differs. */
 	.cur {
 		margin-left: 4px;
 		font-size: var(--text-xs);
 		font-weight: 400;
 		color: var(--fg3);
 	}
-	/* A figure is a control, and has to look like one. The v0.4.5 chip was a
-	   bordered label at --text-xs, so the hint's promise that "correcting it
-	   here remembers the wording" pointed at something that read as static. */
-	/* A figure is a control, and has to look like one. The v0.4.5 chip was a
-	   bordered label at --text-xs, so the hint's promise that "correcting it
-	   here remembers the wording" pointed at something that read as static. */
+	/* A figure is a control, and has to look like one, not a static label. */
 	.figure {
 		background: none;
 		border: 1px solid transparent;

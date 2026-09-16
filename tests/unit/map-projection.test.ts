@@ -2,11 +2,9 @@
 /**
  * Where a place lands on the map.
  *
- * Run against the real world outline where a checkout has one, and skipped
- * where it does not: `geodata/` is fetched at image-build time, and CI's checks
- * job deliberately does not pay for that download. The arithmetic that matters
- * — the antimeridian rotate — is proved on a hand-built feature that needs no
- * fetch at all.
+ * World-outline tests skip when `geodata/` was not fetched (CI's checks job
+ * does not pay for that download). The antimeridian arithmetic is proved on
+ * a hand-built feature that needs no fetch at all.
  */
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';

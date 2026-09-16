@@ -2,11 +2,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ALL_MIGRATIONS, startPostgres, type Harness } from './harness';
 
-// The statements shelf is a seeded row now, not a value in a CHECK. What has to
-// stay true is the same either way: an accepted import can file itself there,
-// and a document cannot be filed onto a shelf that does not exist. The FK is
-// what enforces the second half — asserting a constant alone would pass on a
-// migration that never ran.
+// An accepted import can file itself onto the statements shelf, and a
+// document cannot be filed onto a shelf that does not exist — enforced by
+// the FK, not just a CHECK, so a migration that never ran still fails.
 let harness: Harness;
 
 beforeAll(async () => {

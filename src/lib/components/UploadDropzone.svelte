@@ -27,44 +27,23 @@
 		 *  cost every form a permanently taller control for an answer the user
 		 *  needs once. */
 		description?: string;
-		/**
-		 * Whether the dropzone shows the failure itself. False where the screen
-		 * already renders the same message somewhere more prominent — the same
-		 * error in two places reads as two separate failures.
-		 */
+		/** False where the screen already renders the same message elsewhere,
+		 *  more prominently — avoids showing one failure twice. */
 		reportErrors?: boolean;
-		/**
-		 * The big version: an icon tile, a title and the formats spelled out.
-		 *
-		 * For a screen whose whole purpose IS the upload — Import — where the
-		 * control has room and where a person arriving for the first time needs
-		 * to be told what the app will accept. Everywhere else the dropzone is
-		 * one field beside a date and a subject, and stays the compact one.
-		 */
+		/** The big version — icon tile, title, formats spelled out — for a
+		 *  screen whose whole purpose is the upload (Import). */
 		hero?: boolean;
 		/** The line under the title, saying what happens to what is dropped. */
 		heroNote?: string;
 		/** Format names printed as chips under the title. Hero only. */
 		formats?: string[];
-		/**
-		 * Field mode. The file stays on this component's own input and the
-		 * enclosing <form> posts it under this name, exactly as a raw
-		 * <input type="file" name="…"> did. Nine of the twelve upload sites work
-		 * this way: the file is one field beside a subject, an amount or a date,
-		 * and submitting it on arrival would submit a half-filled form.
-		 */
+		/** Field mode: the file stays on this component's own input and the
+		 *  enclosing <form> posts it under this name, like a raw file input. */
 		name?: string;
 		/** Callback mode. Fires on arrival and owns the submission itself. */
 		onfiles?: (files: FileList | File[]) => Promise<ActionOutcome>;
-		/**
-		 * Offer the corner editor for a PICTURE rather than a document.
-		 *
-		 * The same camera and the same crop, stopping before the thresholding and
-		 * the PDF: a wine label, a meter dial, the back of a card. Without it an
-		 * image-only dropzone has no crop at all, because the scan button is drawn
-		 * from `accept` admitting PDFs — which these sites never do, since what
-		 * comes back has to be an image.
-		 */
+		/** Offer the crop editor for a picture rather than a document — same
+		 *  camera and crop, stopping before thresholding/PDF conversion. */
 		crop?: boolean;
 	} = $props();
 
@@ -77,30 +56,19 @@
 	/** Holds the uncropped photograph, where the call site asked for it. */
 	let originalInput: HTMLInputElement | undefined = $state();
 	let scanning = $state(false);
-	/**
-	 * The scan flow, resolved ONCE and held.
-	 *
-	 * It must not be imported from the template. `{#await import(…)}` re-runs
-	 * its expression whenever the block re-renders, and `import()` hands back a
-	 * new promise each time — so the block invalidates itself and Svelte's flush
-	 * loop never settles. That pegs the main thread: no error, no log, the tab
-	 * just stops. A dev build throws `effect_update_depth_exceeded`; a
-	 * production build has no such guard and simply freezes.
-	 */
+	/** Resolved once and held — must not be imported from the template.
+	 *  `{#await import(…)}` gets a new promise on every re-render, which
+	 *  invalidates the block forever and freezes the tab with no error. */
 	let ScanFlow = $state<typeof import('$lib/scan/client/ScanFlow.svelte').default | null>(null);
 	/** A dropped photograph waiting to go through the pipeline. */
 	let incoming = $state<File[]>([]);
 	let scanFailed = $state(false);
 
 	async function openScanner() {
-		// Once the chunk has failed, stop trying: a second stall helps nobody
-		// when the camera app is right there.
+		// Once the chunk has failed, stop trying — fall back to the camera app.
 		if (scanFailed) return void cameraInput?.click();
 		if (!ScanFlow) {
 			try {
-				// Still lazy, though what it defers is now a few screens rather
-				// than 10 MB of WebAssembly: since v0.8.6 the scanner's heavy half
-				// runs on the server and none of it is in this bundle.
 				ScanFlow = (await import('$lib/scan/client/ScanFlow.svelte')).default;
 			} catch {
 				// The chunk did not load. Fall back to the camera app rather than
@@ -113,72 +81,29 @@
 		scanning = true;
 	}
 
-	/**
-	 * No `scan` prop. `accept` already says whether a camera could help, and
-	 * every call site passes it — so the payslip dialog (.pdf) draws no button
-	 * without being told, and the sites that are not document uploads keep the
-	 * plain input they always had. A second prop would only be needed for a
-	 * dropzone that admits images but must not photograph them, and there is no
-	 * such site.
-	 */
-	/**
-	 * Two different jobs, so two different buttons.
-	 *
-	 * A PHOTOGRAPH is the thing itself — a picture of a meter reading, a receipt
-	 * you want to look at later — and it should arrive untouched, as a JPEG.
-	 * A SCAN is a document: cropped square, flattened, thresholded and written
-	 * as a PDF. Cropping and binarising a photograph someone wanted as a
-	 * photograph is destructive, and handing over a curled, shadowed snapshot
-	 * when someone asked for a scan is useless. One button cannot be both.
-	 */
+	// A photograph should arrive untouched (as a JPEG); a scan is a document —
+	// cropped, flattened, thresholded, written as a PDF. One button can't be both.
 	const offersScan = $derived(admitsPdf(accept));
 	/** The crop button: a document scan, or a picture that wants the same editor. */
 	const offersCrop = $derived(offersScan || (crop && admitsImages(accept)));
-	/**
-	 * …except where the picture wants the crop, and then there is only one job.
-	 *
-	 * `crop` says this site's photographs go through the editor, so a second
-	 * button offering the same camera without it would be a worse version of the
-	 * one beside it. The choices the editor already carries — the four modes and
-	 * Whole photo — are exactly what the plain button was for.
-	 */
+	/** Not shown when `crop` already routes photos through the same editor. */
 	const offersPhoto = $derived(admitsImages(accept) && !crop);
 
-	/**
-	 * The one place the two shapes meet. `onfiles` was typed FileList because a
-	 * raw input is where files came from; the scan engine hands over a File it
-	 * built in memory, and there is no FileList constructor.
-	 */
+	/** `onfiles` is typed FileList because a raw input is where files came
+	 *  from; the scan engine hands over a File built in memory instead. */
 	function list(files: FileList | File[]): File[] {
 		return Array.from(files as ArrayLike<File>);
 	}
 
-	/**
-	 * Whether these files belong in the editor rather than on the field.
-	 *
-	 * A dropped photograph goes through the same pipeline as a captured one, so
-	 * both produce the same artifact — a cropped, flattened page rather than a
-	 * crooked snapshot of a desk. This is the path for photos someone already
-	 * has: a picture of a bill sent to them, something shot earlier and still in
-	 * the camera roll.
-	 *
-	 * PDFs pass through untouched; only images enter the pipeline. And only ONE
-	 * at a time: the spec has several dropped images becoming a single PDF, but
-	 * that needs the review screen to be meaningful, so until then a multiple
-	 * drop keeps the plain behaviour rather than half-doing it.
-	 */
+	/** A dropped photograph goes through the same editor pipeline as a
+	 *  captured one. Only one at a time — several images becoming one PDF
+	 *  needs a review screen that doesn't exist yet. */
 	const wantsEditor = (picked: File[]): boolean =>
 		offersCrop && picked.length === 1 && isImageFile(picked[0]);
 
-	/**
-	 * Set while a file the editor just produced is being put on the field.
-	 *
-	 * The editor hands back a cropped IMAGE, and `wantsEditor` says a single
-	 * image belongs in the editor — so without this the crop was fed straight
-	 * back into the thing that made it and the flow never ended. Cleared as soon
-	 * as the change event has been dispatched, so the next file a person picks
-	 * goes through the editor as it should.
-	 */
+	/** Set while a file the editor just produced is being put on the field —
+	 *  without this, `wantsEditor` would feed the crop straight back into
+	 *  the editor that made it. */
 	let fromEditor = false;
 
 	async function receive(files: FileList | File[]) {
@@ -204,29 +129,8 @@
 		}
 	}
 
-	/**
-	 * Move files onto the input by hand.
-	 *
-	 * Assigning `input.files` is the only way a <form> posts something the user
-	 * dropped rather than browsed for, and DataTransfer is the sanctioned
-	 * constructor for a FileList.
-	 *
-	 * The dispatch is not optional. Assigning `.files` fires NOTHING — so a
-	 * browsed file ran every handler listening for a change and a dropped one
-	 * ran none of them. That is not a dead drop target, which someone would
-	 * notice: it is a drop that fills the field and silently skips the work
-	 * choosing a file is supposed to start — reading a payslip, unlocking the
-	 * "what these are" select. Firing the event here is what makes a drop and a
-	 * browse the same event to everything downstream.
-	 */
-	/**
-	 * Put the uncropped photograph on the companion field.
-	 *
-	 * `<name>Original`, beside the field the crop lands on. One capture, two
-	 * files, one submit — which is the only way a site can show the whole frame
-	 * AND a crop of it without asking somebody to photograph the same bottle
-	 * twice.
-	 */
+	/** Puts the uncropped photograph on the `<name>Original` companion field,
+	 *  so one capture yields both the whole frame and the crop in one submit. */
 	function keepOriginal(file: File) {
 		if (!originalInput) return;
 		const transfer = new DataTransfer();
@@ -246,8 +150,8 @@
 			const transfer = new DataTransfer();
 			for (const file of list(files)) transfer.items.add(file);
 			input.files = transfer.files;
-			// The listener on the field runs `receive` synchronously from here, so
-			// the guard is still standing when it reads it.
+			// Assigning `.files` fires no event, so a drop would silently skip
+			// the work a change normally starts — dispatch it by hand.
 			input.dispatchEvent(new Event('change', { bubbles: true }));
 		} finally {
 			fromEditor = false;
@@ -255,10 +159,8 @@
 	}
 </script>
 
-<!-- The zone is a drop target and a mouse target; the keyboard's way in is
-     the button inside it. It used to be a button itself, which put the camera
-     and scan buttons and the file field inside a control — one control to a
-     screen reader, and an invalid one. -->
+<!-- The keyboard's way in is the button inside; not a button itself, since
+     that would nest the camera/scan buttons and file field in one control. -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <div
@@ -278,9 +180,8 @@
 		event.preventDefault();
 		dragging = false;
 		if (!event.dataTransfer?.files.length) return;
-		// `adopt` fires the input's own change event, which runs `receive` below
-		// and reaches the enclosing form. Calling `receive` here as well would
-		// run the callback twice for one drop.
+		// `adopt` fires the input's change event, which runs `receive` — calling
+		// it here too would run the callback twice for one drop.
 		adopt(event.dataTransfer.files);
 	}}
 >
@@ -333,14 +234,9 @@
 					: 'Scan a document — cropped, flattened and saved as a PDF'}
 				onclick={(event) => {
 					event.stopPropagation();
-					// getUserMedia needs a secure context. Without one — a
-					// self-hosted instance on a plain-http address — the phone's
-					// own camera app still works and needs no such thing.
+					// getUserMedia needs a secure context; a plain-http self-hosted
+					// instance falls back to the native camera app, which needs none.
 					if (isSecureForCamera(window.location)) void openScanner();
-					// There is nothing to pre-fetch any more: the scanner's heavy
-					// half runs on the server, and the child that holds OpenCV is
-					// started by the upload itself — so its ~160 ms of warming
-					// overlaps the photograph arriving rather than following it.
 					else cameraInput?.click();
 				}}
 			>
@@ -350,8 +246,6 @@
 	{/if}
 
 	{#if crop && name}
-		<!-- The whole frame the crop came out of, posted beside it. A site that
-		     wants only the crop ignores this field and nothing changes. -->
 		<input
 			bind:this={originalInput}
 			class="field"
@@ -362,14 +256,8 @@
 		/>
 	{/if}
 
-	<!--
-		The native camera app, via `capture`. It needs no secure context, which
-		matters: getUserMedia does, so a self-hosted Continuum on a plain-http LAN
-		address can never open an in-app viewfinder. This path works there.
-
-		The photo is moved onto the field input above, so it arrives exactly as a
-		browsed or dropped file does and every handler downstream sees one event.
-	-->
+	<!-- Native camera app via `capture` — needs no secure context, unlike
+	     getUserMedia, so this works on a plain-http self-hosted instance. -->
 	<input
 		bind:this={cameraInput}
 		class="field"
@@ -411,9 +299,6 @@
 		ondone={(page, original) => {
 			scanning = false;
 			incoming = [];
-			// The whole frame goes on a companion field, so a site that wants both
-			// gets both from one capture. Nothing reads it unless it asked for
-			// `crop`, and a form that ignores the field simply posts nothing extra.
 			if (original) keepOriginal(original);
 			adopt([page], true);
 		}}
@@ -422,19 +307,9 @@
 {#if error && reportErrors}<p class="error" role="alert">{error}</p>{/if}
 
 <style>
-	/* One control tall, one line of copy.
-	 *
-	 * A 24px-padded two-line block is a panel, not a control: dropped into the
-	 * settings config-row or the receipt modal it dwarfed the button beside it
-	 * and read as a second, competing region. This stands on the same floor as
-	 * every other control in the product — `--control-h`, `.btn`'s radius,
-	 * padding and type size — so a dropzone and the button next to it line up
-	 * without either being told about the other.
-	 *
-	 * The accepted formats live in `title`, not in a second line: they are the
-	 * answer to a question the user only asks once, and paying for them with a
-	 * permanently taller control in every form is the wrong trade.
-	 */
+	/* One control tall, one line of copy — matches --control-h so a dropzone
+	 * lines up with the button next to it. Accepted formats live in `title`,
+	 * not a second line, since that's a question asked only once. */
 	.dropzone {
 		position: relative;
 		display: flex;
@@ -454,9 +329,7 @@
 		background: var(--teal-wash);
 		color: var(--fg1);
 	}
-	/* The one screen that IS an upload gets a target the size of the job.
-	   Teal because Import belongs to Money, and the ground says "drop here"
-	   before the sentence does. */
+	/* Teal because Import belongs to Money. */
 	.dropzone.hero {
 		flex-direction: column;
 		justify-content: center;
@@ -512,9 +385,6 @@
 		cursor: progress;
 		opacity: 0.75;
 	}
-	/* The camera lives IN the row rather than under a rule below it. The design
-	   put it below one, but that assumed the two-line panel this control used to
-	   be; in a one-line control a rule would be a divider across nothing. */
 	.capture-btn {
 		display: inline-flex;
 		align-items: center;
@@ -537,50 +407,20 @@
 		outline: 2px solid var(--blue);
 		outline-offset: 2px;
 	}
-	/*
-	 * Capture is a phone and tablet job, so the two buttons are not offered to a
-	 * mouse.
+	/* Capture is a phone/tablet job; hidden on a mouse where `capture` is
+	 * ignored and the scanner would just open a webcam.
 	 *
-	 * `capture="environment"` is ignored by desktop browsers, so the photo
-	 * button there opened the ordinary file picker — the same thing clicking the
-	 * region already does. The scanner would open a webcam, which is a poor way
-	 * to photograph a page and never the reason this exists.
-	 *
-	 * Nothing is lost by hiding them. A photo dropped or browsed on a computer
-	 * still goes through the crop-flatten-PDF pipeline — see `receive` above —
-	 * so the desktop route to a scan is the one it was always going to be: take
-	 * the picture on your phone, put the file here.
-	 *
-	 * Three clauses, and each is load-bearing:
-	 *
-	 * `pointer: fine` and `hover: hover` describe the PRIMARY pointer, and they
-	 * are what keeps a phone safe. A phone's primary pointer is never fine, so
-	 * this rule cannot match one however the rest is read — and that matters
-	 * more than tidiness on a desktop, because a phone that lost these would
-	 * have lost the feature on the only device it is for.
-	 *
-	 * `not (any-pointer: coarse)` is what saves a TABLET. The primary pointer is
-	 * the wrong question for one: an iPad on a Magic Keyboard, or a Surface
-	 * under its type cover, answers "a trackpad" and would have been treated as
-	 * a laptop by the first two clauses alone. `any-pointer` asks whether a
-	 * finger is available AT ALL, which a tablet answers yes to whatever is
-	 * plugged into it, and a stylus tablet answers yes to as well. A touchscreen
-	 * laptop also answers yes and keeps a button it does not need, which is the
-	 * cheaper of the two mistakes.
-	 *
-	 * Every way this can fail leaves the buttons SHOWING. On a browser too old
-	 * for `not (…)` inside a media query the whole rule fails to parse and is
-	 * dropped; on one that does not know `any-pointer` the clause is false and
-	 * the rule falls back to the primary-pointer test, which a phone still fails.
-	 */
+	 * Three load-bearing clauses: `pointer: fine`/`hover: hover` test the
+	 * PRIMARY pointer, which keeps a phone safe. `not (any-pointer: coarse)`
+	 * saves a TABLET — an iPad on a keyboard reports "trackpad" as primary,
+	 * so `any-pointer` (any finger available at all) is needed to catch it.
+	 * Every failure mode of this query leaves the buttons showing. */
 	@media (pointer: fine) and (hover: hover) and (not (any-pointer: coarse)) {
 		.capture-btn {
 			display: none;
 		}
 	}
-	/* 44px is a floor for FINGERS. On a mouse, 30px inside a 36px row is right
-	   and matches every other control; on touch the row grows to meet the floor
-	   rather than shipping a target nobody can hit. */
+	/* 44px is a floor for fingers; on touch the row grows to meet it. */
 	@media (pointer: coarse) {
 		.capture-btn {
 			width: var(--touch-min);
@@ -610,9 +450,8 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	/* Visually hidden rather than display:none. A named input a form posts must
-	   stay in the accessibility tree — display:none removes it from the tab
-	   order AND from screen readers, and the region above is its only label. */
+	/* Visually hidden, not display:none — the latter drops it from the tab
+	   order and screen readers, and the region above is its only label. */
 	.field {
 		position: absolute;
 		width: 1px;

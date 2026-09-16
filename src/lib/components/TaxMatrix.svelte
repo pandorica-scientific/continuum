@@ -1,14 +1,7 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
-	// Year down, jurisdiction across.
-	//
-	// This replaces a list grouped by person·country, which is the axis the rows
-	// were entered on rather than the axis they are read on: under that grouping
-	// one year appeared in three separate places, so "what did 2024 cost me" was
-	// a question the layout could not answer.
-	//
-	// Numerics are right-aligned throughout. The whole point is scanning a
-	// column, and left-aligned numbers of differing lengths cannot be scanned.
+	// Year down, jurisdiction across — so "what did 2024 cost me" reads as one
+	// row instead of scattered across a person·country grouping.
 	import { compactMinor, displayCurrency, formatMinor } from '$lib/money';
 	import type { Snippet } from 'svelte';
 	import ListPager from '$lib/components/ListPager.svelte';
@@ -82,11 +75,7 @@
 	const cellFor = (row: SerialisedYear, code: string) =>
 		row.byCountry.find((c) => c.country === code) ?? null;
 
-	/**
-	 * A filing far below the median is called out rather than left to pass
-	 * unremarked. It is a question, not an accusation — a part-year filing looks
-	 * exactly like a units error from here, and only the household knows which.
-	 */
+	/** Flags a filing far below the median — a question, not an accusation. */
 	const flagged = (gross: string) => threshold > 0n && BigInt(gross) < threshold;
 
 	/** Lifetime total per jurisdiction, and how many years it filed. Over the
@@ -108,31 +97,25 @@
 		totalGross === 0n ? null : Number((totalTax * 10000n) / totalGross) / 100
 	);
 
-	// 92px year, one fraction per jurisdiction, 196px total. Set as custom
-	// properties on the table and read by the header, every row and the summary,
-	// so the three cannot drift apart.
+	// Set as custom properties on the table and read by the header, every row
+	// and the summary, so they cannot drift apart.
 	//
-	// A jurisdiction column carries a MINIMUM rather than `minmax(0, 1fr)`. With
-	// a floor of zero the scroll width was the only thing holding these open, and
-	// it divides between however many jurisdictions a household has filed in — so
-	// a fourth country squeezed each heading down until they printed over one
-	// another.
+	// A jurisdiction column carries a MINIMUM rather than `minmax(0, 1fr)` —
+	// at a floor of zero a fourth country squeezed headings until they
+	// overlapped.
 	const YEAR = 92;
 	const COUNTRY_MIN = 104;
 	const TOTAL = 196;
 	const columns = $derived(
 		`${YEAR}px repeat(${countries.length}, minmax(${COUNTRY_MIN}px, 1fr)) ${TOTAL}px`
 	);
-	// Every column at its minimum, plus one gap between each pair and the row's
-	// own padding — derived from the same numbers as the columns above rather
-	// than kept by hand beside them. The 620px floor is the width the table had
-	// before any column carried a minimum.
+	// Derived from the same numbers as `columns` rather than kept by hand.
+	// 620px is the pre-minimum table width.
 	const minWidth = $derived(
 		`max(620px, calc(${YEAR + TOTAL + countries.length * COUNTRY_MIN}px + ${countries.length + 1} * var(--space-5) + 2 * var(--space-6)))`
 	);
 
-	// The one table's columns: the year, one per jurisdiction, the total. A
-	// phone keeps the year and the total; the jurisdictions are what the open
+	// A phone keeps the year and the total; jurisdictions are what the open
 	// year's cards say.
 	const tableColumns = $derived<Column[]>([
 		{ key: 'year', label: 'Year', width: `${YEAR}px` },
@@ -157,8 +140,6 @@
 
 <div class="matrix" style:--row-cols={columns} style:--row-min={minWidth}>
 	{#if ordered.length > LIST_PAGE_SIZES[0]}
-		<!-- Above the rows it sizes: how much to show is a decision made before
-		     reading, while which page to read is one made after. -->
 		<div class="tools">
 			<PageSize bind:size onchange={() => (page = 0)} label="years" />
 		</div>
@@ -207,8 +188,7 @@
 								{cell.ratePct === null ? '—' : `${cell.ratePct.toFixed(2)}%`}
 							</span>
 						{:else}
-							<!-- Not an em dash and not 0: no filing means "lived elsewhere
-							     that year", which is a different thing from earning nothing. -->
+							<!-- No filing means "lived elsewhere that year", not earning nothing. -->
 							<span class="absent">·</span>
 						{/if}
 					</span>
@@ -218,9 +198,8 @@
 			<span class="cell right total">
 				<span class="c-rate">{row.ratePct === null ? '—' : `${row.ratePct.toFixed(2)}%`}</span>
 				<span class="display t-value">{formatMinor(BigInt(row.grossMinor), currency)}</span>
-				<!-- The magnitude bar lives ONLY here. This is the one column where
-				     every row is in the same currency, so the only one where
-				     comparing bar lengths is honest. -->
+				<!-- Only here: the one column where every row shares a currency, so
+				     bar-length comparison is honest. -->
 				<span class="track">
 					<span
 						class="fill"

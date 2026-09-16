@@ -2,12 +2,9 @@
 /**
  * Everything the Documents screen reads, in one place and one round of queries.
  *
- * It lives here rather than in `+page.server.ts` because it is a domain read,
- * not a route concern: the archive scope is the archive's invariant, and a
- * route that builds its own selects is free to forget it. Eleven hand-written
- * queries
- * sat in the route beside a fully-formed domain package — which is how a screen
- * ends up being the second place that knows how a document is stored.
+ * Lives here rather than in `+page.server.ts` because it is a domain read: the
+ * archive scope is the archive's invariant, and a route building its own
+ * selects is free to forget it.
  *
  * The shaping stays in the route. What comes back here is rows; turning them
  * into chips, groups and counts is presentation and belongs with the markup.
@@ -44,8 +41,8 @@ export async function readDocumentsScreen(
 ) {
 	const [docs, railCounts, everywhereCount, docLinks, docTags, tags, texts, pending, identities] =
 		await Promise.all([
-			// The shelf key travels with the row: the rail filters by key and the
-			// label is the household's to change, so neither may be a code list.
+			// The shelf key travels with the row: the label is the household's to
+			// change, so neither may be a code list.
 			handle
 				.select({
 					...getTableColumns(document),
@@ -67,7 +64,6 @@ export async function readDocumentsScreen(
 				.groupBy(shelfTable.key),
 			// Without the archive scope, which is how many are being hidden.
 			handle.select({ n: count() }).from(document),
-			// One select for every kind of target; the kind comes from `entity`.
 			handle
 				.select({
 					documentId: documentLink.documentId,
@@ -93,10 +89,8 @@ export async function readDocumentsScreen(
 				.select({ documentId: job.subjectId })
 				.from(job)
 				.where(and(eq(job.kind, 'extract_text'), inArray(job.state, ['queued', 'running']))),
-			// Every identity row the archive holds, keyed by document by the caller.
-			// Whole rather than by id: there is one per identity document and a
-			// household has a handful, which is cheaper than a second round trip
-			// once the selected document turns out to be one of them.
+			// Whole table rather than by id: a household has a handful, cheaper than
+			// a second round trip once the selected document turns out to be one.
 			handle.select().from(documentIdentity)
 		]);
 

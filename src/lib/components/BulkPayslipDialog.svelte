@@ -1,14 +1,9 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	/**
-	 * Filing a run of payslips at once — a year of them, or a job's worth.
-	 *
-	 * Its own dialog rather than a mode of the single-slip one, because the two
-	 * ask different questions. That one shows what it read and waits for you to
-	 * check it, which is the whole reason it exists; nobody checks twelve slips in
-	 * a dialog. This one files only what it can read with confidence and names
-	 * every file it could not, so the ones needing a human go through the other
-	 * door one at a time.
+	 * Files a run of payslips at once. Separate from the single-slip dialog,
+	 * which waits for a human to check each read — this one only files what it
+	 * can read with confidence and lists the rest for the single-slip dialog.
 	 */
 	import { untrack } from 'svelte';
 	import { enhance } from '$app/forms';
@@ -34,13 +29,8 @@
 	let actionError = $state<string | null>(null);
 	let filed = $state<{ name: string; periodMonth: string }[]>([]);
 	let skipped = $state<{ name: string; reason: string }[]>([]);
-	/**
-	 * Files that were already on the shelf — the same bytes, already filed.
-	 *
-	 * Kept apart from `skipped`, which means "this one needs you". These need
-	 * nothing; they are listed so that eleven of twelve landing is not read as
-	 * a failure, and so that dropping a folder in twice is visibly harmless.
-	 */
+	/** Files already on the shelf (same bytes). Kept apart from `skipped`,
+	 * which means "this one needs you" — these need nothing. */
 	let already = $state<{ name: string; periodMonth: string | null }[]>([]);
 	let done = $state(false);
 </script>
@@ -65,8 +55,7 @@
 					done = true;
 					chosen = [];
 				}
-				// Never closed automatically: what was filed and what was refused is
-				// the result, and closing over it would be the same as not reporting.
+				// Never closed automatically — filed/refused results must stay visible.
 				await update({ reset: false });
 			};
 		}}
@@ -90,9 +79,8 @@
 				</select>
 			</label>
 			<label>
-				<!-- Optional, unlike the single-slip dialog's. Most slips name their
-				     own currency, and one stated earlier for this person is remembered;
-				     this only covers the ones where neither is true. -->
+				<!-- Optional, unlike the single-slip dialog's: only used when a slip
+				     names no currency and none is remembered for this person. -->
 				<span>Currency, if a slip does not say</span>
 				<select name="currency" bind:value={currency}>
 					<option value="">Refuse those slips</option>
@@ -169,9 +157,8 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 		gap: var(--space-5) var(--space-6);
-		/* Controls line up along their BOTTOM edge: a label that wraps to two
-		   lines would otherwise push its input a line below the ones beside it,
-		   and a row of controls that no longer lines up stops reading as a row. */
+		/* Align controls to their bottom edge so wrapped labels don't push
+		   inputs out of line with the rest of the row. */
 		align-items: end;
 	}
 	label {
@@ -217,8 +204,7 @@
 		font-size: var(--text-sm);
 		color: var(--yellow);
 	}
-	/* Not the refusal colour. Nothing here needs attention — a file already on
-	   the shelf is a no-op reported, not a problem to go and fix. */
+	/* Not the refusal colour — an already-filed file is a no-op, not a problem. */
 	.known {
 		margin: 0;
 		font-size: var(--text-sm);

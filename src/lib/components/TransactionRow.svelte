@@ -1,19 +1,9 @@
 <script lang="ts">
 	import { tagHue } from '$lib/tag-hue';
 	// SPDX-License-Identifier: AGPL-3.0-or-later
-	// One transaction, collapsed to a line and expanded to everything.
-	//
-	// The register used to put every control a row has on the row itself — a
-	// category chooser, a Save, a Split, a paperclip and a state pill, on every
-	// one of ten rows. Reading the ledger and editing it are different jobs, and
-	// paying the price of the second while doing the first made a page of
-	// transactions unreadable as a list of transactions.
-	//
-	// So the face carries only what a row IS — when, what, how much, filed as
-	// what — and everything you can DO to it lives under it, on the one row you
-	// opened. The one exception is a row that still needs a look: that is a
-	// state worth seeing without opening anything, and it is the only state that
-	// gets a pill on the face.
+	// The face carries only what a row IS — when, what, how much, filed as
+	// what — while everything you can DO to it lives in the opened panel. The
+	// one exception is `needs_review`, which gets a pill on the face too.
 	import { enhance } from '$app/forms';
 	import CategoryPicker from '$lib/components/CategoryPicker.svelte';
 	import Pill from '$lib/components/Pill.svelte';
@@ -38,9 +28,8 @@
 		onsplit,
 		onreceipts
 	}: {
-		// The register's serialised row. Typed structurally rather than imported
-		// from the loader's return: this component is the shape's only consumer,
-		// and a `typeof data.rows[number]` import would tie a component to a route.
+		// Typed structurally rather than imported from the loader's return, so
+		// this component isn't tied to a route.
 		row: {
 			id: string;
 			/** The day the money moved, which is the day the register files it under. */
@@ -72,13 +61,9 @@
 			}[];
 			tags: { id: string; name: string; direct: boolean }[];
 			documents: { id: string }[];
-			/**
-			 * The loan this row has already been recorded as paying, or null — and
-			 * the two lines it counts as, where the record can divide it: the
-			 * interest under the category it is filed with, the principal under the
-			 * one that names it. Null halves means the record cannot divide it and
-			 * every total behind the row holds it whole.
-			 */
+			/** The loan this row has already been recorded as paying, or null.
+			 *  `halves` splits it into interest/principal lines; null means the
+			 *  record can't divide it and totals hold it whole. */
 			loanPayment: {
 				loanId: string;
 				loanName: string;
@@ -103,24 +88,18 @@
 		onreceipts: () => void;
 	} = $props();
 
-	// Whether the category chooser has been asked for. A filed row shows what it
-	// is filed as and offers to change it; showing the chooser unasked would put
-	// an empty select over an answered question.
+	// Whether the category chooser has been asked for — a filed row shows what
+	// it's filed as, not an unasked-for empty select.
 	let changing = $state(false);
 	let picked = $state<string | null>(null);
 
-	// Whether the loan-payment form has been asked for, on the same reasoning as
-	// `changing` above: most debits are not instalments, so a select and an
-	// amount box under every one of them would be a form nobody asked for.
 	let recording = $state(false);
-	// Only the loans this debit could actually have paid. The mutation refuses a
-	// payment in a currency the loan is not in rather than guessing a rate, so
-	// offering one here would be offering a refusal — and with the list down to
-	// one currency, the unit printed beside the interest box is simply the row's.
+	// Only loans in this debit's own currency — the mutation refuses a
+	// cross-currency payment rather than guessing a rate.
 	const payableLoans = $derived(loans.filter((l) => l.currency === row.currency));
 
-	// A row that closes must not reopen mid-correction, and a different row must
-	// never inherit this one's half-made choice.
+	// A row that closes must not reopen mid-correction, and a different row
+	// must never inherit this one's half-made choice.
 	$effect(() => {
 		if (!open) {
 			changing = false;
@@ -129,9 +108,7 @@
 		}
 	});
 
-	// Offered on money that left an account, when there is a loan for it to have
-	// gone to and nothing has claimed it yet. Money that arrived is not an
-	// instalment, and a row already recorded carries its chip instead.
+	// Only for money that left an account, with an unclaimed loan to record against.
 	const canRecordLoanPayment = $derived(
 		payableLoans.length > 0 && row.negative && row.loanPayment === null
 	);
@@ -147,25 +124,18 @@
 
 <div class="txn" class:open>
 	<button type="button" class="face" aria-expanded={open} onclick={ontoggle}>
-		<!-- The date the money moved. Where the bank booked it on another day, that
-		     day is on the title rather than in a second column: the row is filed
-		     under one of them and a register that showed both would be asking
-		     somebody to work out which. -->
+		<!-- Where the bank booked it on another day, that day is in the title
+		     rather than a second column — the row is filed under one date. -->
 		<span class="mono t-date" title={row.bookedDate ? `Booked ${row.bookedDate}` : undefined}
 			>{row.date}</span
 		>
 
 		<span class="t-name">
-			<!-- The category's colour, leading the name rather than only sitting
-			     beside it three columns to the right. A bar and not a dot: at 8×22
-			     it reads down a list of forty rows as a stripe of colour, which is
-			     what makes a register scannable without reading a word of it. -->
+			<!-- A bar, not a dot: at 8×22 it reads down a list as a stripe of
+			     colour, making the register scannable without reading a word. -->
 			<span class="cat-bar" style="background: var({row.categoryToken})" aria-hidden="true"></span>
 			<span class="t-names">
 				<span class="t-merchant">{row.merchant}</span>
-				<!-- Always, not only when the row is open: what account a payment came
-				     out of is half of what identifies it, and a register where every
-				     line says only a shop name cannot be checked against a statement. -->
 				<span class="t-sub">
 					{row.detail ?? row.account}
 					{#if row.detail}· {row.account}{/if}
@@ -174,9 +144,7 @@
 			</span>
 		</span>
 
-		<!-- A chip in the category's own colour, not a word in a grey column. It is
-		     the same hue as the bar to its left, which is what ties the stripe down
-		     the register to a name. -->
+		<!-- Same hue as the bar to its left, tying the stripe down the register to a name. -->
 		<span class="t-category" style="--cat: var({row.categoryToken})">
 			{row.categoryLabel ?? 'Uncategorised'}
 		</span>
@@ -184,21 +152,14 @@
 		<span class="mono t-amount" class:negative={row.negative}>{row.amount}</span>
 
 		<span class="t-marks">
-			<!-- Amber is the only state that reaches the face. See the note at the
-			     top: the rest are the ordinary case, and a pill on every line is
-			     noise rather than information. -->
 			{#if row.reviewState === 'needs_review' && !row.isSplit}
 				<Pill hue={REVIEW_HUES.needs_review}>{REVIEW_LABELS.needs_review}</Pill>
 			{/if}
 			{#if row.isSplit}
 				<Pill hue="purple">split</Pill>
 			{/if}
-			<!-- On the face rather than in the panel: which loan a debit went to is
-			     what the row IS, and it is the answer to "have I recorded this one
-			     yet" that a person is scanning the month for. -->
 			{#if row.loanPayment}
-				<!-- The full name is in the title; the pill itself truncates to its
-				     column, or a long loan name runs under the amount beside it. -->
+				<!-- Full name is in the title; the pill truncates to its column. -->
 				<span class="mark" title="Loan payment · {row.loanPayment.loanName}">
 					<Pill hue="teal">Loan · {row.loanPayment.loanName}</Pill>
 				</span>
@@ -231,17 +192,12 @@
 					{/each}
 				</ul>
 			{:else if changing}
-				<!-- The register is a long page and these rows run to the bottom of it,
-				     which is where a native select's popup opened downwards past the
-				     fold. -->
 				<form
 					method="POST"
 					action="?/file"
 					use:enhance={() =>
 						async ({ update, result }) => {
 							await update();
-							// Back to the pill, which now names what was just chosen. Leaving
-							// the chooser open reads as a save that did not take.
 							if (result.type === 'success') changing = false;
 						}}
 					class="cat-form"
@@ -253,9 +209,6 @@
 						value={row.categoryId}
 						onpick={(id) => (picked = id)}
 					/>
-					<!-- Disabled until something is chosen: the placeholder posts an empty
-					     category, which the action rejects with a message that used to have
-					     nowhere to appear. The row read as an unresponsive button. -->
 					<button type="submit" class="btn btn-primary" disabled={!(picked ?? row.categoryId)}>
 						Save
 					</button>
@@ -272,13 +225,9 @@
 				</div>
 			{/if}
 
-			<!-- The two lines a recorded instalment counts as. Drawn with the split
-			     lines' own markup because that is what they are to every total on
-			     this screen: the footer and the month above it are summed from
-			     these two figures, and a row reading one whole debit under a footer
-			     holding half of it had nothing on it that said why. Not a
-			     transaction_split row, though — the loan link is what divides it,
-			     and the split dialog would drop it. -->
+			<!-- Not a transaction_split row — the loan link divides it, and the
+			     split dialog would drop it. Drawn with split-line markup because
+			     that's what these two figures are to every total on this screen. -->
 			{#if !row.isSplit && row.loanPayment?.halves}
 				<ul class="splits">
 					{#each row.loanPayment.halves as h (h.key)}
@@ -342,19 +291,12 @@
 							Record as loan payment
 						</button>
 					{/if}
-					<!-- Carries the counterparty and the filing away with it, so the rule
-					     editor opens already describing this row rather than asking you to
-					     retype what you were just looking at. -->
 					<a class="btn" href={row.ruleHref}>Make a rule</a>
 				</div>
 			</div>
 
-			<!-- What was recorded, and the way back out of it. Recording is otherwise
-			     a one-way door: the duplicate guard refuses a second attempt, so a
-			     debit filed against the wrong mortgage stayed filed against it. The
-			     face states the same fact as a pill and this is the panel's copy —
-			     the row states what it IS on the face and what you can DO to it
-			     below, the same division the split pill and the receipt count keep. -->
+			<!-- The way back out: the duplicate guard otherwise makes recording a
+			     one-way door, so a debit filed against the wrong loan stays filed. -->
 			{#if row.loanPayment}
 				<form method="POST" action="?/unlinkLoanPayment" use:enhance class="tag-chip recorded">
 					<input type="hidden" name="transactionId" value={row.id} />
@@ -363,10 +305,8 @@
 				</form>
 			{/if}
 
-			<!-- The interest box is optional and stays that way: what the bank
-			     printed beats anything derived, but a household that only has the
-			     instalment should still be able to say the debit was one. Left
-			     blank, the cash-flow split works the month out from the schedule. -->
+			<!-- Interest is optional: left blank, the cash-flow split works the
+			     month out from the schedule instead. -->
 			{#if canRecordLoanPayment && recording}
 				<form
 					method="POST"
@@ -374,8 +314,6 @@
 					use:enhance={() =>
 						async ({ update, result }) => {
 							await update();
-							// Back to the chip the row now carries. Leaving the form open
-							// reads as a save that did not take.
 							if (result.type === 'success') recording = false;
 						}}
 					class="loan-form"
@@ -398,11 +336,6 @@
 				</form>
 			{/if}
 
-			<!-- What the statement itself said, in the statement's own words. Only
-			     rendered when there is something beyond what the face already
-			     printed: a row whose whole content is its counterparty has nothing
-			     to add here, and an empty rule under every row is a rule that means
-			     nothing. -->
 			{#if row.detail || row.readAs}
 				<p class="mono provenance">
 					{#if row.detail}{row.detail}{/if}
@@ -422,9 +355,7 @@
 	.txn:last-of-type {
 		border-bottom: 0;
 	}
-	/* The face is the row. A grid rather than a flex row so date, amount and
-	   category line up down the list — the whole reason to look at a register is
-	   to scan one of those columns. */
+	/* Grid, not flex, so date/amount/category line up down the list. */
 	.face {
 		display: grid;
 		grid-template-columns: 92px minmax(0, 1fr) 170px 130px 120px;
@@ -482,8 +413,7 @@
 		font-weight: 600;
 		text-align: right;
 		color: var(--green);
-		/* Wraps rather than nowrap: a figure too long for the column would
-		   otherwise run out of its cell and take the page into sideways scroll. */
+		/* Wraps rather than pushing the page into sideways scroll. */
 		overflow-wrap: anywhere;
 	}
 	.t-date {
@@ -493,9 +423,7 @@
 	.t-amount.negative {
 		color: var(--red);
 	}
-	/* The chip: the category's own hue as ink on a 14% mix of itself. Its own
-	   colour rather than a neutral chip, because this is identity — which group
-	   the row files into — and not a state. */
+	/* Own hue, not a neutral chip — this is identity (which category), not state. */
 	.t-category {
 		display: inline-flex;
 		align-items: center;
@@ -524,9 +452,8 @@
 		line-height: 1;
 		min-width: 0;
 	}
-	/* A pill is a state word and stays whole; a pill carrying a NAME can be
-	   any length, so it is cut to the column with an ellipsis and the full
-	   text lives on the title. */
+	/* A pill carrying a name can be any length, so it's cut with an ellipsis
+	   and the full text lives on the title. */
 	.mark {
 		display: inline-flex;
 		min-width: 0;
@@ -621,8 +548,6 @@
 		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
-	/* One line where there is room for one, wrapping rather than shrinking the
-	   loan's name into something unreadable when there is not. */
 	.loan-form {
 		display: flex;
 		align-items: center;
@@ -637,15 +562,12 @@
 		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
-	/* A chip in a column: without this it would stretch the width of the panel.
-	   Tinted like the pill on the face, the way a tag chip is tinted by its own
-	   hue, so the two readings of the same fact look like one fact. */
+	/* Tinted like the pill on the face, so both readings of the fact match. */
 	.recorded {
 		align-self: flex-start;
 		color: var(--teal);
 		border-color: color-mix(in srgb, var(--teal) 45%, transparent);
 	}
-	/* The lines of a split, shown under the transaction they divide. */
 	.splits {
 		list-style: none;
 		margin: 0;
@@ -685,13 +607,10 @@
 		opacity: 0.85;
 	}
 	@media (max-width: 720px) {
-		/* Two lines rather than five squeezed columns: when, what and how much on
-		   the first, what it is filed as on the second. */
 		.face {
 			grid-template-columns: 84px minmax(0, 1fr) auto auto;
 		}
-		/* The chip is the first thing to go: the bar down the left already says
-		   which category this is, in the width of eight pixels. */
+		/* The bar down the left already says which category this is. */
 		.t-category {
 			display: none;
 		}

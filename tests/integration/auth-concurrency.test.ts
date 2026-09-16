@@ -112,9 +112,7 @@ describe('authentication concurrency', () => {
 			authGeneration: 0
 		});
 
-		// These values model work captured while the person was active. Once the
-		// deactivation commits, none of that work may create an authentication
-		// artifact that survives until a later reactivation.
+		// Work captured while active must not create a session after deactivation commits.
 		await testDb
 			.update(schema.person)
 			.set({ deactivatedAt: new Date('2026-08-15T12:00:00Z') })

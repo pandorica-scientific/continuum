@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * The figures a shelf's summary band shows.
- *
- * Counted against a real database rather than a fixture list, because most of
- * what makes them interesting is a join: a wallet counts PEOPLE and not
- * documents, a dossier counts the cards its paper is about, and the amber
- * window comes off the document's type rather than off a constant. None of
- * those survive being faked.
+ * The figures a shelf's summary band shows, counted against a real database rather
+ * than a fixture list — a wallet counts PEOPLE not documents, a dossier counts the
+ * cards its paper is about, none of which survives being faked.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { shelfFacts } from '$lib/server/documents/shelf-tiles';

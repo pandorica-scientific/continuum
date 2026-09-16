@@ -15,15 +15,14 @@ vi.mock('$env/dynamic/private', () => ({
 }));
 
 /**
- * Task 12: the property page's own `DocumentsCard` and the one per tenancy.
+ * The property page's own `DocumentsCard` and the one per tenancy.
  *
- * Both cards read `documentsAbout` against a different target id — the flat's
- * or the tenancy's — so what is asserted here is the split itself: a lease
- * filed against the TENANCY must not appear on the flat's card, and a deed
- * filed against the FLAT must not appear on the tenancy's. The attach/detach
- * actions are exercised through the real route, because the registry lookup
- * inside `attachDocument`/`detachDocument` (which entity kind is `targetId`)
- * is the part a hand-written insert would not cover.
+ * Both cards read `documentsAbout` against a different target id, so what
+ * matters is the split: a lease filed against the tenancy must not appear on
+ * the flat's card, and a deed filed against the flat must not appear on the
+ * tenancy's. Attach/detach go through the real route, since the registry
+ * lookup — which entity kind `targetId` is — is what a hand-written insert
+ * would skip.
  */
 let harness: Harness;
 let testDb: TestDb;

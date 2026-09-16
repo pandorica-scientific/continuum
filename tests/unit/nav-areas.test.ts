@@ -17,9 +17,7 @@ const modules = (overrides: Partial<ModuleToggles> = {}): ModuleToggles =>
 		...overrides
 	}) as ModuleToggles;
 
-// pathDisabled is the route guard: it is what makes a switched-off module's
-// screens 404 rather than quietly rendering. The sidebar was restructured
-// underneath it, so these pin the behaviour that must not have changed.
+// pathDisabled is the route guard that 404s a switched-off module's screens.
 describe('pathDisabled', () => {
 	it('allows a screen whose module is on', () => {
 		expect(pathDisabled('/property', modules())).toBe(false);
@@ -78,11 +76,8 @@ describe('the area structure', () => {
 		expect(assets?.screens.map((s) => s.path)).toEqual(['/property', '/investments', '/loans']);
 	});
 
-	// Household was split so the calendar is one click away rather than two.
-	// What matters is that Home and Calendar are separate rows and that the
-	// calendar is the first screen of its own — an area opens on its first live
-	// screen, so anything ahead of /calendar would cost the extra click the split
-	// was made to remove. Which screens sit BEHIND it is free to change.
+	// An area opens on its first live screen, so /calendar must be first in its area
+	// for the calendar to stay one click away.
 	it('gives Home and Calendar a sidebar row each', () => {
 		expect(AREAS.find((a) => a.key === 'home')?.screens.map((s) => s.path)).toEqual(['/home']);
 		expect(AREAS.find((a) => a.key === 'calendar')?.screens[0].path).toBe('/calendar');
@@ -92,10 +87,8 @@ describe('the area structure', () => {
 		const calendar = AREAS.find((a) => a.key === 'calendar');
 		expect(calendar?.label).toBe('Calendar & Contacts');
 		expect(calendar?.screens.map((s) => s.path)).toEqual(['/calendar', '/contacts']);
-		// Contacts moved out of Admin, and then Admin itself went: Documents is its
-		// own row after Calendar, and Settings is the gear beside the wordmark.
-		// Sharing one row put paperwork somebody opens often behind the same click
-		// as configuration somebody opens rarely.
+		// Admin no longer exists: Documents is its own row after Calendar, and Settings
+		// is the gear beside the wordmark.
 		expect(AREAS.find((a) => a.key === 'admin')).toBeUndefined();
 		expect(AREAS.find((a) => a.key === 'documents')?.screens.map((s) => s.path)).toEqual([
 			'/documents'
@@ -106,10 +99,8 @@ describe('the area structure', () => {
 	});
 
 	it('puts Settings in no area at all', () => {
-		// It is reached from the gear, so nothing in the navigation owns it — and
-		// `areaForPath` returning undefined for it is the expected answer rather
-		// than a gap. It is also therefore not module-gated: switching everything
-		// off cannot hide the screen that switches things back on.
+		// Reached from the gear, not the navigation, so it is also not module-gated:
+		// switching everything off cannot hide the screen that switches things back on.
 		expect(AREAS.flatMap((a) => a.screens).some((s) => s.path === SETTINGS_PATH)).toBe(false);
 		expect(areaForPath(SETTINGS_PATH)).toBeUndefined();
 	});
@@ -160,17 +151,13 @@ describe('visibleAreas', () => {
 		expect(areas.map((a) => a.key)).toContain('money');
 		expect(areas.map((a) => a.key)).toContain('overview');
 
-		// Documents IS module-gated, so it goes with its module — where the old
-		// Admin row survived only because Settings shared it. Settings is reached
-		// from the gear now, so switching everything off can no longer hide the
-		// screen that switches things back on.
+		// Documents is module-gated, so it goes with its module.
 		expect(areas.map((a) => a.key)).not.toContain('documents');
 	});
 });
 
-// Icon names are strings in the registry and keys in the icon set. TypeScript
-// ties them together at build time; this says so at test time as well, and
-// catches an icon deleted from under a screen that still names it.
+// Icon names are strings in the registry and keys in the icon set; this catches an
+// icon deleted from under a screen that still names it.
 describe('the icon set', () => {
 	it('has an icon for every area and every screen', () => {
 		for (const area of AREAS) {
@@ -195,9 +182,7 @@ describe('the icon set', () => {
 	});
 });
 
-// The identity hue is a token name, so a typo renders an invisible colour
-// rather than failing. TypeScript catches it at build time; this says so at
-// test time too, and pins the palette a hue must exist in.
+// The identity hue is a token name, so a typo would render an invisible colour rather than fail.
 describe('area identity hues', () => {
 	it('names a hue every area can be drawn with', () => {
 		const css = readFileSync('src/lib/styles/app.css', 'utf8');

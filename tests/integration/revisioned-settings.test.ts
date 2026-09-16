@@ -14,9 +14,8 @@ let testDb: TestDb;
 beforeAll(async () => {
 	harness = await startPostgres('revisioned-settings');
 	testDb = harness.db;
-	// The real schema, not a hand-written subset of it. The subset that used
-	// to live here had to be kept in step with schema.ts by hand, and a test
-	// passing against a stale copy of a table says nothing about the real one.
+	// The real schema, not a hand-written subset: a test passing against a
+	// stale copy of a table says nothing about the real one.
 	await harness.applyMigrations(ALL_MIGRATIONS);
 }, 30_000);
 
@@ -75,10 +74,8 @@ describe('revisioned settings', () => {
 		expect(exported.settings.retirement).not.toHaveProperty('writerId');
 	});
 
-	// Export unwraps the payload, so import has to re-wrap it. Writing the bare
-	// value reset the version to 0: a tab still holding baseVersion 0 then
-	// passed the concurrency check and silently replaced the file that had just
-	// been imported.
+	// Export unwraps the payload, so import must re-wrap it — writing the bare
+	// value would reset the version to 0, letting a stale tab overwrite it.
 	it('re-versions an imported retirement payload above any open tab', async () => {
 		const writer = '99999999-9999-4999-8999-999999999999';
 		await setRevisionedSetting('retirement', writer, 0, 1, { spend: 42 }, testDb);
@@ -303,11 +300,6 @@ describe('rule definition mutation', () => {
 });
 
 /*
- * RETIRED with the migration chain: two cases covering 0031, which stamped the
- * base currency of the day onto rule bounds and the meter price so a later
- * change of base currency could not silently reinterpret them.
- *
- * The migration ran once, against data written before those fields carried a
- * currency. Both fields are written with an explicit currency now, and the
- * squash to a single baseline leaves nothing to replay.
+ * No replay test here: the base-currency backfill ran once, before the
+ * squash to a single baseline migration.
  */

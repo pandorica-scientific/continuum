@@ -104,10 +104,8 @@ describe('the position a property was bought in', () => {
 			)
 		).toEqual({ ok: true });
 
-		// The household's own cash, not the whole price: most of the price is the
-		// bank's, and the part that becomes theirs arrives as the mortgage is
-		// repaid — which the loan already records. Counting the price here would
-		// double it.
+		// The household's own cash, not the whole price: the rest becomes theirs
+		// as the mortgage is repaid, which the loan already records.
 		expect(String((await flat()).moneyInMinor)).toBe('9900000');
 	});
 

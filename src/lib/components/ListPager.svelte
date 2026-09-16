@@ -1,13 +1,11 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
-	// The ‹ › nav, shared by every screen that pages a long list — the Tax and
-	// Salary tables and the Rules list — so they cannot drift apart. The size
-	// control is `PageSize`, and sits ABOVE the rows rather than beside this.
+	// The ‹ › nav shared by every screen that pages a long list. `PageSize` is
+	// the separate size control and sits above the rows, not beside this.
 	//
-	// Unlike the transactions pager this is local state rather than the URL: the
-	// rest of these screens' view — the open year, the person filter — is local
-	// too, and putting one of them in the address bar and not the others would
-	// make a shared link restore half a view.
+	// Local state rather than the URL, matching the rest of these screens'
+	// view state (open year, person filter) — mixing local and URL state would
+	// make a shared link restore only half a view.
 	let {
 		page = $bindable(),
 		pages,
@@ -18,13 +16,7 @@
 		pages: number;
 		/** What the current page covers, e.g. "2019–2023" or "1–5 of 23". */
 		range: string;
-		/**
-		 * Drop the top rule.
-		 *
-		 * It exists to seat the pager at the foot of a bordered table. A list of
-		 * separate cards has no such foot, and the line would double up with the
-		 * card's own border.
-		 */
+		/** Drop the top rule — for a list of cards, which has no table foot to seat it against. */
 		bare?: boolean;
 	} = $props();
 </script>

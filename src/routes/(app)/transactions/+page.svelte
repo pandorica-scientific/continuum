@@ -1,17 +1,7 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
-	// The register, as a table of months you open rather than a run of cards.
-	//
-	// It used to be a flat list of transactions, ten to a page, each card
-	// carrying every control that row has. That made two jobs fight each other:
-	// reading the ledger, which wants a scannable list, and correcting it, which
-	// wants controls. So the months collapse, a month opens into its
-	// transactions, and a transaction opens into everything you can do to it —
-	// the same three tiers the Tax and Salary screens are built on.
-	//
-	// The two pagers are independent. The month list is walked in local state;
-	// the transactions inside the open month are paged by the URL, because they
-	// are fetched a month at a time. Paging one leaves the other where it was.
+	// Two independent pagers: months page in local state, the open month's
+	// transactions page via the URL since they're fetched per month.
 	import { deserialize } from '$app/forms';
 	import { page } from '$app/state';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
@@ -40,10 +30,8 @@
 	type Month = (typeof data.months)[number];
 	let splitting = $state<Row | null>(null);
 
-	// The month list, paged locally the way the Tax and Salary tables page
-	// theirs. A record that shrank must not strand the view on a page that no
-	// longer exists; an open month has to be reachable, so the page follows it
-	// when it CHANGES and not otherwise, or paging away would be impossible.
+	// Month list pages locally, like Tax and Salary. The page follows the open
+	// month only when it CHANGES, so paging away manually still works.
 	let monthSize = $state<number>(DEFAULT_LIST_PAGE_SIZE);
 	let monthPage = $state(0);
 	const monthPages = $derived(Math.max(1, Math.ceil(data.months.length / monthSize)));
@@ -69,10 +57,9 @@
 				: `${monthWindow.at(-1)!.month} – ${monthWindow[0].month}`
 	);
 
-	// 190px month, one fraction each for in and out, 210px for the net. The two
-	// flexible columns carry a minimum rather than a floor of zero, so a heading
-	// can never be squeezed narrower than the word it prints. A phone keeps the
-	// month and the net; the bar on the net already says in against out.
+	// Flexible columns carry a minimum so a heading is never squeezed narrower
+	// than the word it prints. A phone keeps only month and net — the bar on
+	// net already says in against out.
 	const COLUMNS: Column[] = [
 		{ key: 'month', label: 'Month', width: 'minmax(190px, 1.4fr)' },
 		{ key: 'in', label: 'In', align: 'end', width: 'minmax(120px, 1fr)', hideBelow: 760 },
@@ -89,14 +76,10 @@
 	);
 	const monthOf = (group: Group<Row>): Month => monthByKey.get(group.key)!;
 
-	// Which transaction is expanded. Local, not the URL: a month's rows are
-	// already on the page, so opening one asks the server for nothing — and the
-	// month, which does need a fetch, is the thing worth being able to link to.
+	// Local, not the URL — a month's rows are already loaded, so opening one needs no fetch.
 	let openRow = $state<string | null>(null);
-	// A different month is a different set of rows; carrying an id across would
-	// leave a row expanded that nobody can see. Guarded on the month CHANGING
-	// rather than on `data`: every form action on this screen replaces the load,
-	// and filing a category must not collapse the row it was filed from.
+	// Guarded on the month CHANGING, not on `data`: every form action here
+	// replaces the load, and filing a category must not collapse its own row.
 	let followedMonth: string | null = null;
 	$effect(() => {
 		if (data.openMonth === followedMonth) return;
@@ -104,37 +87,28 @@
 		openRow = null;
 	});
 
-	// Receipts open in a dialog rather than sitting under every row: a file input
-	// and its chips took a whole line per transaction, on a page that is nothing
-	// but transactions. Held by id, not by the row object — `data` is replaced
-	// when the attach action returns, and a captured row would keep showing the
-	// attachments the page had before the upload.
+	// Dialog rather than a per-row file input. Held by id, not the row object —
+	// `data` is replaced when the attach action returns, and a captured row
+	// would keep showing stale attachments.
 	let attachingId = $state<string | null>(null);
 	const attaching = $derived(
 		attachingId ? (data.rows.find((r) => r.id === attachingId) ?? null) : null
 	);
 
-	// What "Attach existing" may offer, for the one transaction whose dialog is
-	// open. `load` does not compute this for every row the register is paging
-	// — up to fifty of them — because that would mean carrying the household's
-	// whole visible document library once per row for the sake of the single
-	// dialog a person might open. `?/candidates` asks for it only when there is
-	// something open to ask it for.
+	// Fetched via `?/candidates` only for the one open dialog, rather than
+	// computed by `load` for every row the register can page up to fifty of.
 	let candidates = $state<CandidateDocument[]>([]);
-	// Set on anything but a clean success — a dropped connection and a
-	// non-action response (a CSRF refusal page, a 500) both throw out of
-	// `deserialize` the same way, and a person cannot tell those apart from
-	// here either. Left as `null` is "nothing wrong", not "nothing tried yet".
+	// Set on anything but a clean success (dropped connection, CSRF refusal, a
+	// 500 — all throw out of `deserialize` the same way). `null` means nothing
+	// tried yet, not nothing wrong.
 	let candidatesError = $state<string | null>(null);
-	// True only while the request above is in flight, so the dialog can say it
-	// is checking rather than showing an empty picker that then pops a list
-	// into it a moment later.
+	// True only while the request is in flight, so the dialog shows a loading
+	// state instead of an empty picker that then pops a list in.
 	let loadingCandidates = $state(false);
 	$effect(() => {
 		const id = attachingId;
-		// Re-read whenever this row's own filed documents change too: an attach
-		// or a delete both change what is already linked, and a stale list would
-		// still offer what was just attached, or hide what was just removed.
+		// Re-read on this row's own documents changing too, so an attach or
+		// delete elsewhere doesn't leave a stale list.
 		void attaching?.documents;
 		if (!id) {
 			candidates = [];
@@ -178,9 +152,8 @@
 		};
 	});
 
-	// The quick chips are links, not form controls: they have to be reachable
-	// while the filter grid is closed, and a link keeps the register's whole
-	// state in the URL — which is what makes a narrowed view shareable.
+	// Links, not form controls, so the register's whole state stays in the URL
+	// and a narrowed view remains shareable.
 	interface QuickChip {
 		label: string;
 		hue: string;
@@ -215,14 +188,12 @@
 		}
 	];
 
-	// Built as a string rather than by mutating a URLSearchParams: the app's
-	// lint rule reserves the mutable class for reactive state, and this is a
-	// throwaway read of the current URL.
+	// Built as a string rather than by mutating URLSearchParams — the lint rule
+	// reserves the mutable class for reactive state.
 	function quickHref(params: Record<string, string | null>): string {
 		const touched = new Set(Object.keys(params));
 		const pairs = [...page.url.searchParams.entries()]
-			// A narrowing always lands on the first page: page 4 of the old result
-			// set is a different four hundred rows.
+			// A narrowing always lands on page one — the old page number means a different result set.
 			.filter(([key]) => key !== 'page' && !touched.has(key))
 			.concat(
 				Object.entries(params).filter((entry): entry is [string, string] => entry[1] !== null)
@@ -266,14 +237,11 @@
 />
 
 {#if form?.message && !form?.id}
-	<!-- Failures that name a row render beside that row instead; showing the same
-	     message here as well reads as two separate failures. -->
+	<!-- Failures naming a row render beside that row; showing the same message here too would look like two failures. -->
 	<div class="error">{form.message}</div>
 {/if}
 
-<!-- Four chips and a search box answer nearly every visit: what needs a look,
-     and money in or out. The eleven-field grid is still here, one click away,
-     rather than the first thing on the screen every time. -->
+<!-- Chips and search cover most visits; the full filter grid stays one click away. -->
 <ControlRow>
 	{#snippet left()}
 		<form method="GET" class="quick-search">
@@ -320,16 +288,11 @@
 
 <section class="section" hidden={!showFilters}>
 	<form method="GET" class="card filters">
-		<!-- A GET form submits its own fields and nothing else, so a chosen page
-		     size would be dropped the moment anything was filtered. Only carried
-		     when it differs from the default, to keep the URL clean. -->
+		<!-- A GET form submits only its own fields, so page size is carried explicitly, and only when it differs from the default. -->
 		{#if data.pageSize !== data.defaultPageSize}
 			<input type="hidden" name="per" value={data.pageSize} />
 		{/if}
-		<!-- Arriving from a stage of the cash-flow chart narrows the register to a
-		     category group, and nothing in the grid below carries one — so Apply
-		     would silently drop it. Stated rather than only carried, because a
-		     narrowing nobody can see is a register that looks wrong. -->
+		<!-- Carries the group filter (set from cash-flow chart navigation) since the grid below has no control for it. -->
 		{#if data.filter.groupKey}
 			<input type="hidden" name="group" value={data.filter.groupKey} />
 			<div class="active-filters">
@@ -434,8 +397,7 @@
 	</div>
 
 	{#if data.months.length > LIST_PAGE_SIZES[0]}
-		<!-- Above the rows it sizes: how much to show is a decision made before
-		     reading, while which page to read is one made after. -->
+		<!-- Above the rows it sizes — how much to show comes before which page to read. -->
 		<div class="tools">
 			<PageSize bind:size={monthSize} onchange={() => (monthPage = 0)} label="months" />
 		</div>
@@ -486,9 +448,7 @@
 		{#snippet head(group, visible)}
 			{@const m = monthOf(group)}
 			<span class="month">
-				<!-- A 34px tile, not a bare glyph: it is the row's grip, and at 9px
-				     the chevron was a target nobody could aim at. Teal when open,
-				     which is the one place this screen's area colour appears. -->
+				<!-- 34px tile, not a bare glyph — at 9px the chevron wasn't a usable target. -->
 				<span class="chevron" class:open={group.open} aria-hidden="true"
 					>{group.open ? '▾' : '▸'}</span
 				>
@@ -520,9 +480,7 @@
 						<span class="c-sub">{c.currency}</span>
 						<span class="display t-value" class:short={c.negative}>{c.net}</span>
 					</span>
-					<!-- In beside out, both scaled against the widest month IN THE SAME
-					     currency — the one scale on which two months can honestly be
-					     compared. A month in another currency gets its own. -->
+					<!-- In vs out, scaled against the widest month in the same currency. -->
 					<span class="track" aria-hidden="true">
 						<span class="fill in" style:width="{c.inPct}%"></span>
 						<span class="fill out" style:width="{c.outPct}%"></span>
@@ -536,9 +494,7 @@
 				<span class="empty-month">Nothing in {monthOf(group).label} matches the filters above.</span
 				>
 			{/if}
-			<!-- Links, not a control that posts: every other part of this view
-			     lives in the URL, so page size does too and a narrowed view
-			     stays shareable at the size it was read in. -->
+			<!-- Links, not a posting control — page size lives in the URL like the rest of this view. -->
 			<span class="per-page" role="group" aria-label="Transactions per page">
 				{#each data.pageSizes as p (p.size)}
 					<a
@@ -718,9 +674,7 @@
 		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 		gap: var(--space-6);
 	}
-	/* Scoped to the filter grid. Bare, it also caught the search box in the
-	   control row above, which is a row and not a stacked field — the icon
-	   ended up above the input. */
+	/* Scoped to the filter grid — bare, this also caught the search box above. */
 	.filters label {
 		display: flex;
 		flex-direction: column;
@@ -747,9 +701,7 @@
 		gap: var(--space-4);
 		align-items: center;
 	}
-	/* What the register is narrowed to that no control in the grid states.
-	   Named for what it holds rather than for the state it is in: a bare `.active`
-	   also matched the selected page-size link, which has a rule of its own. */
+	/* Named for what it holds, not the state — a bare `.active` also matched the page-size link's own rule. */
 	.active-filters {
 		display: flex;
 		flex-wrap: wrap;
@@ -784,8 +736,7 @@
 		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
-	/* The month row's cells. The table draws the grid; these are what sits
-	   in it, and they read the same in the head row and the summary row. */
+	/* The month row's cells — read the same in both the head row and the summary row. */
 	.month {
 		display: flex;
 		align-items: center;
@@ -859,8 +810,7 @@
 		font-size: var(--text-lg);
 		color: var(--fg1);
 	}
-	/* Red only when the month ran short. Every other month is the ordinary
-	   case, and colouring all of them would leave nothing for the exception. */
+	/* Red only when the month ran short — colouring every month would lose the exception. */
 	.t-value.short {
 		color: var(--red);
 	}

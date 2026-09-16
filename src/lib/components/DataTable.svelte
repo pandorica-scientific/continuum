@@ -4,28 +4,18 @@
 	import { gridTemplate, visibleColumns, type Column, type Group } from './data-table';
 
 	/**
-	 * The one table.
+	 * The one table. A screen brings its columns, groups and cells; this draws
+	 * the shared chrome: header strip, row line, open group's ground, summary
+	 * row, hover.
 	 *
-	 * A screen brings its columns, its groups and the cells; this draws what
-	 * every list in the product shares and nothing a screen should be deciding:
-	 * the header strip, the row line, the ground an open group sits on, the
-	 * summary row, the hover. Before v0.8.1 Transactions, Rules, Salary, Tax,
-	 * Retirement, Investments and the Documents list each drew that chrome
-	 * themselves, and each was a shade and a pixel apart — which is what "the
-	 * app looks different in different places" actually looked like.
+	 * Groups, not rows, are the unit — a table of things you open (a month, a
+	 * category, a year, a type). A group head is a button; rows under it may
+	 * hold their own forms and buttons, so the head can't — nested interactive
+	 * content is invalid HTML. A head needing a control beside it uses `aside`.
 	 *
-	 * Groups, not rows, are the unit: every adopter is a table of things you
-	 * open (a month, a category, a year, a type). A group head is a button; the
-	 * rows under it are plain rows and may hold forms and buttons of their own,
-	 * which is why the head is not allowed to — nested interactive content is
-	 * invalid HTML and a screen reader reads it as one control. A head that
-	 * needs a control beside it puts it in `aside`, which draws under the open
-	 * head, right-aligned, on the same ground.
-	 *
-	 * Columns hide by breakpoint (`hideBelow`), and the snippets receive the
-	 * set of visible keys so a cell that is not drawn is not rendered either —
-	 * the alternative, `display:none` on a cell a screen still renders, leaves
-	 * the grid counting a track that is not there.
+	 * Columns hide by breakpoint (`hideBelow`); snippets receive the set of
+	 * visible keys so a hidden cell isn't rendered at all, rather than
+	 * `display:none`d while still claiming a grid track.
 	 */
 	interface Props {
 		columns: Column[];
@@ -39,9 +29,8 @@
 		ontoggle?: (key: string) => void;
 		/**
 		 * A group head as a link rather than a button, for a table whose open
-		 * group lives in the URL — the register, where a narrowed view stays
-		 * shareable at the month it was read in. The link is expected to toggle:
-		 * the same href closes the group it opened.
+		 * group lives in the URL. The link is expected to toggle: the same href
+		 * closes the group it opened.
 		 */
 		href?: (group: Group<Row>) => string;
 		/**
@@ -90,14 +79,13 @@
 	}: Props = $props();
 
 	let box = $state<HTMLElement | null>(null);
-	// null until measured: the server and the first frame draw the wide layout.
+	// null until measured: server and first frame draw the wide layout.
 	let width = $state<number | null>(null);
 
 	$effect(() => {
 		const element = box;
 		if (!element) return;
-		// Measured synchronously first — a ResizeObserver never fires in a
-		// hidden document, the trap LineChart and Sankey both document.
+		// Measure synchronously first — ResizeObserver never fires in a hidden document.
 		width = element.getBoundingClientRect().width;
 		const observer = new ResizeObserver(([entry]) => {
 			width = entry.contentRect.width;
@@ -193,8 +181,8 @@
 		min-width: 0;
 	}
 
-	/* The head, every group head and every row share one grid, so the
-	   columns line up through open and closed groups alike. */
+	/* Head, group heads and rows share one grid so columns line up through
+	   open and closed groups alike. */
 	.dt-head,
 	.dt-group,
 	.dt-row,
@@ -234,8 +222,7 @@
 		border-top: 1px solid var(--bd);
 	}
 
-	/* A group head is a button or a link, so it starts from neither: no
-	   border, the table's type, the row's grid, no underline. */
+	/* A group head is a button or a link, styled as neither. */
 	.dt-group {
 		appearance: none;
 		border: 0;
@@ -258,9 +245,8 @@
 		outline: 2px solid var(--blue);
 		outline-offset: -2px;
 	}
-	/* The open group's ground: a step up from the table, and the hue's edge
-	   down the left. The rows under it stay on the table's own surface, so an
-	   open month reads as a lid lifted rather than a block dropped in. */
+	/* Open group's ground: a step up from the table, hue's edge down the left.
+	   Rows stay on the table's own surface so it reads as a lid lifted. */
 	.dt-group.open {
 		background: var(--table-open);
 		box-shadow: inset 3px 0 0 var(--dt-hue);
@@ -282,14 +268,12 @@
 	.dt-row:hover {
 		background: var(--surface-2);
 	}
-	/* The row that is now: a step up and heavier, so a table of futures has
-	   a present to read them against. */
+	/* The row that is now: a step up and heavier. */
 	.dt-row.now {
 		background: var(--surface-2);
 		font-weight: 600;
 	}
-	/* A block row is the component's own: no grid, no padding, no hover of
-	   the table's — the component draws its face and its hover itself. */
+	/* A block row draws its own face and hover — no grid, no padding, no hover here. */
 	.dt-row.block {
 		display: block;
 		padding: 0;

@@ -7,14 +7,10 @@ import { DEFAULT_PAGE_SIZE, type RegisterFilter } from '$lib/transactions/filter
 import { rowId } from '../row-id';
 
 /**
- * W2.2: a stage of the waterfall is a group, and clicking one asks the register
- * for the categories inside it.
- *
- * The register could already be narrowed to one category. A group is a
- * different question — "everything filed under Housing" — and it has to be
- * answered on the same effective lines the rest of the filter uses, or a split
- * transaction with one housing line would either drop out of the list or bring
- * its whole amount into the total.
+ * A group ("everything filed under Housing") is a different question from a
+ * category, and must be answered on the same effective lines the rest of the
+ * filter uses, or a split transaction with one housing line would drop out or
+ * bring its whole amount into the total.
  */
 
 let harness: Harness;
@@ -147,12 +143,9 @@ describe('the group filter', () => {
 });
 
 /**
- * The window is measured on the day the money moved.
- *
- * The chart sums on the value date where the bank prints one, and every band
- * links back here. A card payment started in June and booked in July was
- * counted in June's band and then missing from the June list that band opened,
- * which is one figure disagreeing with the list behind it.
+ * The chart sums on the value date where the bank prints one. Regression:
+ * a card started in June and booked in July was counted in June's band but
+ * missing from the June list that band opened.
  */
 describe('the effective date', () => {
 	beforeEach(async () => {
@@ -200,13 +193,9 @@ describe('the effective date', () => {
 
 /**
  * The two halves are worked out twice — once in SQL for the totals, once in
- * TypeScript for the panel that explains them — and they have to land on the
- * same minor unit.
- *
- * The figures here are the only shape that can catch it: the exact interest is
- * 20 017.5, a half-way tie, and a tie is where two roundings part company. The
- * fee is what produces it, by making the line the halves are taken from
- * something other than the amount the loan event was recorded against.
+ * TypeScript for the panel — and must land on the same minor unit. Only a
+ * half-way tie (interest exactly 20 017.5) can catch two roundings parting
+ * company.
  */
 describe('a loan payment whose halves land on a half-way tie', () => {
 	beforeEach(async () => {
@@ -251,11 +240,9 @@ describe('a loan payment whose halves land on a half-way tie', () => {
 });
 
 /**
- * A claimed instalment is two lines, and each group sees only its own.
- *
- * The chart moves the interest into the group the payment is filed under and
- * the principal into savings. Until the register expressed the same split, the
- * housing band said one thing and the list it opened said the whole debit.
+ * A claimed instalment is two lines, and each group sees only its own: the
+ * chart moves interest into the group the payment is filed under, principal
+ * into savings — the register must express the same split.
  */
 describe('a loan payment with a stated interest', () => {
 	beforeEach(async () => {

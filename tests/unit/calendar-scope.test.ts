@@ -16,10 +16,10 @@ describe('edit scope planning', () => {
 		expect(planScopeChange('all', WEEKLY, OCCURRENCE)).toEqual({ kind: 'series' });
 	});
 
-	// 'following' is NOT an exception, and modelling it as one desynchronises on
-	// the first pass: the remote goes on believing the original series still owns
-	// every occurrence after the split, so the ones we "moved" come straight back.
-	// The original is truncated and a second series starts at the split.
+	// 'following' is NOT an exception: modelling it as one desynchronises on the
+	// first pass, since the remote still believes the original series owns
+	// every later occurrence. The original is truncated and a second series
+	// starts at the split.
 	it("'following' truncates the original with UNTIL and starts a new series", () => {
 		const plan = planScopeChange('following', WEEKLY, OCCURRENCE);
 		expect(plan).toEqual({

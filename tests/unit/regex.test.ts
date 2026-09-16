@@ -5,11 +5,9 @@ import { escapeRegExp } from '$lib/regex';
 /**
  * Patterns built out of data.
  *
- * The statement reader assembles a regular expression from a currency symbol to
- * decide what a file is denominated in. It escaped `$` alone, which was correct
- * for the symbols it happened to carry and one metacharacter away from a
- * pattern meaning something else entirely — the failure being silent, because a
- * regular expression that matches the wrong thing does not throw.
+ * The statement reader assembles a regular expression from a currency symbol.
+ * A wrong escape fails silently, because a regex that matches the wrong thing
+ * does not throw.
  */
 describe('escapeRegExp', () => {
 	it('escapes every character a pattern treats as syntax', () => {
@@ -26,7 +24,7 @@ describe('escapeRegExp', () => {
 	});
 
 	it('makes a backslash match a backslash, not an escape', () => {
-		// The case CodeQL named: `$`-only escaping left this one through.
+		// Regression: `$`-only escaping left this one through.
 		expect(new RegExp(escapeRegExp('\\d')).test('\\d')).toBe(true);
 		expect(new RegExp(escapeRegExp('\\d')).test('7')).toBe(false);
 	});

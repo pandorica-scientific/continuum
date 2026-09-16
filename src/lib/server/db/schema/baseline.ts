@@ -3,24 +3,13 @@
  * The half of the schema drizzle-kit cannot write, assembled in order.
  *
  * drizzle-kit models tables, columns, indexes and foreign keys, and nothing
- * else. Triggers, generated columns, CHECK constraints, expression indexes, the
- * `net_worth_component` view and the seed rows a foreign key needs to be
- * satisfiable are all invisible to it — so `db:generate` cannot notice any of
- * them going missing, and a database built with `drizzle-kit push` would have
- * the tables without the integrity they depend on.
+ * else — triggers, generated columns, CHECK constraints, expression indexes,
+ * the `net_worth_component` view and seed rows are all invisible to it.
  *
- * They used to live only as hand-written SQL appended to `0000_baseline.sql`,
- * which made the schema two sources of truth that nothing reconciled: adding an
- * entity kind meant three coordinated edits in two languages, and only one of
- * the three was held by a test. Now each block sits beside the tables it
- * constrains, `scripts/compose-baseline.mjs` collects them into the migration,
- * and `tests/unit/baseline-composition.test.ts` fails if the committed file and
- * these modules ever disagree. `drizzle/0000_baseline.sql` is a build artefact;
- * nothing edits it by hand.
- *
- * The two lists that used to be repeated in SQL — the enum CHECK constraints and
- * the entity kinds — are now GENERATED from `$lib/enums`, which is what makes
- * "one source of truth" a fact rather than an intention.
+ * Each block sits beside the tables it constrains; `scripts/compose-baseline.mjs`
+ * collects them into `drizzle/0000_baseline.sql`, a build artefact nothing
+ * edits by hand, and `tests/unit/baseline-composition.test.ts` fails if the
+ * two ever disagree.
  */
 import { ENUMS, ENUM_COLUMNS, checkName } from '../../../enums';
 import { authSql } from './auth';
@@ -55,27 +44,15 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 /**
  * A CHECK for every closed set of column values, written from the lists
- * themselves.
- *
- * Twenty-one columns once held their permitted values only in a comment beside
- * the declaration, and the comments had already drifted: `transaction.review_state`
- * documented three states while the code wrote four, and `document.shelf`
- * documented eight shelves while the app offered nine. Nothing compared them, so
- * nothing noticed. Then the lists moved to `$lib/enums` and were copied a third
- * time into hand-written SQL, which is the same failure one step further along.
- *
- * Generating them closes it: the list is used to type the Drizzle column, to
- * build what the screens offer, and — here — to write the constraint, from one
- * declaration. `tests/integration/schema-invariants.test.ts` still reads
- * pg_constraint and compares, so a database that drifted from the file is caught
- * as well.
+ * themselves — the same list types the Drizzle column, builds what the
+ * screens offer, and writes the constraint, so nothing can drift.
  *
  * PostgreSQL ENUM types were rejected: a value cannot be dropped or reordered
- * without recreating the type and every column using it. A CHECK is one DROP and
- * one ADD, which is what an additive-only schema needs.
+ * without recreating the type and every column using it. A CHECK is one DROP
+ * and one ADD, which is what an additive-only schema needs.
  *
- * Nullable columns need no special handling: `col in (...)` is NULL for a NULL
- * input, and a CHECK accepts anything that is not false.
+ * Nullable columns need no special handling: `col in (...)` is NULL for a
+ * NULL input, and a CHECK accepts anything that is not false.
  */
 function enumChecksSql(): string {
 	const statements = ENUM_COLUMNS.map(({ table, column, enum: key }) => {
@@ -89,20 +66,14 @@ function enumChecksSql(): string {
  * Every valued thing, in one place, with the liabilities-are-negative rule
  * applied exactly once rather than in each caller that has to remember it.
  *
- * Adding an asset type is one table plus one UNION branch here. Net-worth code
- * reads the view and sums whatever it finds, so "forgot to include vehicles in
- * net worth" stops being a vigilance problem: the branch is the only edit.
+ * Adding an asset type is one table plus one UNION branch here.
  *
- * `subkind` carries the row's own kind — an account is `current` or `brokerage`,
- * a property `lived` or `rented` — because the caller has rules that turn on it
- * (a brokerage balance is reported by the broker, not counted as cash) and it
- * would otherwise need a second query per table, which is the coupling the view
- * exists to remove.
+ * `subkind` carries the row's own kind — an account is `current` or
+ * `brokerage`, a property `lived` or `rented` — because callers have rules
+ * that turn on it (e.g. a brokerage balance isn't counted as cash).
  *
- * Amounts stay in each row's own currency: this view knows nothing about rates,
- * so summing it across currencies is only meaningful when they agree. The caller
- * converts row by row. It belongs to no single domain, which is why it is here
- * and not beside one of the four tables it reads.
+ * Amounts stay in each row's own currency: the view knows nothing about
+ * rates, so the caller converts row by row.
  */
 const netWorthSql = `
 CREATE VIEW net_worth_component AS
@@ -120,7 +91,21 @@ CREATE VIEW net_worth_component AS
 	UNION ALL
 	SELECT id, 'holding', category, NULL,
 	       currency, value_minor, valued_at::date
-	  FROM holding;
+	  FROM holding
+	UNION ALL
+	SELECT t.id, 'equity', 'rsu', g.person_id,
+	       p.currency,
+	       round((coalesce(t.delivered_units, t.units) - t.sold_units) * p.close_minor)::bigint,
+	       p.day
+	  FROM equity_tranche t
+	  JOIN equity_grant g ON g.id = t.grant_id
+	  JOIN LATERAL (
+	    SELECT close_minor, currency, day FROM security_price sp
+	     WHERE sp.ticker = g.ticker ORDER BY sp.day DESC LIMIT 1
+	  ) p ON true
+	 WHERE t.forfeited_on IS NULL
+	   AND (t.settled_on IS NOT NULL OR t.vests_on <= current_date)
+	   AND (coalesce(t.delivered_units, t.units) - t.sold_units) > 0;
 `;
 
 /**

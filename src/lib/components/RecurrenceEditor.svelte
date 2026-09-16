@@ -39,10 +39,8 @@
 		return Number.isInteger(n) ? n : 0;
 	}
 
-	// Google and Apple write "the second Tuesday" as `BYDAY=2TU`; this editor
-	// writes the equivalent `BYDAY=TU;BYSETPOS=2`. Both have to open as
-	// "monthly on a weekday", or an imported series is shown as — and saved back
-	// as — "monthly on the 13th".
+	// `BYDAY=2TU` (imported) and `BYDAY=TU;BYSETPOS=2` (this editor) both mean
+	// "second Tuesday" and must both open as "monthly on a weekday".
 	const ordinalDay = parsed?.byDay.find((d) => ordinalOf(d) !== 0) ?? null;
 
 	function initialPattern(): Pattern {

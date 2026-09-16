@@ -4,14 +4,9 @@
 	// What an identity document is, in fields: the kind, the country that issued
 	// it, its number, and when.
 	//
-	// One component in two places on purpose. The inspector's edit form had these
-	// fields and the Inbox did not, so every passport filed from the Inbox
-	// reached the wallet with no kind and no country — which meant generic
-	// artwork, no flag, and a card titled "Identity document" until somebody
-	// reopened it and filled the same form in again. Two copies of the markup
-	// would have fixed that once and drifted the next time a field was added, so
-	// there is one, and `readIdentityFields` on the server reads whichever form
-	// posted it.
+	// One component shared by both the Inbox and the inspector's edit form, so
+	// the two copies can't drift out of sync. `readIdentityFields` on the server
+	// reads whichever form posted it.
 	import { untrack } from 'svelte';
 	import { IDENTITY_KINDS, IDENTITY_KIND_LABELS } from '$lib/documents';
 	import { countryOptions } from '$lib/countries';
@@ -33,17 +28,15 @@
 	} = $props();
 
 	/**
-	 * Local state rather than `$derived`, because the form is being edited: rows
-	 * are added and removed before anything is saved, and a derived list would
-	 * discard them on the next load. Seeded once — callers wrap this component
-	 * in `{#key documentId}` so a different document starts from its own rows.
+	 * Local state rather than `$derived`: rows are added and removed before
+	 * saving, and a derived list would discard them. Seeded once — callers wrap
+	 * this in `{#key documentId}` so a different document starts fresh.
 	 */
 	let rows = $state(untrack(() => numbers.map((n) => ({ ...n }))));
 </script>
 
 <!-- Typed by hand, every field optional. Nothing reads the document to fill
-     these in: a number a recogniser guessed wrong is worse than an empty box,
-     because it is believed. -->
+     these in: a wrongly guessed number is worse than an empty box. -->
 <div class="id-grid">
 	<label class="id-field">
 		<span class="quiet">Kind</span>
@@ -76,11 +69,9 @@
 	</label>
 </div>
 
-<!-- One document really can carry several numbers — a residence permit with a
-     card number and a personal number, a licence with a national identifier
-     beside it — and there is no sensible ceiling to guess at, so the household
-     adds as many as it has. Clearing both halves of a row is how one goes:
-     saving writes exactly what the form holds. -->
+<!-- One document can carry several numbers (a residence permit's card number
+     and personal number), so no fixed ceiling. Clearing both halves of a row
+     is how one goes: saving writes exactly what the form holds. -->
 <div class="id-extra">
 	{#each rows as extra, i (i)}
 		<div class="id-extra-row">

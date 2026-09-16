@@ -15,25 +15,18 @@
 
 	let drawerOpen = $state(false);
 
-	// Every `/files/…` link in the app opens here instead of in a browser tab —
-	// wired once, on the shell, rather than screen by screen. See
-	// $lib/actions/file-preview for why it is delegated.
+	// Every `/files/…` link opens here instead of a browser tab, wired once on the shell.
 	let openFile = $state<{ source: ViewerSource; title: string } | null>(null);
 
 	let quickPinned = $state(false);
 	let quickHovering = $state(false);
 	const quickOpen = $derived(quickPinned || quickHovering);
 
-	// What "add" can mean right now.
-	//
-	// Every entry is gated on its module, so the menu never offers a screen that
-	// would 404. Importing is no longer restricted to Overview and Money: that
-	// gating existed because a bare floating button on the Property screen was
-	// just something in the way, and a named menu item is not.
+	// What "add" can mean right now. Every entry is gated on its module, so the
+	// menu never offers a screen that would 404.
 	const quickAdds = $derived(
 		[
-			// The hue is the AREA's, so the tile beside "XTB statement" is the same
-			// purple as the Assets row that leads to the same screen.
+			// Hue matches the area it leads to, e.g. teal for the Assets row.
 			data.modules.import
 				? { href: '/import', label: 'Bank statements', icon: 'inbox' as IconName, hue: 'teal' }
 				: null,
@@ -54,10 +47,7 @@
 			data.modules.documents
 				? { href: '/documents?add=1', label: 'Document', icon: 'folders' as IconName, hue: 'fg3' }
 				: null,
-			// The two Money screens that are FILED rather than imported. Both open
-			// their form on arrival, the way /documents?add=1 already does — a menu
-			// item that lands you on a screen you then have to find a button on is
-			// half a shortcut.
+			// The two Money screens that are filed rather than imported; both open their form on arrival.
 			data.modules.salary
 				? { href: '/salary?add=1', label: 'Payslip', icon: 'wallet' as IconName, hue: 'teal' }
 				: null,
@@ -88,7 +78,7 @@
 			netWorthDeltaShare={data.netWorthDeltaShare}
 			baseCurrency={data.baseCurrency}
 			importBadge={data.importBadge}
-			approximateRates={data.missingRates.none.length + data.missingRates.carried.length > 0}
+			approximateRates={data.missingRates.none.length > 0}
 			version={data.version}
 			runtime={data.runtime}
 			onNavigate={() => (drawerOpen = false)}
@@ -105,19 +95,13 @@
 	{/if}
 
 	<main id="content" tabindex="-1">
-		<!-- The brand, on a phone only. The sidebar it normally lives in is a
-		     drawer down here, so without this the app has no name on screen. -->
+		<!-- Brand mark shown only on phone, where the sidebar is a drawer. -->
 		<div class="phone-brand">
 			<span class="phone-mark"><BrandMark size={18} /></span>
 			<span class="phone-word">Continuum</span>
 		</div>
-		<!-- The open-instance banner used to live here, on every screen. It now
-		     appears in Settings, where it can be acted on, and on the SIGN-IN page,
-		     which is where somebody who did not expect an open instance actually
-		     meets it — before they are inside.
-		     The trade is deliberate and worth naming: somebody who did not turn it
-		     on will not be reminded unless they visit Settings. Against that, a
-		     warning on every screen forever is one nobody reads. -->
+		<!-- Open-instance banner lives in Settings and on sign-in, not here — a
+		     warning on every screen forever goes unread. -->
 		{@render children()}
 	</main>
 
@@ -128,13 +112,8 @@
 		onopen={() => (drawerOpen = true)}
 	/>
 
-	<!-- Quick add: one target for the things done often, on every screen. It
-	     replaced a header button that led to the same place, and the menu is what
-	     lets it stay everywhere — a bare plus on the Retirement screen was
-	     ambiguous, a named list is not. -->
 	{#if quickAdds.length > 0}
-		<!-- Opens on hover AND on click: there is no hover on a phone, and a
-		     keyboard user never triggers one. -->
+		<!-- Opens on hover and on click: no hover on a phone, and a keyboard user never triggers one. -->
 		<div
 			class="quick-wrap"
 			onmouseenter={() => (quickHovering = true)}
@@ -162,9 +141,7 @@
 					{/each}
 				</div>
 			{/if}
-			<!-- The rotation lives on the wrapper and the scale on the button, so the
-			     two transforms do not overwrite each other: open rotates, hover
-			     grows, and both can be true at once. -->
+			<!-- Rotation on the wrapper, scale on the button, so open and hover can both apply at once. -->
 			<span class="quick-spin" class:open={quickOpen}>
 				<button
 					type="button"
@@ -191,9 +168,8 @@
 </div>
 
 <style>
-	/* Three layouts, one markup. The columns are the only thing that changes:
-	   a 264px sidebar on a monitor, a 76px rail on a tablet, and nothing at all
-	   on a phone, where BottomBar takes over and `.side` becomes a drawer. */
+	/* Three layouts, one markup: only the columns change (264px sidebar, 76px
+	   rail, or none on phone where `.side` becomes a drawer). */
 	.shell {
 		display: grid;
 		grid-template-columns: 264px minmax(0, 1fr);
@@ -201,19 +177,13 @@
 		align-items: start;
 	}
 
-	/* Sticky rather than in the flow: the navigation used to scroll away with the
-	   page, so on anything shorter than the content — a tablet above all — you had
-	   to scroll back to the top to move between screens.
-	   `align-items: start` on the grid is what lets this work: stretched to the
-	   row's full height, a sticky element has nothing left to stick within. */
+	/* Sticky, not in-flow, so nav doesn't scroll away on short viewports.
+	   `align-items: start` on the grid is what lets a sticky element work here. */
 	.side {
 		position: sticky;
 		top: 0;
-		/* dvh, not vh: a mobile browser's chrome hides and reappears, and vh is
-		   measured against the largest viewport, so the sidebar would be taller
-		   than the screen and its last item would sit below the fold.
-		   The scrolling belongs to `aside` inside this, which is the element
-		   carrying the background — two scroll containers here would fight. */
+		/* dvh, not vh: mobile browser chrome changes vh's viewport, which would
+		   overflow the sidebar below the fold. Scrolling belongs to the inner aside. */
 		height: 100dvh;
 	}
 	main {
@@ -222,10 +192,7 @@
 		flex-direction: column;
 		gap: var(--space-8);
 		min-width: 0;
-		/* The screen settling in. Keyed on nothing, so it runs once per mount —
-		   a SvelteKit navigation remounts the page component, which is exactly
-		   when this should play. Collapsed to 1ms by the reduced-motion block in
-		   app.css along with everything else. */
+		/* Runs once per mount, since SvelteKit remounts the page component on navigation. */
 		animation: v2-in var(--dur-slow) var(--ease);
 	}
 
@@ -300,10 +267,8 @@
 	.quick-spin.open {
 		transform: rotate(45deg);
 	}
-	/* Small at rest and full size under the pointer. It sits over the corner of
-	   every screen, and at full size it covered a table's last row and the
-	   corner of the Documents rail — so it stays out of the way until it is
-	   being reached for. */
+	/* Small at rest, full size under the pointer, so it doesn't sit over a
+	   table's last row or the Documents rail corner until reached for. */
 	.quick-add {
 		display: grid;
 		place-items: center;
@@ -357,9 +322,7 @@
 			width: 264px;
 			z-index: 30;
 			transform: translateX(-100%);
-			/* A transformed element is still tabbable and exposed to assistive
-			 * technology. Visibility removes the closed mobile drawer from both;
-			 * the desktop sidebar is outside this media rule and remains visible. */
+			/* A transformed element is still tabbable/exposed to a11y tools; visibility fixes that. */
 			visibility: hidden;
 			transition:
 				transform var(--dur) var(--ease),

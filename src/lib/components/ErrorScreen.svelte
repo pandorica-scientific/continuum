@@ -16,10 +16,8 @@
 		path?: string;
 	} = $props();
 
-	// A page rendered from cache while the server is unreachable is not a 500,
-	// whatever status it arrived with — the useful thing to say is "you cannot
-	// reach the server", so the offline state replaces whatever we were given.
-	// Client-only: the server obviously always thinks it is reachable.
+	// A page served from cache while offline isn't really a 500 — the offline
+	// state replaces whatever status was given. Client-only check.
 	let offline = $state(false);
 	$effect(() => {
 		const read = () => (offline = navigator.onLine === false);
@@ -35,15 +33,12 @@
 	const screen = $derived(offline ? ERROR_STATES.find((s) => s.code === '000')! : stateFor(status));
 	const hues = $derived(huesFor(screen));
 
-	// The thrown message says what went wrong for THIS request and beats the
-	// catalogue's sentence about the class of problem. SvelteKit's stand-in
-	// messages ("Not Found") say less than the catalogue does, so they lose.
+	// A specific thrown message beats the catalogue's generic sentence, but
+	// SvelteKit's stand-in messages ("Not Found") lose to the catalogue.
 	const body = $derived(!offline && !isGenericMessage(message) ? message! : screen.body);
 
-	// Stamped on the client, so the server and the browser cannot disagree about
-	// the time — rendering it during SSR would be a hydration mismatch on every
-	// error page. Once, on mount: this is when the screen was seen, and it must
-	// not tick while somebody is reading it off to a colleague.
+	// Stamped client-side only (SSR would cause a hydration mismatch), once on
+	// mount so it doesn't tick while someone reads it.
 	let stamp = $state<string | null>(null);
 	onMount(() => {
 		stamp = new Date().toLocaleString();
@@ -70,10 +65,8 @@
 		open = !open;
 	}
 
-	// The drawing is a few hundred kilobytes and is only referenced once it has
-	// been revealed, so a cold click would show an empty square while it loads.
-	// Fetching it when the pointer or focus arrives — not on mount — keeps the
-	// reveal instant without spending the download on everyone who never clicks.
+	// Prefetch on hover/focus rather than on mount, so revealing the (large)
+	// drawing is instant without downloading it for everyone who never clicks.
 	let warmed = '';
 	function warm() {
 		if (warmed === artwork) return;
@@ -105,9 +98,7 @@
 				{/if}
 			</div>
 
-			<!-- Facts, not decoration: every line here is something the server or
-			     the browser actually reported, because these are what someone
-			     quotes when they report the problem. -->
+			<!-- Facts, not decoration: what someone would quote reporting the problem. -->
 			<div class="tech">
 				{#if reference}<span>ref {reference}</span>{/if}
 				{#if path}<span>{path}</span>{/if}
@@ -127,10 +118,8 @@
 				style:color={hues.hue}
 			>
 				{#if open}
-					<!-- The drawing is white line art on transparency, used as a
-					     luminance mask over a solid fill, so the ink takes the hue of
-					     the state rather than staying white on a light background.
-					     The blurred copy underneath is the glow. -->
+					<!-- White line art used as a luminance mask over a solid fill, so
+					     the ink takes the state's hue. Blurred copy underneath is the glow. -->
 					<svg
 						data-error-artwork
 						class="art"
@@ -201,8 +190,7 @@
 				{/if}
 			</button>
 
-			<!-- The line is held in a box of its own height whether or not it is
-			     showing, so revealing the drawing does not shove the page around. -->
+			<!-- Fixed-height box so revealing the drawing doesn't shift the page. -->
 			<div class="note-slot">
 				{#if open && NOTES[screen.code]}
 					<p class="note" style:color={hues.hue}>
@@ -226,11 +214,8 @@
 		background-attachment: fixed;
 	}
 
-	/* The design set these 56px apart in a 1080px grid of equal fractions, so the
-	   mark drifted to the far right while the sentence — capped at 46ch — ended
-	   well short of it, and the two read as separate things. Sizing both tracks
-	   to their content and centring the pair is what actually closes the gap: a
-	   fractional column would just re-open it on a wider screen. */
+	/* Both columns sized to content and centred, rather than a fractional grid,
+	   so the text and mark stay close together at any width. */
 	.layout {
 		max-width: 100%;
 		display: grid;
@@ -348,9 +333,8 @@
 		min-width: 0;
 	}
 
-	/* Both states fill the same square, so revealing the drawing is a redraw
-	   rather than a resize. The rings sit at 78% inside it because the drawings
-	   are full-bleed and the two would otherwise read as different sizes. */
+	/* Both states fill the same square so revealing the drawing is a redraw,
+	   not a resize; rings sit at 78% since the drawings are full-bleed. */
 	.mark {
 		width: 100%;
 		aspect-ratio: 1 / 1;
@@ -427,9 +411,8 @@
 		opacity: 0.7;
 	}
 
-	/* On a phone the mark goes ABOVE the sentence rather than beside or below
-	   it: side by side there is no room for either, and underneath it is the
-	   first thing scrolled off. */
+	/* On a phone the mark goes above the sentence: side by side there's no
+	   room, and below it would be scrolled off first. */
 	@media (max-width: 720px) {
 		.layout {
 			grid-template-columns: minmax(0, 1fr);

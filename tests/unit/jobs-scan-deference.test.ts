@@ -1,9 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// The CPU queue standing back while someone is scanning.
-//
-// Extraction is batch work nobody is watching and a scan is a button press
-// someone is looking at. Sharing one slot is right; sharing it FIRST-COME is
-// not, and this is the whole of the difference.
 import { describe, expect, it } from 'vitest';
 import { cpuQueueHeldForScan, holdCpuQueueForScan } from '$lib/server/jobs';
 
@@ -20,10 +15,8 @@ describe('holding the CPU queue for a scan', () => {
 	});
 
 	it('counts rather than flags, so two scans do not release each other', () => {
-		// A mode switch and a keep overlap; so do two people. With a boolean,
-		// whichever finished first would declare that nobody was scanning — and
-		// that is the exact moment a hundred-page OCR would start underneath the
-		// other one.
+		// A boolean would let the first scan to finish declare nobody scanning,
+		// letting OCR start underneath the other one.
 		const first = holdCpuQueueForScan();
 		const second = holdCpuQueueForScan();
 		first();
@@ -33,9 +26,7 @@ describe('holding the CPU queue for a scan', () => {
 	});
 
 	it('ignores a release called twice', () => {
-		// Routes release in a `finally` and may also release on an error path.
-		// Counting below zero would leave the queue permanently un-held, which is
-		// the failure this guard exists to prevent, arrived at from the other side.
+		// Guards against counting below zero, which would leave the queue permanently held.
 		const release = holdCpuQueueForScan();
 		const other = holdCpuQueueForScan();
 		release();

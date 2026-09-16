@@ -1,15 +1,13 @@
 import { rowId } from '../row-id';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { computeNetWorth } from '$lib/server/networth';
+import { makePerson } from './fixtures';
 import { ALL_MIGRATIONS, startPostgres, type Harness } from './harness';
 
 /**
- * Every valued thing in one place, with the liabilities-are-negative rule
- * applied once in the view rather than in each caller that has to remember it.
- *
- * The point of the view is not tidiness: it is that adding an asset type is one
- * table plus one UNION branch, and net worth picks it up without anyone editing
- * TypeScript. The last test here is that promise, tested rather than asserted.
+ * The liabilities-are-negative rule lives once in the view, not in each caller.
+ * Adding an asset type is one table plus one UNION branch, and net worth picks
+ * it up without any TypeScript change — the last test here asserts that.
  */
 let harness: Harness;
 
@@ -66,9 +64,34 @@ describe('computeNetWorth over the view', () => {
 		expect(nw.totalMinor).toBe(500000n + 50000n + 90000n - 200000n);
 	});
 
+	it('groups vested shares as Equity at the latest close, and never as Other', async () => {
+		const person = await makePerson(harness.db, { id: rowId('nw-person') });
+		await harness.sql`insert into equity_grant (id, person_id, ticker, currency, granted_on, total_units)
+			values (${rowId('nw-grant')}, ${person.id}, 'ACME.US', 'CZK', '2025-03-01', 200)`;
+		await harness.sql`insert into equity_tranche (id, grant_id, vests_on, units, settled_on, delivered_units, withheld_units)
+			values (${rowId('nw-t1')}, ${rowId('nw-grant')}, '2026-03-01', 100, '2026-03-01', 62, 38),
+			       (${rowId('nw-t2')}, ${rowId('nw-grant')}, '2099-03-01', 100, null, null, null)`;
+		await harness.sql`insert into security_price (ticker, day, close_minor, currency, source)
+			values ('ACME.US', '2026-08-01', 1000, 'CZK', 'manual')`;
+
+		const nw = await computeNetWorth(harness.db);
+		const group = nw.groups.find((g) => g.key === 'equity');
+		expect(group).toMatchObject({
+			label: 'Equity',
+			colorVar: '--purple',
+			assetMinor: 62_000n,
+			liabilityMinor: 0n,
+			detail: '1 vested tranche at the latest close'
+		});
+		expect(nw.groups.some((g) => g.key === 'other')).toBe(false);
+
+		await harness.sql`delete from equity_grant where id = ${rowId('nw-grant')}`;
+		await harness.sql`delete from security_price where ticker = 'ACME.US'`;
+	});
+
 	it('picks up an asset type that did not exist when the code was written', async () => {
-		// The whole promise of the view: a new table, one UNION branch, and net
-		// worth counts it. No TypeScript is edited between the two assertions.
+		// A new table plus one UNION branch, and net worth counts it — no
+		// TypeScript edited between the two assertions.
 		const before = await computeNetWorth(harness.db);
 
 		await harness.sql.unsafe(`

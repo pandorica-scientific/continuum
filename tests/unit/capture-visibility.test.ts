@@ -1,15 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Which devices are offered the camera and scan buttons.
 //
-// The rule lives in a media query, so the question it answers — "is this a
-// phone or a tablet" — is only ever asked by a browser. That makes it exactly
-// the kind of rule that regresses silently: it is invisible in markup, no
-// screenshot can cover every device, and getting it wrong on a phone removes
-// the feature from the only device it is for.
-//
-// So the query is READ OUT OF THE COMPONENT and evaluated here against real
-// device profiles. Asserting the text of the query would only restate it; this
-// asserts what it decides.
+// The rule lives in a media query, evaluated only by a browser, so it
+// regresses silently and no screenshot can cover every device. The query is
+// read out of the component and evaluated here against real device profiles,
+// rather than asserting its text (which would only restate it).
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 

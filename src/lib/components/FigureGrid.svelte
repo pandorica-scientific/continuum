@@ -1,17 +1,10 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	/**
-	 * A row of figures where some can be corrected in place.
-	 *
-	 * NOT a `SummaryBand`, and the difference is the pencil. A summary tile is
-	 * read; these are read AND written, because two of a property's figures — what
-	 * it is worth and what was paid for it — are stored on the record rather than
-	 * computed from the loans and the tenancy, and the place to correct a figure
-	 * is where it is wrong. Forcing them through `MetricTile` would mean either
-	 * losing the edit or giving every tile in the app a form it never uses.
-	 *
-	 * The geometry is `MetricTile`'s, to the pixel, so a screen carrying both
-	 * kinds reads as one row.
+	 * A row of figures where some can be corrected in place. Not a
+	 * `SummaryBand`: some figures here are stored on the record (not computed)
+	 * and editable where they're wrong. Shares `MetricTile`'s geometry so a
+	 * screen carrying both kinds reads as one row.
 	 */
 	import { enhance } from '$app/forms';
 	import type { SubmitFunction } from '@sveltejs/kit';
@@ -65,9 +58,8 @@
 			<span class="f-label">
 				{figure.label}
 				{#if figure.edit}
-					<!-- Only on the figures the record actually stores. The rest are
-					     computed, and a pencil on those would offer an edit the next
-					     recompute discards. -->
+					<!-- Only on stored figures — a pencil on computed ones would offer
+					     an edit the next recompute discards. -->
 					<button
 						type="button"
 						class="pencil"
@@ -79,8 +71,6 @@
 				{/if}
 			</span>
 			{#if figure.edit && editing === figure.label}
-				<!-- Save and Cancel replace the value they are editing, which is where
-				     the pencil was. -->
 				<form method="POST" {action} use:enhance={saved} class="f-form">
 					<input type="hidden" name={recordField} value={recordId} />
 					<input type="hidden" name="field" value={figure.edit.field} />

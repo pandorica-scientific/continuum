@@ -67,14 +67,13 @@ export function availableHomeProviders(): ProviderKind[] {
 }
 
 /**
- * Write this month's meter reading onto the lived-in flat's energy bill, so the
- * budget follows what the meter actually did.
+ * Write this month's meter reading onto the lived-in flat's energy bill, so
+ * the budget follows what the meter actually did.
  *
- * This is a write, so it lives behind an explicit call and never inside a page
- * load. It used to run in the home page's GET `load`, and app.html asks
- * SvelteKit to preload on hover — so moving the pointer across the sidebar
- * mutated the database. It runs on the hourly tick and once when a platform is
- * connected; the home page only reads.
+ * This is a write, so it lives behind an explicit call and never inside a
+ * page load — SvelteKit preloads `load` on hover, so a mutation there would
+ * fire just from moving the pointer. Runs on the hourly tick and once when a
+ * platform is connected; the home page only reads.
  *
  * Returns the bill note for the page, or null when there is nothing to write.
  */
@@ -117,10 +116,8 @@ export async function syncMeterBill(handle: Db = db): Promise<string | null> {
 		if (!livedIn) return null;
 
 		// The price is in minor units of the currency it was typed in; the bill is
-		// denominated in the property's. A price stored before the currency was
-		// recorded is bound to the base currency in force when it was written, so a
-		// malformed unbound config fails closed above instead of being silently
-		// redenominated.
+		// denominated in the property's. A malformed unbound config fails closed
+		// above instead of being silently redenominated.
 		const inPriceCurrency = BigInt(Math.round(monthKwh * price));
 		const amountMinor = convertOrFace(
 			await loadRateTable(tx),

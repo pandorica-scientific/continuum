@@ -1,20 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * Decision D10: the demo household files real paper.
- *
- * Every document the demo seeded used to be metadata only — a name, a shelf
- * and nothing behind it — so the viewer, search-by-contents, receipts,
- * restricted documents and the archived-subject rules all rendered empty on
- * the one instance built to show them. This suite is the contract for the
- * seed that fixes that: every document has bytes on the volume, a hash OF
- * those bytes, links to whatever it is about, an extraction job waiting, and
- * not one value that came from the machine the demo happens to run on.
+ * Every document the demo seeds must have real bytes on the volume, a hash
+ * of those bytes, links to whatever it is about, an extraction job waiting,
+ * and not one value that came from the machine the demo happens to run on —
+ * otherwise the viewer, search-by-contents, receipts, restricted documents
+ * and the archived-subject rules all render empty on the one instance built
+ * to show them.
  *
  * The seed reads the module-level `db` singleton and the upload directory out
- * of `$env/dynamic/private`, so both are pointed at this harness the way
- * `deadlines` and `archive-scope` do it — and the same mock records WHICH
- * environment variables the seed touched, which is how "fictional data only"
- * is proved rather than asserted.
+ * of `$env/dynamic/private`, so both must be pointed at this harness — and the
+ * same mock records WHICH environment variables the seed touched, which is
+ * how "fictional data only" is proved rather than asserted.
  */
 import { mkdtempSync, readdirSync } from 'node:fs';
 import { listShelves } from '$lib/server/documents/shelves';
@@ -53,9 +49,9 @@ import { seedDemo } from '$lib/server/system/demo';
 import { getHomeConfig } from '$lib/server/home';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 
-// Recorded, not just proxied: the ruling for D10 is that the seed reads no
-// environment variable beyond the ones it has always read, and the only way to
-// prove that is to watch every read as it happens.
+// Recorded, not just proxied: the seed must read no environment variable
+// beyond the ones it has always read, and the only way to prove that is to
+// watch every read as it happens.
 const { envKeysRead } = vi.hoisted(() => ({ envKeysRead: new Set<string>() }));
 
 vi.mock('$env/dynamic/private', () => ({
@@ -190,10 +186,9 @@ describe('the demo seed', () => {
 		const entries = await testDb.select().from(salaryEntry);
 		expect(entries.filter((e) => e.documentId !== null)).toHaveLength(12);
 
-		// D6: a payslip whose month also holds a bank credit carries a visible
-		// link to that credit. The credit has to be recorded FIRST for the slip
-		// to claim its row, so this is the assertion that the seed got the order
-		// right rather than leaving two rows for the month.
+		// A payslip whose month also holds a bank credit carries a visible link
+		// to that credit; the credit must be recorded first for the slip to
+		// claim its row, rather than leaving two rows for the month.
 		const merged = entries.filter((e) => e.documentId !== null && e.transactionId !== null);
 		expect(merged.length).toBeGreaterThan(0);
 		for (const entry of merged) {
@@ -209,10 +204,9 @@ describe('the demo seed', () => {
 		expect(lease.expiresOn).toBe(only.endsOn);
 		expect(lease.expiryVerb).toBe('renews');
 
-		// D7: the tenancy owns the date, so the lease document adds no second
-		// event of its own on the same day. Bound events only — the monthly
-		// "import last month's statements" nudge is not bound to a record and
-		// lands on the first of the month like every other first of the month.
+		// The tenancy owns the date, so the lease document adds no second event
+		// of its own on the same day. Bound events only — the monthly reminder
+		// is not bound to a record.
 		const events = await generateEvents(
 			`${Number(today.slice(0, 4)) - 1}-01-01`,
 			'2099-01-01',
@@ -264,8 +258,7 @@ describe('the demo seed', () => {
 		expect(await targetsOf(report.id)).toContain(brokerage[0].id);
 
 		// The demo writes its transactions directly rather than running an
-		// import, so there is no `import_file` row for a statement to be keyed
-		// to — the branch the D10 ruling names as the alternative.
+		// import, so there is no `import_file` row for a statement to be keyed to.
 		expect(await testDb.select().from(importFile)).toHaveLength(0);
 	});
 

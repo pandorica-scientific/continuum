@@ -2,18 +2,14 @@
 /**
  * Finding a document by anything a person is likely to remember about it.
  *
- * A candidate UNION over four tiers rather than a denormalized search column.
- * The alternative — one materialised text column per document, kept current by
- * triggers on every table a document can be linked to — is a fan-out that rots:
- * a tag rename or a flat renamed has to reach every row that mentions it, and
- * the day one of those triggers is missed the search is wrong in a way nothing
- * reports. The UNION pays a few joins per query instead, which is the cheaper
- * mistake by a wide margin at household scale.
+ * A candidate UNION over four tiers rather than a denormalized search column,
+ * which would need triggers on every linkable table to stay current and rot
+ * silently the day one is missed.
  *
  * BOTH SIDES ARE FOLDED THROUGH `public.contact_fold`, and every predicate is
- * written the way the index expression is written. A query that folds even
- * slightly differently gets a sequential scan over every chunk in the archive
- * and nothing says so — the contacts search learned this once already.
+ * written the way the index expression is written — a query that folds even
+ * slightly differently gets a sequential scan over every chunk with nothing
+ * to say so.
  *
  * Tiers: A name or tag · B linked entity, type or shelf label · C note ·
  * D contents. A document appears exactly ONCE, under its best tier, with
@@ -24,19 +20,11 @@ import { db, type Queryable } from '$lib/server/db';
 import { documentTargetSpec, DOCUMENT_TARGET_KINDS } from './targets';
 
 /**
- * Tier B's "what is this about" side, built from the registry rather than typed
- * out here.
+ * Tier B's "what is this about" side, built from the registry rather than
+ * typed out here, so a kind registered tomorrow is searchable the same day.
  *
- * The hand-written union this replaces named four kinds — person, property,
- * subject, account — so a receipt could not be found by the shop its
- * transaction names, a lease could not be found by its tenant, and a mortgage
- * statement could not be found by the loan it belongs to. None of those words
- * is anywhere on the paper, which is exactly why a person searches for them.
- *
- * The label expression is the one `loadTargetNames` shows in the chip, so the
- * name a person searches for is by construction the name they were shown. A
- * kind registered tomorrow is searchable the same day, with nothing to
- * remember here.
+ * The label expression is the same one `loadTargetNames` shows in the chip,
+ * so the name a person searches for is the name they were shown.
  */
 const LABELLED_TARGETS = sql.join(
 	DOCUMENT_TARGET_KINDS.map((kind) => documentTargetSpec(kind).nameSql),
@@ -80,9 +68,9 @@ const SNIPPET_LENGTH = 180;
 /**
  * The archive scope, as an SQL fragment over an aliased `document`.
  *
- * Written against an alias rather than reusing `visibility.ts` directly because
- * this query mentions `document` several times over; the RULE is the same one,
- * and the truth table that proves it lives in `tests/integration/archive-scope`.
+ * Written against an alias rather than reusing `visibility.ts` directly
+ * because this query mentions `document` several times over; the rule is the
+ * same one.
  */
 function readableSql(includeArchived: boolean) {
 	return includeArchived
@@ -103,10 +91,8 @@ function readableSql(includeArchived: boolean) {
  * Every candidate, tagged with the tier it matched at.
  *
  * The substring predicate is written EXACTLY as `dtc_trgm_idx` is defined —
- * `public.contact_fold(text) like '%' || public.contact_fold($q) || '%'`. Any
- * other spelling is a sequential scan. `similarity()` is deliberately absent
- * from the ordering: an identifier like a variable symbol is not a fuzzy match,
- * and sorting by similarity buries the exact hit under near misses.
+ * any other spelling is a sequential scan. `similarity()` is deliberately
+ * absent from the ordering: it would bury exact hits under near misses.
  */
 function candidateSql(q: string, options: SearchOptions) {
 	const readable = readableSql(options.includeArchived ?? false);
@@ -211,8 +197,8 @@ export async function searchDocuments(
 /**
  * What the screen is allowed to say about what it could NOT find.
  *
- * Every count is derived rather than stored, and every count passes through the
- * same archive scope as the rows.
+ * Every count is derived rather than stored, and passes through the same
+ * archive scope as the rows.
  */
 async function honestyCounts(
 	hits: SearchHit[],
@@ -239,9 +225,8 @@ async function honestyCounts(
 
 	let archivedOnly = 0;
 	if (options.query && !options.includeArchived) {
-		// The same candidate query with the archive scope open. Anything it finds
-		// that the closed scope did not is a match hiding in the archive — which
-		// is a thing the screen must offer to show rather than pretend is absent.
+		// Same candidate query with the archive scope open, to find matches
+		// hiding in the archive that the screen must offer rather than hide.
 		const open = (await handle.execute(
 			candidateSql(options.query, { ...options, includeArchived: true })
 		)) as unknown as { document_id: string }[];

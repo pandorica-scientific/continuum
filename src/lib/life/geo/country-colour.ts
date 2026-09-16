@@ -2,34 +2,20 @@
 /**
  * Which colour each country wears.
  *
- * The map paints 241 countries from a palette of 19, so colours repeat. What
- * must never happen is two countries that share a border sharing a colour —
- * that reads as one larger country, which is a map saying something false.
+ * 241 countries from a palette of 19, so colours repeat — but two countries
+ * sharing a border must never share a colour, or the map reads as one larger
+ * (false) country.
  *
- * **The assignment is spatial, not hashed.** Countries are sorted into
- * horizontal bands by where their centroid projects, then by latitude within a
- * band, and the palette is handed out sequentially down that list. Neighbours
- * therefore land on different slots BY CONSTRUCTION rather than by luck, and a
- * repeat is always far away.
+ * The assignment is spatial, not hashed: countries are sorted into horizontal
+ * bands by projected centroid, then by latitude within a band, and the
+ * palette handed out sequentially — so neighbours land on different slots by
+ * construction. A hash + distance-repair pass was tried and silently failed
+ * (bad centroids caused neighbour collisions); do not reintroduce it.
  *
- * A hash plus a distance-based repair pass was tried first and silently failed:
- * neighbours kept colliding, because the centroids it compared came from a
- * "largest polygon" guess rather than from the projected geometry. It looked
- * like it worked, because most pairs are fine under any scheme. Do not
- * reintroduce it.
- *
- * The same function inks the trip stamps, which is why it lives here and not
- * inside the map component: a stamp for Portugal and Portugal on the map are
- * the same colour, and that is the whole point of the stamp wall.
+ * Also inks the trip stamps, so Portugal the country and a Portugal stamp match.
  */
 
-/**
- * The nineteen series slots, in the order they are handed out.
- *
- * The nine named ones first, then the ten reserves. Named tokens rather than
- * hexes so both themes follow, and so `palette-contrast` and the token check
- * see them like any other use.
- */
+/** The nineteen series slots, in order — nine named ones, then ten reserves. */
 export const COUNTRY_PALETTE = [
 	'series-income',
 	'series-taxes',
@@ -55,13 +41,9 @@ export const COUNTRY_PALETTE = [
 export type CountryColour = (typeof COUNTRY_PALETTE)[number];
 
 /**
- * How tall a band is, in projected units.
- *
- * The map is fitted to a 960×480 viewBox, and 60 puts eight bands across it —
- * enough that a band holds a manageable run of countries, few enough that the
- * run is long compared with the palette. Widen it and Europe becomes one band
- * whose colours cycle three times; narrow it and neighbours north and south of
- * each other start to collide.
+ * How tall a band is, in projected units — 60 puts eight bands across the
+ * 960×480 viewBox. Too wide and Europe becomes one band with colours cycling
+ * three times; too narrow and north/south neighbours start to collide.
  */
 export const BAND_HEIGHT = 60;
 
@@ -74,11 +56,8 @@ export interface CountryCentroid {
 }
 
 /**
- * Hand every country a slot, deterministically.
- *
- * Same input, same output, every time and on every machine: the sort is total
- * — band, then y, then x, then code — so no two countries can compare equal and
- * leave the order to the engine's sort stability.
+ * Hand every country a slot, deterministically. The sort is total (band,
+ * y, x, code) so no two countries can compare equal.
  */
 export function assignColours(countries: CountryCentroid[]): Map<string, CountryColour> {
 	const ordered = [...countries].sort((a, b) => {
@@ -98,13 +77,9 @@ export function assignColours(countries: CountryCentroid[]): Map<string, Country
 }
 
 /**
- * The colour for one country when the projected map is not to hand.
- *
- * The stamp wall needs Portugal's colour without loading a world atlas to get
- * it, so the assignment is precomputed from the same geometry the map uses and
- * frozen into `country-colour-table.ts`. A country the table does not know —
- * a code from a future dataset — falls back to a stable slot of its own rather
- * than to a default that would put every unknown place in one colour.
+ * The colour for one country when the projected map is not to hand, read
+ * from the precomputed `country-colour-table.ts`. An unknown code falls back
+ * to a stable slot of its own, not a shared default.
  */
 export function countryColour(
 	code: string,
@@ -113,29 +88,22 @@ export function countryColour(
 	const known = table[code.toUpperCase()];
 	if (known) return known;
 
-	// Two letters, so this is a small stable number: it never collides with the
-	// table and never changes between runs.
+	// A small stable number from two letters — never changes between runs.
 	const seed = code.toUpperCase().charCodeAt(0) * 31 + (code.toUpperCase().charCodeAt(1) || 0);
 	return COUNTRY_PALETTE[seed % COUNTRY_PALETTE.length];
 }
 
 /**
- * The ground a country is painted on: its hue muted into the page.
- *
- * 82% rather than the hue itself. The series colours were measured for
- * separation as chart series against a card, which makes them far too loud
- * spread across half a continent — at full strength the map reads as a
- * children's atlas and the foil above it disappears.
+ * The ground a country is painted on: its hue muted 82% into the page — at
+ * full strength (tuned for chart series) the map reads as a children's atlas.
  */
 export const countryFill = (colour: CountryColour): string =>
 	`color-mix(in srgb, var(--${colour}) 82%, var(--bg))`;
 
 /**
- * A region inside an opened country: the country's own colour, five steps.
- *
- * Shades of one hue rather than five hues, because inside a country the
- * question is "which parts have we been to", not "which region is which". The
- * cycle is deliberately short and the steps deliberately close.
+ * A region inside an opened country: shades of the country's own colour, not
+ * five different hues — the question inside a country is "which parts have
+ * we been to", not "which region is which".
  */
 export const regionFill = (colour: CountryColour, index: number): string =>
 	`color-mix(in srgb, var(--${colour}) ${58 + (index % 5) * 9}%, var(--bg))`;

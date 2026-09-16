@@ -20,8 +20,7 @@
 		onclose
 	}: { loanId: string; currency: string; sim: ScenarioPayload; onclose: () => void } = $props();
 
-	// The parent keys this draft by loan. This is intentionally the boundary of
-	// the period in force today, never a maximum historical end date.
+	// The boundary of the period in force today, never a maximum historical end date.
 	// svelte-ignore state_referenced_locally
 	let startsOn = $state(defaultFixationStart(sim.periods, new Date().toISOString().slice(0, 10)));
 	let rate = $state('');
@@ -35,9 +34,8 @@
 	 *  figure holds to, so an offer is compared like for like. */
 	const term = $derived(base.summary.debtFreeMonth);
 
-	// Whichever field was filled in for you. Kept so a derived value can be
-	// replaced when its counterpart changes, while anything typed is never
-	// overwritten — correcting a quoted payment must not move the rate.
+	// Which field was derived, so it can be replaced when its counterpart
+	// changes while anything typed by hand is never overwritten.
 	let derivedField = $state<'rate' | 'payment' | null>(null);
 
 	function fillPaymentFromRate() {
@@ -164,9 +162,8 @@
 		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 		gap: var(--space-6);
 	}
-	/* Labels are grid items of equal height, so a caption that wraps to two
-	   lines pushed its own input down and out of line with its neighbours.
-	   Anchoring the control to the bottom lets the text grow upwards instead. */
+	/* Anchor the control to the bottom so a wrapped label grows upward instead
+	   of pushing the input out of line with its neighbours. */
 	label {
 		display: flex;
 		flex-direction: column;

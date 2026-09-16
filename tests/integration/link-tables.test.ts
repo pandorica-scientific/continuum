@@ -3,18 +3,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ALL_MIGRATIONS, startPostgres, type Harness } from './harness';
 
 /**
- * Three link tables where there were thirteen.
- *
- * Ten of the thirteen were pure fan-out from three connectors — `tag` reached
- * five tables, `document` four, `contact` four — so a new module cost three link
- * tables before it held a column of its own. Pointing them all at `entity`
- * collapses that to one table per connector, and both ends still keep a real
- * foreign key and a working cascade.
- *
- * Three rather than one `entity_link` with a `relation` column, because each
- * connector will want columns of its own within a year — a note on why a contact
- * is attached, a sort order for filed documents — and a shared table has nowhere
- * to put them.
+ * Pointing every connector (tag, document, contact) at `entity` collapses
+ * per-connector fan-out into one table each, while both ends keep a real
+ * foreign key and cascade. Kept as three tables rather than one shared
+ * `entity_link`, because each connector needs columns of its own.
  */
 let harness: Harness;
 

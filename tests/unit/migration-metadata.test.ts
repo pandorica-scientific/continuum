@@ -14,17 +14,9 @@ interface DrizzleSnapshot {
 	>;
 }
 
-// Derived, not pinned by name. A hardcoded filename has to be bumped by hand on
-// every schema migration, and when someone forgets, this suite fails as "schema
-// drift" — the wrong diagnosis, which sends the next person looking in the wrong
-// place.
-//
-// Read from the snapshot FILES, not from the journal. A hand-written migration
-// carries a journal entry but generates no snapshot, because it changes data or
-// something drizzle does not model. Taking the newest journal entry would
-// therefore name a file that does not exist, and this suite would die on ENOENT
-// the first time someone writes SQL by hand — which is exactly when it is most
-// needed.
+// Derived, not hardcoded, so a forgotten bump doesn't get misdiagnosed as schema drift.
+// Reads the snapshot FILES, not the journal: a hand-written migration has a journal
+// entry but no snapshot, so the newest journal entry can name a file that doesn't exist.
 function currentSnapshotName(): string {
 	const snapshots = readdirSync('drizzle/meta')
 		.filter((name) => /^\d{4}_snapshot\.json$/.test(name))
@@ -124,10 +116,6 @@ describe('Drizzle migration metadata', () => {
 		expect(snapshot.tables['public.calendar_account'].columns).toHaveProperty('credential');
 		expect(snapshot.tables).toHaveProperty('public.calendar_conflict');
 	});
-
-	// RETIRED with the migration chain: a case pinning the fingerprint repair in
-	// 0027 to a LATERAL that stops at its first match rather than ordering the
-	// whole series. The repair ran once, on data that no longer exists.
 
 	// transfer_pair_leg enforces the cross-column claim rule through a trigger.
 	// Drizzle models tables, not triggers, so `db:generate` cannot notice the

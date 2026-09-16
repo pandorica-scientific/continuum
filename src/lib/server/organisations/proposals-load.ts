@@ -2,14 +2,9 @@
 /**
  * What the lanes think, before anything is filed.
  *
- * Proposals are COMPUTED and never stored. A stored proposal is a row that goes
- * stale the moment somebody edits a lane or files the document by hand, and
- * then the screen is arguing with the archive; computing them means the answer
- * is always about the lanes as they are now.
- *
- * What IS stored is the evidence — `accepted_count` and `corrected_count` on
- * the lane — because that is a fact about what happened rather than a guess
- * about what should.
+ * Proposals are COMPUTED, never stored — a stored proposal goes stale the
+ * moment a lane is edited or the document filed by hand. What IS stored is the
+ * evidence (`accepted_count`/`corrected_count`), a fact about what happened.
  */
 import { and, eq, inArray, notExists, sql } from 'drizzle-orm';
 import { assignLane } from '$lib/server/documents/mutations';
@@ -45,9 +40,8 @@ export interface ProposalRow {
 /**
  * Documents on the Income & Tax shelf that no organisation has claimed.
  *
- * The candidate set is deliberately narrow: only paper on this shelf, and only
- * where no link to an organisation exists. A document already filed against one
- * has an answer, and proposing a second would be arguing with it.
+ * Deliberately narrow: a document already filed against an organisation has
+ * an answer, and proposing a second would be arguing with it.
  */
 async function unclaimedDocuments(
 	handle: Queryable
@@ -140,9 +134,8 @@ export async function loadProposals(handle: Queryable = db): Promise<ProposalRow
 /**
  * File the document where the lane said, and record that it was right.
  *
- * One transaction: the link and the evidence are one fact, and a link written
- * without the count would leave a lane that is always right looking as though
- * it had never proposed anything.
+ * Link and evidence are one fact — writing the link without the count would
+ * leave an always-right lane looking as though it had never proposed anything.
  */
 export async function acceptProposal(
 	documentId: string,
@@ -152,9 +145,8 @@ export async function acceptProposal(
 ): Promise<{ ok: boolean; message?: string }> {
 	const result = await attachDocument(organisationId, documentId, handle);
 	if (!result.ok) return { ok: false, message: result.message };
-	// The link AND the lane. Accepting a proposal that only linked the card left
-	// the document in the card's history rather than in the lane that claimed
-	// it, so the cell it was proposed for stayed a gap.
+	// The link AND the lane — linking without assigning would leave the
+	// proposed cell as a gap.
 	await assignLane(documentId, laneId, handle);
 	await recordLaneOutcome(laneId, 'accepted', handle);
 	return { ok: true };
@@ -163,9 +155,8 @@ export async function acceptProposal(
 /**
  * Refuse the proposal, and record that the lane was wrong.
  *
- * No link is written and the document stays where it was. What changes is the
- * lane's standing: enough of these and it stops proposing, without anybody
- * having to go and find it.
+ * No link is written. What changes is the lane's standing — enough of these
+ * and it stops proposing on its own.
  */
 export async function dismissProposal(laneId: string, handle: Queryable = db): Promise<void> {
 	await recordLaneOutcome(laneId, 'corrected', handle);

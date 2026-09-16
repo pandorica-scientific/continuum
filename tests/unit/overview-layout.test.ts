@@ -28,8 +28,7 @@ describe('firstFreeSlot', () => {
 		expect(firstFreeSlot([], 6, 4)).toEqual({ x: 0, y: 0 });
 	});
 
-	// Left to right before top to bottom, so adding a second half-width panel
-	// fills the row rather than starting a new one.
+	// Left to right before top to bottom, so a second half-width panel fills the row.
 	it('fills the space beside an existing panel before starting a row', () => {
 		expect(firstFreeSlot([at('a', 0, 0, 6, 4)], 6, 4)).toEqual({ x: 6, y: 0 });
 	});
@@ -50,8 +49,7 @@ describe('firstFreeSlot', () => {
 	});
 });
 
-// A jsonb column stores whatever it is handed, so this is the trust boundary
-// and it runs on write as well as on read.
+// jsonb stores whatever it's handed; this is the trust boundary, run on write and read.
 describe('normalise', () => {
 	it('drops keys that are not panels', () => {
 		const layout = [at('a', 0, 0, 6, 4), at('nonsense', 6, 0, 6, 4)];
@@ -59,8 +57,7 @@ describe('normalise', () => {
 		expect(normalise(layout, known).map((p) => p.k)).toEqual(['a']);
 	});
 
-	// A panel is placed once. Two entries for one key would render it twice and
-	// break every operation that addresses panels by key.
+	// A panel is placed once; duplicate keys would render it twice and break key-addressed operations.
 	it('keeps only the first entry for a repeated panel', () => {
 		const layout = [at('a', 0, 0, 6, 4), at('a', 6, 0, 6, 4)];
 
@@ -87,10 +84,8 @@ describe('normalise', () => {
 		expect(normalise([at('a', 0, -5, 6, 4)], known)[0].y).toBe(0);
 	});
 
-	// `known[k]` finds inherited properties, so a posted key of "constructor" or
-	// "__proto__" once passed the bounds lookup and wrote NaN geometry into the
-	// database. It self-healed on the next read, which made it quiet rather than
-	// harmless.
+	// Regression: prototype-inherited keys (constructor, __proto__) passed the bounds
+	// lookup and wrote NaN geometry into the database.
 	it('refuses a key inherited from Object.prototype', () => {
 		for (const k of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) {
 			expect(normalise([{ k, x: 0, y: 0, w: 6, h: 4 }], known)).toEqual([]);
@@ -113,16 +108,15 @@ describe('normalise', () => {
 });
 
 describe('visible', () => {
-	// The entry survives in storage so re-enabling the module restores the
-	// panel; it simply must not render while the module is off.
+	// The entry stays in storage so re-enabling the module restores the panel;
+	// it must just not render while off.
 	it('leaves out panels whose module is off', () => {
 		const layout = [at('a', 0, 0, 6, 4), at('b', 6, 0, 6, 4)];
 
 		expect(visible(layout, (k) => k !== 'b').map((p) => p.k)).toEqual(['a']);
 	});
 
-	// This gap is not the person's choice — an admin made it on their board —
-	// so it is the one case where the board does close up.
+	// Admin-made gaps (not the person's own layout choice) are the one case that closes up.
 	it('closes the gap a hidden panel leaves behind', () => {
 		const layout = [at('a', 0, 0, 12, 6), at('b', 0, 6, 12, 19)];
 
@@ -138,9 +132,8 @@ describe('visible', () => {
 		expect(shown.find((p) => p.k === 'b')?.y).toBe(0);
 	});
 
-	// Each hidden panel was measured against the panel's already-shifted y, so
-	// only the first gap in a column ever closed and the board kept a band of
-	// empty space at the top. Two module-owning panels switched off is enough.
+	// Regression: hidden panels measured against an already-shifted y, so only the
+	// first gap in a column ever closed.
 	it('closes the space of several hidden panels stacked in one column', () => {
 		const layout = [at('a', 0, 0, 12, 5), at('b', 0, 5, 12, 5), at('c', 0, 10, 12, 6)];
 
@@ -154,10 +147,8 @@ describe('visible', () => {
 	});
 });
 
-// Reordering a one-column view cannot be a swap: exchanging a six-row panel
-// with a nineteen-row one leaves them overlapping, and `settle` then pushes the
-// shorter one straight back below the taller. Packing lays the list out in the
-// order given, which is what makes a phone reorder visible.
+// A swap would leave differently-sized panels overlapping; packing lays the list
+// out in the order given instead.
 describe('packInOrder', () => {
 	it('leaves a well-formed board exactly as it is', () => {
 		const layout = [
@@ -170,8 +161,7 @@ describe('packInOrder', () => {
 		expect(packInOrder(layout)).toEqual(layout);
 	});
 
-	// The case the swap could not do: the taller panel takes the top and the
-	// shorter one lands below it rather than inside it.
+	// The case a swap can't do: the taller panel takes the top, the shorter lands below it.
 	it('realises a new order across panels of different heights', () => {
 		const layout = [at('tall', 0, 0, 12, 19), at('short', 0, 19, 12, 6)];
 
@@ -182,8 +172,7 @@ describe('packInOrder', () => {
 		]);
 	});
 
-	// Packing must not flatten the board into one column: two panels side by
-	// side do not obstruct each other.
+	// Packing must not flatten the board into one column; side-by-side panels stay so.
 	it('keeps a side-by-side pair on the same row', () => {
 		const packed = packInOrder([at('a', 0, 9, 6, 6), at('b', 6, 9, 6, 6)]);
 
@@ -199,10 +188,8 @@ describe('packInOrder', () => {
 	});
 });
 
-// The board has gravity. This reverses the rule the design started with —
-// "nothing is ever compacted upward, the person's empty space is theirs to
-// keep" — because free placement that leaves holes reads as broken rather than
-// deliberate.
+// The board has gravity: free placement that leaves holes reads as broken, so
+// compacting upward is intentional.
 describe('compact', () => {
 	it('pulls a panel up to close the row above it', () => {
 		expect(compact([at('a', 0, 9, 6, 4)])).toEqual([at('a', 0, 0, 6, 4)]);
@@ -214,8 +201,7 @@ describe('compact', () => {
 		expect(compact(layout)).toEqual([at('a', 0, 0, 12, 3), at('b', 0, 3, 12, 5)]);
 	});
 
-	// Reading order decides who gets a row, so a panel dropped above another
-	// takes the higher slot even though it is later in the array.
+	// Reading order (cell position), not array order, decides who gets the higher row.
 	it('ranks by cell, not by array position', () => {
 		const layout = [at('later', 0, 8, 12, 4), at('higher', 0, 2, 12, 4)];
 
@@ -237,8 +223,7 @@ describe('compact', () => {
 		expect(compact(layout)).toEqual(layout);
 	});
 
-	// A drag in progress must not have the panel tugged out from under the
-	// pointer while everything else rearranges beneath it.
+	// A panel being dragged must not move while the rest rearranges beneath it.
 	it('holds a pinned panel exactly where it is', () => {
 		const layout = [at('dragged', 0, 9, 6, 4), at('other', 0, 0, 6, 4)];
 

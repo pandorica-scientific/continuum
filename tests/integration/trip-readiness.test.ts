@@ -67,9 +67,8 @@ describe('choosing a passport', () => {
 		expect(read.passport).toBe('valid');
 	});
 
-	// A descending sort in Postgres puts nulls FIRST, so the undated one won and
-	// a household that had just renewed read "no expiry date" over a passport
-	// good until 2031.
+	// Regression: a descending sort in Postgres puts nulls FIRST, so a naive
+	// sort would pick the undated passport over the dated, valid one.
 	it('prefers a dated passport over one with no expiry', async () => {
 		await filePassport('CZ', null);
 		await filePassport('PL', '2031-09-30');

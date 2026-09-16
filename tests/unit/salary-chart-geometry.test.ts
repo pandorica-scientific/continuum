@@ -8,10 +8,8 @@ import {
 } from '$lib/charts/salary-chart-geometry';
 
 /**
- * What a salary bar means. Where it goes is `line-chart.test.ts` now: the
- * stacking, the hairline floor, the change scale and the hover geometry moved
- * into the shared engine in v0.8.1, and are tested there against every chart
- * that draws them rather than twice, once per screen.
+ * Tests only what a salary bar's segments mean; drawing geometry (stacking,
+ * hairline floor, change scale, hover) lives in line-chart.test.ts.
  */
 const year = (over: Partial<Record<string, unknown>> = {}) =>
 	({
@@ -21,6 +19,8 @@ const year = (over: Partial<Record<string, unknown>> = {}) =>
 		grossTotalMinor: '84000000',
 		baseTotalMinor: '78000000',
 		bonusTotalMinor: '6000000',
+		equityTotalMinor: '0',
+		equityOnPayslipMinor: '0',
 		netTotalMinor: '60000000',
 		grossMonths: 12,
 		netMonths: 12,
@@ -38,8 +38,7 @@ describe('barValues', () => {
 	});
 
 	it('divides by the months actually recorded in average mode', () => {
-		// A year with four payslips is compared as a monthly rate, not as a short
-		// year — that comparison is the whole reason the mode exists.
+		// A partial year is compared as a monthly rate, not as a short year.
 		const v = barValues(
 			year({ grossMonths: 4, baseTotalMinor: '28000000', bonusTotalMinor: '0' }),
 			'avg'
@@ -71,8 +70,7 @@ describe('ceilingFor', () => {
 
 describe('the blocks a salary bar is made of', () => {
 	it('seats the bonus on the baseline with the base above it', () => {
-		// The other way round, a bonus that changed size every year moved the
-		// base's boundary for a reason that had nothing to do with the base.
+		// Bonus below base so a changing bonus never moves the base's boundary.
 		const out = salaryBarSegments(year(), 'total');
 		expect(out.map((s) => s.kind)).toEqual(['bonus', 'base']);
 	});
@@ -92,5 +90,17 @@ describe('the blocks a salary bar is made of', () => {
 	it('measures against the mode, so an average year is a monthly bar', () => {
 		const out = salaryBarSegments(year(), 'avg');
 		expect(out.reduce((sum, s) => sum + s.value, 0)).toBe(7_000_000);
+	});
+});
+
+describe('equity on the bar', () => {
+	it('draws only the vests a payslip did not already carry, and counts them in the ceiling', () => {
+		const row = year({ equityTotalMinor: '9000000', equityOnPayslipMinor: '3000000' });
+		const segments = salaryBarSegments(row, 'total');
+		expect(segments[0]).toMatchObject({ kind: 'equity', value: 6_000_000 });
+		expect(ceilingFor([row], 'total')).toBe(
+			BigInt(row.baseTotalMinor) + BigInt(row.bonusTotalMinor) + 6_000_000n
+		);
+		expect(salaryBarSegments(year(), 'total').some((s) => s.kind === 'equity')).toBe(false);
 	});
 });

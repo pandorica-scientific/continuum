@@ -70,12 +70,10 @@ export async function rejectTransferProposal(
  * Mark a row as a transfer to one of the household's own accounts that is not
  * imported, so it stops counting as spending.
  *
- * Pairing needs both legs. Money moved to a savings account whose statements
- * never arrive has one leg only, so nothing matches and the row sits in the
- * review queue looking like unexplained spending.
- *
- * The destination must be a real account row, but that account need not have a
- * single imported statement — an account can be recorded for exactly this.
+ * Pairing needs both legs, so a transfer to an account with no statements has
+ * only one leg and would otherwise sit in the review queue looking like
+ * unexplained spending. The destination must be a real account row, but need
+ * not have any imported statement.
  */
 export async function markOneSidedTransfer(
 	id: string,

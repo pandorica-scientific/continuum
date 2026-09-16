@@ -97,9 +97,8 @@ describe('the Paper panel', () => {
 		expect(panel.shelves.find((s) => s.key === 'identity')?.count).toBe(2);
 	});
 
-	// The inbox is the panel's own first figure, with its own link to the review
-	// flow. Listing it again among the shelves would offer the same pile twice,
-	// and the second offer goes to the screen that cannot file it.
+	// The inbox has its own link to the review flow; listing it among the
+	// shelves too would send it to a screen that cannot file it.
 	it('leaves the inbox out of the shelf list and counts it on its own', async () => {
 		await seed({ name: 'Scan 004', shelf: 'inbox' });
 		await seed({ name: 'Scan 005', shelf: 'inbox' });

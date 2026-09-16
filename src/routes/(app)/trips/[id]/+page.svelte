@@ -81,18 +81,13 @@
 				{/each}
 			</span>
 		</div>
-		<!-- Both ways of changing this trip, in the box that holds what they
-		     change. Delete sits above Edit because it is the rarer and heavier of
-		     the two, and putting it at the far foot of a long page meant scrolling
-		     past the bookings to find it. -->
+		<!-- Delete sits above Edit — rarer and heavier of the two — rather than at the foot of a long page. -->
 		<div class="fact edit">
 			<form
 				method="POST"
 				action="?/delete"
 				use:enhance={({ cancel }) => {
-					// A trip carries its bookings and its places with it, and the visits
-					// it wrote to the map are kept — so this asks once rather than
-					// offering an undo that would have to reconstruct all of it.
+					// Deletes bookings and places too — confirmed once rather than offering an undo.
 					if (!confirm(`Delete ${trip.name}? Its bookings and places go with it.`)) cancel();
 					return async ({ update }) => update();
 				}}
@@ -163,11 +158,7 @@
 			</ul>
 		{/if}
 
-		<!--
-			Offered, not added. The list above is what somebody chose to put in it;
-			these sit underneath and become real rows only when tapped, so a trip to
-			Paris for a funeral is not told to see the Eiffel Tower.
-		-->
+		<!-- Offered, not added — become real rows only when tapped. -->
 		{#if data.suggestions.length}
 			<div class="suggested">
 				<span class="eyebrow">Worth seeing there</span>

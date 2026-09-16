@@ -1,12 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-/**
- * Correcting an account after it exists.
- *
- * Until now one could be created and never changed: a mistyped name, the wrong
- * bank, "current" where "savings" was meant, all permanent. And every account
- * was joint, because `addAccount` never set an owner and the row said "joint"
- * only because there was nothing else it could say.
- */
+/** Correcting an account after it exists (name, bank, kind, owner, currency). */
 
 import { count, eq } from 'drizzle-orm';
 import { db, type Db } from '$lib/server/db';

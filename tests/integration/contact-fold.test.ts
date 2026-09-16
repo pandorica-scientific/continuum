@@ -6,16 +6,15 @@ import { ALL_MIGRATIONS, startPostgres, type Harness } from './harness';
 /**
  * The contact search fold, run against a real PostgreSQL.
  *
- * The TypeScript half normalises what someone typed; the SQL half normalises
- * what is stored, and the index is built on the SQL half. If they disagree the
- * query returns NO RESULTS — never an error — so a contact that plainly exists
- * simply cannot be found, and nothing anywhere says why.
+ * TypeScript normalises what someone typed; SQL normalises what is stored,
+ * and the index is built on the SQL half. If they disagree the query returns
+ * no results, never an error, so a contact that exists cannot be found and
+ * nothing says why.
  *
- * The unit test can pin the letters and the shape of the expression. Only this
- * can answer the questions that are database behaviour: whether `unaccent`
- * actually strips what we assume it strips, whether the index resolves the
- * function under its restricted search_path, and — the bug this file was added
- * for — whether an UPPERCASE stroked letter folds the same on both sides.
+ * Only this suite can answer questions that are database behaviour: whether
+ * `unaccent` strips what we assume, whether the index resolves the function
+ * under its restricted search_path, and whether an uppercase stroked letter
+ * folds the same on both sides.
  */
 
 let harness: Harness;
@@ -24,9 +23,7 @@ beforeAll(async () => {
 	harness = await startPostgres('contact-fold', { max: 1 });
 
 	// Statement by statement, the way drizzle sends them — so this also proves
-	// the baseline APPLIES, which is the half that only ever fails on a fresh
-	// database (see its notes on the ::regdictionary cast and the schema
-	// qualification, both of which were found exactly that way).
+	// the baseline applies, which only ever fails on a fresh database.
 	await harness.applyMigrations(ALL_MIGRATIONS);
 }, 120_000);
 
@@ -35,13 +32,10 @@ afterAll(async () => {
 });
 
 describe('contact_fold agrees with normaliseSearch', () => {
-	// Written the way a person writes them: CAPITALISED, which is the case the
-	// two halves fold in different orders. normaliseSearch lowercases first and
-	// then substitutes strokes; the SQL translate() runs before its lower(), and
-	// its from-list is lowercase only, so 'Ł' never reaches it. That the two
-	// still agree rests on PostgreSQL's unaccent covering the stroked letters
-	// itself — which is not what the migration's comment assumes, and is worth
-	// holding still: every letter of STROKED appears below, in upper case.
+	// Written CAPITALISED: normaliseSearch lowercases then substitutes strokes,
+	// while SQL translate() runs before lower() with a lowercase-only
+	// from-list, so 'Ł' never reaches it. The two still agree only because
+	// PostgreSQL's unaccent covers stroked letters itself.
 	const names = [
 		'Łódź',
 		'Łukasz Nowak',

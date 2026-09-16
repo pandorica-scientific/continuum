@@ -28,11 +28,9 @@ export { statementDocumentName };
  * A file uploaded with a statement, to be filed on the Finance shelf and linked to
  * the statement in one commit.
  *
- * The screen used to assume the paperwork had already been filed elsewhere: the
- * only way to attach it was to pick from a list of tax documents that someone
- * had to go and create first, on another screen, before the statement could be
- * recorded. Recording the statement and filing the paper it came from are one
- * act, so they are one save.
+ * Recording the statement and filing the paper it came from are one act, so
+ * they are one save — rather than requiring the tax document to already
+ * exist on another screen before the statement can be attached to it.
  */
 export interface StatementAttachment {
 	/** The stored upload's name on the data volume, from `saveUpload`. */
@@ -204,12 +202,10 @@ export async function saveStatement(input: StatementInput, handle: Db = db): Pro
 	let refusal: TaxResult | null = null;
 	try {
 		await handle.transaction(async (tx) => {
-			// The statement goes in FIRST, which reverses what this did before
-			// v0.4.3. A document is no longer pointed at by a column on the statement
-			// — it is linked to the statement's `entity` row, and that row does not
-			// exist until the statement is inserted. Same transaction either way, so
-			// a statement that fails to save still cannot leave its paperwork filed
-			// on the shelf on its own.
+			// The statement goes in FIRST: the document is linked to the statement's
+			// `entity` row, and that row does not exist until the statement is
+			// inserted. Same transaction either way, so a statement that fails to
+			// save still cannot leave its paperwork filed on the shelf on its own.
 			//
 			// The unique key resolves concurrent saves of the same statement and
 			// RETURNING gives us the winning row id.

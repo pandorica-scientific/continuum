@@ -2,16 +2,9 @@
 import { describe, expect, it } from 'vitest';
 import { maxGross, taxBarSegments, type SerialisedYear } from '$lib/charts/tax-chart-geometry';
 
-/**
- * What a tax bar means. Where it goes is `line-chart.test.ts` now.
- *
- * The slot spacing, the bar width cap, the hairline floor under a tiny segment
- * and the "no stroke on a segment too thin to carry one" rule all moved into
- * the shared chart engine in v0.8.1, and are tested there once instead of
- * here and in the salary chart's own copy of the same arithmetic. What is
- * still this file's business is the ORDER of the blocks, because that order is
- * the picture the engine draws.
- */
+// Layout arithmetic (spacing, width cap, hairline floor) lives in the shared
+// chart engine and is tested there. This file's business is the ORDER of the
+// blocks, because that order is the picture the engine draws.
 const hues = new Map([
 	['CZ', '--series-health-soft'],
 	['PL', '--series-taxes-soft']

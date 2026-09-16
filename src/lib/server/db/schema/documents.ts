@@ -42,10 +42,7 @@ import { templateDefaults, type LaneSeed } from '../../../documents/templates';
  * their existence are not.
  *
  * **A shelf is one question, one unit, one template**, and all three are on the
- * row. Before v0.8.0 they lived in `src/lib/shelf-profiles.ts`, keyed by shelf,
- * so a shelf the household made could not have a layout, a question or an
- * expected rhythm — it got the generic list and nothing else. Moving them here
- * is what makes a shelf somebody invents as good as one that ships.
+ * row — so a shelf the household invents is as good as one that ships.
  */
 export const shelf = pgTable('shelf', {
 	id: uuid('id').primaryKey(),
@@ -90,15 +87,11 @@ export const document = pgTable(
 		shelfId: uuid('shelf_id')
 			.notNull()
 			.references(() => shelf.id, { onDelete: 'restrict' }),
-		// What kind of paper this is, independent of where it sits. The salary
-		// tracker reads this; it used to read the shelf, which meant renaming a
-		// shelf could silently unhook a feature.
-		// A foreign key into `document_type`, not a CHECK: the household grows the
-		// list, so what is valid is a row rather than a constant.
-		// RESTRICT, not cascade: deleting a type the household still files under
-		// must be refused, never allowed to take the paper with it. The key is a
-		// row rather than a CHECK because a household invents its own types, and a
-		// constraint is not something a person can add a value to.
+		// What kind of paper this is, independent of where it sits — the salary
+		// tracker reads this rather than the shelf, so renaming a shelf can't
+		// unhook it. A foreign key into `document_type`, not a CHECK, because the
+		// household grows the list. RESTRICT: deleting a type still in use must be
+		// refused, never take the paper with it.
 		type: text('type')
 			.$type<DocumentTypeKey>()
 			.notNull()
@@ -135,19 +128,15 @@ export const document = pgTable(
 		 */
 		periodEndOn: date('period_end_on'),
 		// SHA-256 of the stored file's bytes, so the same file uploaded twice is
-		// recognised as the same file. A month may hold more than one payslip
-		// since v0.5.5, which removed the only key that used to catch a
-		// re-upload — see `payslipMatchingContent`. Null on a document filed
-		// before this column existed, and on a metadata-only one; filled in the
-		// first time something has to compare against it.
+		// recognised as the same file — see `payslipMatchingContent`. Null on a
+		// metadata-only document, or one filed before this column existed.
 		contentHash: text('content_hash'),
 		/**
 		 * The lane on its card this document sits in, or null for history.
 		 *
 		 * EXPLICIT membership, not computed. A lane's `conditions` propose a lane
 		 * and a person confirms; matching alone cannot say which of two lanes a
-		 * payslip belongs to when both match it, and the counterparties release
-		 * had exactly that ambiguity.
+		 * payslip belongs to when both match it.
 		 *
 		 * No `.references()` here: `lane` lives in `organisations.ts`, which
 		 * imports this file, so a thunk would make the two modules import each
@@ -167,7 +156,7 @@ export const document = pgTable(
  * That a document's text was read, and by what.
  *
  * One row per document. The text itself is NOT here — see the chunk table
- * below, and §2.4 of the handoff for why a single column cannot hold it.
+ * below.
  *
  * `complete=false` with `pagesExtracted` is the bounded-work contract: a
  * 600-page manual occupies the single CPU worker in slices rather than for an
@@ -370,9 +359,9 @@ export const subject = pgTable(
 		// Archiving a subject demotes everything filed under it in one reversible
 		// action — a sold car stops crowding the list without anything being
 		// deleted. `activeFrom`/`activeTo` are the period the subject was real,
-		// which is what lets an old document read as history rather than as an
-		// expiry someone forgot — and, since v0.8.0, what bounds its card's lanes:
-		// a car bought in 2021 is not missing an insurance policy for 2019.
+		// letting an old document read as history rather than a forgotten expiry,
+		// and bounding its card's lanes: a car bought in 2021 is not missing an
+		// insurance policy for 2019.
 		archivedAt: timestamp('archived_at', { withTimezone: true }),
 		activeFrom: date('active_from'),
 		activeTo: date('active_to')
@@ -508,8 +497,7 @@ export const SHELF_SEED_ROWS: ShelfSeedRow[] = [
 		question: 'Does everybody hold a valid document?',
 		laneSeeds: [],
 		// Certificates too: a birth or marriage certificate is proof of who
-		// somebody is, and the shelf that used to hold them separately was one
-		// more place to look for the same kind of paper.
+		// somebody is.
 		types: ['id_document', 'certificate']
 	},
 	{

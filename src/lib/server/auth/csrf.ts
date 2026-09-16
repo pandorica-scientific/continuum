@@ -1,27 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Cross-site request forgery, checked against the address the browser actually
- * used rather than against one configured address.
+ * used rather than against one configured `ORIGIN` (SvelteKit's own check,
+ * disabled in `vite.config.ts`) — a household reaching the app at more than
+ * one LAN address needs `Origin` compared against the real `Host`, not a
+ * single configured address.
  *
- * SvelteKit ships this check and it is turned off in `vite.config.ts`, because
- * its comparison is `Origin` against `url.origin` — and adapter-node takes
- * `url.origin` from the `ORIGIN` environment variable. That names ONE address,
- * so a household that reaches its ledger at `http://continuum.local` on a
- * laptop and `http://192.168.1.40` on a phone had every form post from the
- * phone refused, sign-in first. The refusal was `text/plain`, which Safari
- * offers to save, so the reported symptom was "it tried to download login.txt".
- *
- * The check itself is not weakened. A page on `evil.com` still cannot post
- * here: its `Origin` says `evil.com` while the `Host` says yours, and they
- * still have to match. What is dropped is the assumption that the server knows
- * its own name in advance.
- *
- * SCHEME IS NOT COMPARED, deliberately. The app always speaks HTTP and learns
- * about TLS only from a proxy header a plain LAN deployment does not have, so
- * comparing schemes would mean guessing — and guessing `https`, which is
- * adapter-node's own default, is exactly what breaks a LAN address. The
- * residual gap is an attacker who can already forge `Host` or terminate TLS
- * inside the network, who is past this fence either way.
+ * Scheme is deliberately not compared: the app only speaks HTTP and has no
+ * reliable way to know if a LAN client used https.
  */
 
 /** The methods a browser can use to change state from another site. */
@@ -40,9 +26,8 @@ const FORM_TYPES = new Set([
 
 /** The address the browser put in its URL bar, as this server can see it. */
 function browsedHost(request: Request): string | null {
-	// Behind a reverse proxy `Host` is
-	// whatever the proxy dialled, and the address the person actually typed is
-	// in `X-Forwarded-Host`. That is the one to compare against `Origin`.
+	// Behind a reverse proxy, `X-Forwarded-Host` carries the address the person
+	// actually typed; `Host` is whatever the proxy dialled.
 	return request.headers.get('x-forwarded-host') ?? request.headers.get('host');
 }
 
@@ -55,9 +40,8 @@ export function sameSiteFormPost(request: Request): boolean {
 
 	const origin = request.headers.get('origin');
 	const host = browsedHost(request);
-	// No origin is a refusal, matching the behaviour this replaces. Every browser
-	// sends one on these methods; something that does not is not a browser, and
-	// the API boundary authenticates itself with a bearer token instead.
+	// Every browser sends Origin on these methods; the API boundary
+	// authenticates itself with a bearer token instead.
 	if (!origin || !host) return false;
 
 	try {
@@ -69,14 +53,8 @@ export function sameSiteFormPost(request: Request): boolean {
 }
 
 /**
- * The refusal, as a page rather than as a body the browser saves to disk.
- *
- * The old one was `text/plain`, and Safari's response to a plain-text body
- * arriving from a form submission is to offer it as a download — so a person
- * whose sign-in was refused got a file called `login.txt` and no idea why.
- *
- * It names both addresses, because the mismatch between them IS the problem
- * and neither is a secret: the browser sent one and this server saw the other.
+ * The refusal, as an HTML page rather than `text/plain` — Safari offers a
+ * plain-text form response as a download instead of showing it.
  */
 export function csrfRefusal(request: Request): Response {
 	const origin = request.headers.get('origin') ?? 'none';

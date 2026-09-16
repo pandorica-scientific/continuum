@@ -1,19 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-/**
- * The downstream surface, pinned.
- *
- * A separate private repository builds on this one by registering into the
- * seams below and editing nothing. Under fork-and-merge nothing tells this
- * repository when it has broken that arrangement: a rename applies cleanly to
- * a fork that only CALLS the renamed thing, and the breakage surfaces days
- * later in a different repository.
- *
- * So this file is a tripwire rather than a behaviour test. The behaviour of
- * each seam is covered where it always was; what is asserted here is only that
- * the seam still exists, still has its shape, and still accepts and forgets a
- * registration. Deleting or renaming any of it fails CI in the repository that
- * did it, which is the only place the failure is cheap.
- */
+// A separate private repository builds on this one by registering into these
+// seams. This file is a tripwire, not a behaviour test: it asserts only that
+// each seam still exists, has its shape, and accepts/forgets a registration,
+// so a breaking rename fails CI here rather than surfacing downstream later.
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { setStorageDriver, storageDriver, type StorageDriver } from '$lib/server/system/storage';
@@ -180,13 +169,11 @@ describe('the boot seam', () => {
 			.map((t) => t.id)
 			.sort();
 		expect(ids).toEqual(
-			['backup', 'calendar', 'cpu-queue', 'fx', 'meter', 'networth', 'scan-sweep'].sort()
+			['backup', 'calendar', 'cpu-queue', 'fx', 'meter', 'networth', 'prices', 'scan-sweep'].sort()
 		);
 	});
 
-	// These lines are what an operator reads when something is wrong on their
-	// own server, and they predate the registry. Deriving them from the id would
-	// have quietly reworded all seven.
+	// Operator-facing log labels; deriving them from the id would reword all seven.
 	it('keeps the log label each task had before it was a registration', () => {
 		const labels = Object.fromEntries(bootTasks().map((t) => [t.id, t.label]));
 		expect(labels['cpu-queue']).toBe('CPU queue');
@@ -251,9 +238,8 @@ describe('the navigation seam', () => {
 				.find((a) => a.key === 'money')
 				?.screens.map((s) => s.path)
 		).toContain('/usage');
-		// Registering into a core area mutates the literal. Vitest isolates test
-		// FILES, so nav-areas.test.ts gets its own module graph and is unaffected;
-		// this is belt on braces.
+		// Registering into a core area mutates the literal; undo it (Vitest
+		// isolates test files, so other suites are unaffected regardless).
 		AREAS.find((a) => a.key === 'money')?.screens.pop();
 	});
 

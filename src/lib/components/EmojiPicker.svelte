@@ -1,25 +1,17 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	//
-	// A 36px button showing the chosen emoji, and behind it a fixed grid of the
-	// emoji a household actually files things under plus a two-character field
-	// for the twenty-fifth.
+	// A 36px button showing the chosen emoji, and behind it a fixed grid of
+	// filing emoji plus a two-character field for anything else.
 	//
-	// A popover rather than an always-open grid: on the settings list the grid
-	// lives in the row the shelf occupies, and an inline 24-cell grid under
-	// every add or rename row turned a one-line control into a tall block.
+	// A popover rather than an always-open grid: an inline 24-cell grid under
+	// every add/rename row turned a one-line control into a tall block.
 	//
-	// No external picker — this ships self-hosted and must not depend on a CDN —
-	// and no OS picker either: a Linux box may not have one reachable. The field
-	// covers everything the grid does not, without shipping an emoji database.
-	//
-	// 24 cells at 6 × 36px is 236px wide, so the grid never scrolls.
+	// No external or OS picker — ships self-hosted, must not depend on a CDN,
+	// and a Linux box may not have an OS picker reachable.
 	//
 	// The default set is what a household files PAPER under. A caller whose
-	// subject is something else — a trip, a recipe, a bottle — passes its own
-	// twenty-four through `choices`, because a picker offering 🧾 and ⚖️ for a
-	// holiday is a picker nobody uses, and a second component would be a second
-	// popover to keep in step with this one.
+	// subject is something else passes its own twenty-four through `choices`.
 	const FILING = [
 		'🗂️',
 		'🏠',

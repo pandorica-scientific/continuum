@@ -20,16 +20,9 @@ export const load: PageServerLoad = async () => {
 	const people = await db
 		.select({ id: person.id, name: person.name, initials: person.initials })
 		.from(person)
-		// Only people who can actually sign in — the same pair of conditions as
-		// canSignIn. Anyone else would sit in the picker failing every attempt,
-		// which reads as a broken password rather than as a closed account or one
-		// whose enrollment link has not been opened yet. The second is the worse
-		// of the two: a new person who tries the picker before reading their mail
-		// spends the per-address failure budget that gates everyone's sign-in, and
-		// behind a reverse proxy the whole household shares one
-		// address.
-		// In open mode a password is not what makes an account usable, so requiring
-		// one here would hide people who can now perfectly well sign in.
+		// Only people who can actually sign in (same conditions as canSignIn) — otherwise
+		// a not-yet-enrolled account spends the shared per-address failure budget.
+		// In open mode a password isn't required, so don't filter on it.
 		.where(
 			openMode
 				? isNull(person.deactivatedAt)
@@ -52,9 +45,7 @@ export const actions: Actions = {
 		const personId = asRowId(form.get('personId'));
 		const password = String(form.get('password') ?? '');
 
-		// Resolve existence with one cheap indexed lookup before spending Argon2.
-		// Unknown caller-controlled IDs all share one subject, while every failure
-		// also spends the coarse address budget.
+		// Cheap indexed lookup before spending Argon2; unknown IDs share one rate-limit subject.
 		const rows = await db.select().from(person).where(eq(person.id, personId));
 		const row = rows[0];
 		const limitSubject = loginLimitSubject(personId, Boolean(row));
@@ -65,16 +56,9 @@ export const actions: Actions = {
 			});
 		}
 
-		// A deactivated or never-enrolled account must not be distinguishable from
-		// a wrong password — by wording or by how long the answer took. Which is
-		// why the verify runs first and is combined afterwards: short-circuiting on
-		// `row.deactivatedAt ||` skipped argon2 entirely and returned in about a
-		// millisecond, where a wrong password costs the full ~100ms. verifyPassword
-		// does the same for a null hash rather than returning early.
-		// Open mode: the instance has been told, by an administrator who proved it
-		// with their own password, that no credential is wanted. The account still
-		// has to exist and be usable — that is not a credential check, it is the
-		// same "is this a real, open account" gate every path applies.
+		// verifyPassword must always run (not short-circuited) so a deactivated or
+		// never-enrolled account isn't distinguishable from a wrong password by timing.
+		// Open mode skips the credential but still requires a real, usable account.
 		const open = await isOpenMode();
 		const correct = open || (await verifyPassword(row?.passwordHash ?? null, password));
 		if (!row || row.deactivatedAt || !correct) {

@@ -82,10 +82,8 @@ export function credentialIsPending(credential: string): boolean {
 /**
  * Remove abandoned Google authorisations, and ONLY those.
  *
- * Shared by the action that starts a flow and the callback that finishes one,
- * because both used to clear "every Google row" and both therefore destroyed a
- * live connection — with its sync links and conflict history — on a press or a
- * Cancel. Deleting by id keeps the predicate in one place.
+ * Shared by the action that starts a flow and the callback that finishes one, so
+ * neither can accidentally clear a live connection along with a pending one.
  */
 export async function deletePendingGoogleAccounts(handle: Db = db): Promise<number> {
 	const rows = await handle
@@ -110,12 +108,8 @@ export async function runSync(accountId: string, handle: Db = db): Promise<SyncR
 	} catch (error) {
 		// A failing account records why and backs off; it must not take the other
 		// accounts down with it, so the error is stored rather than rethrown.
-		//
-		// `lastSyncAt` is stamped on failure as well as on success, and that is what
-		// the backing off actually IS: syncDue reads only that column, so leaving it
-		// alone meant a never-successful account was due unconditionally and the
-		// sixty-second tick presented a dead credential to Apple or Google 1,440
-		// times a day, forever. An attempt was made; the interval now applies to it.
+		// `lastSyncAt` is stamped on failure too — syncDue reads only that column,
+		// so an unstamped failure would be retried on every tick forever.
 		await handle
 			.update(calendarAccount)
 			.set({

@@ -72,20 +72,12 @@ export interface FlowData {
 	 * The same window, one window earlier — what every figure above is compared
 	 * against.
 	 *
-	 * Null on either of two counts, both of which are the same mistake: a
-	 * comparison that would describe when the importing started rather than what
-	 * the household did.
+	 * Null when the window holds no transactions at all (counted in rows, not
+	 * totals, since zero and "nothing happened" differ) or when the record does
+	 * not fully cover it — either would report missing data as a collapse.
 	 *
-	 * The first is a window holding no transactions at all — which is not the
-	 * same as one where everything came to zero, so it is counted in rows rather
-	 * than read off the totals. The second is a window the record does not cover
-	 * the whole of: a trailing year whose first eight months are before anything
-	 * was imported is four months of spending, and comparing a full year against
-	 * it reports the missing eight as a collapse.
-	 *
-	 * Its sources and leaves are not carried. A comparison is a number beside a
-	 * figure, not a second chart, and nobody clicks through to a window that is
-	 * not on screen.
+	 * Its sources and leaves are not carried: nobody clicks through to a window
+	 * that is not on screen.
 	 */
 	previous: {
 		caption: string;
@@ -216,11 +208,9 @@ export interface FlowOptions {
 /**
  * The month a window may actually end on.
  *
- * A URL can name any month; the record covers only some of them. Snapping to
- * the nearer end rather than falling back to the newest is what keeps the
- * steppers honest — walking off the earliest month lands on the earliest month,
- * not at the other end of the record. `YYYY-MM` sorts chronologically as text,
- * so the comparison needs no dates.
+ * Snaps to the nearer end of the record rather than falling back to the
+ * newest, so walking off the earliest month lands on the earliest month, not
+ * the other end of the record. `YYYY-MM` sorts chronologically as text.
  */
 function clampToSpan(month: string | null, span: MonthSpan | null): string | null {
 	if (!span) return null;
@@ -233,17 +223,9 @@ function clampToSpan(month: string | null, span: MonthSpan | null): string | nul
 /**
  * The window this one may honestly be compared against, or null.
  *
- * The previous window has to be one the record covers the whole of. A trailing
- * year anchored on the second month a household ever imported is compared
- * against twelve months of which eleven are before the record begins, and the
- * eleven months of nothing come back as a collapse in everything they earn —
- * a fact about the import, reported as a fact about the household. The window
- * is refused rather than pro-rated, because a household that imported four
- * months of one year cannot be told what the other eight held.
- *
- * There is nothing to compare on an instance with no anchor either: that is an
- * instance with nothing in it. `YYYY-MM` sorts chronologically as text, the way
- * `clampToSpan` above relies on, so the coverage test needs no dates.
+ * The previous window must be fully covered by the record — a trailing year
+ * mostly before the record began would report the missing months as a
+ * collapse in what the household earns. Refused rather than pro-rated.
  */
 function comparableWindow(
 	period: Period,
@@ -258,11 +240,9 @@ function comparableWindow(
 /**
  * The expense stage money nobody attributed rides in.
  *
- * The seeded catch-all when the household still has it, and otherwise the last
- * expense stage — any group is deletable, and money with nowhere to ride would
- * be reported as cash that was never spent. Read from the groups rather than
- * named outright in the two places that need it, so they cannot answer
- * differently: the sum and the leaf under it are the same claim.
+ * The seeded catch-all when it still exists, otherwise the last expense
+ * stage — any group is deletable, and unattributed money must ride somewhere
+ * or it reads as cash that was never spent.
  */
 function catchAllGroup(groups: GroupRow[]): GroupRow | undefined {
 	const expense = stagesOf(groups);
@@ -283,21 +263,11 @@ interface LoanShare {
  * How each loan payment in this window split, keyed by the transaction that
  * carried it.
  *
- * The transaction is the only thing the two records have in common — the
- * register knows money left an account, the loan knows what the bank did with
- * it — so a payment nobody linked stays whole, and so does every loan with no
- * linked payment in the window.
- *
- * Read from `loan_event.interest_minor` rather than worked out here. The five
- * rules in `$lib/loans/payment-split` still decide it; they run once, when the
- * payment is recorded, because the register has to be able to express the same
- * split in SQL and cannot run an amortisation schedule per row. A null is the
- * record saying nothing honest can be said — no rate on it — and that payment
- * stays one cost on both screens.
- *
- * A ratio rather than two amounts: the line has already been converted to the
- * household's currency, and converting the loan's own minor units a second time
- * would be a second chance to disagree with the first.
+ * Read from `loan_event.interest_minor` rather than worked out here — the
+ * split rules in `$lib/loans/payment-split` decide it once, at record time,
+ * since the register cannot run an amortisation schedule per row. A ratio
+ * rather than two amounts: the line is already converted to household
+ * currency, and converting the loan's minor units again could disagree.
  */
 async function loanSharesFor(transactionIds: string[]): Promise<Map<string, LoanShare>> {
 	if (transactionIds.length === 0) return new Map();
@@ -317,26 +287,19 @@ async function loanSharesFor(transactionIds: string[]): Promise<Map<string, Loan
 		.orderBy(loanEvent.happenedOn, loanEvent.id);
 
 	const shares = new Map<string, LoanShare>();
-	// Which transactions have been answered for, apart from which ones split: the
-	// oldest claim is the one that counts even when it has no interest on record,
-	// so a younger claim must not answer in its place.
-	//
-	// Known limitation: one transaction referenced by two events — two loans paid
-	// by a single standing order, or a payment recorded twice — keeps only that
-	// oldest claim. Splitting one line between several loans needs the share each
-	// of them took, which nothing records yet, and a guessed share would be a
-	// worse answer than one loan's own numbers.
+	// The oldest claim on a transaction wins, even with no interest on record.
+	// A transaction referenced by two events (e.g. two loans paid by one
+	// standing order) keeps only that oldest claim — splitting needs a
+	// per-loan share nothing records yet.
 	const claimed = new Set<string>();
 	for (const event of events) {
-		// The query already excluded the unlinked events; this is what says so to
-		// the type checker.
+		// Type guard: the query already excluded the unlinked events.
 		if (event.transactionId === null || claimed.has(event.transactionId)) continue;
 		claimed.add(event.transactionId);
 		if (event.interestMinor === null || event.amountMinor <= 0n) continue;
-		// Rule 5 of the split, applied to a figure that was stored rather than
-		// derived: a statement can disagree with the schedule, and neither is
-		// grounds for reporting a payment that repaid a negative amount of debt.
-		// The register's own SQL clamps it the same way.
+		// Clamp to [0, amount]: a stored figure can disagree with the schedule,
+		// and neither is grounds for negative debt repaid. Matches the
+		// register's own SQL clamp.
 		const interest =
 			event.interestMinor < 0n
 				? 0n
@@ -364,11 +327,8 @@ async function loanSharesFor(transactionIds: string[]): Promise<Map<string, Loan
  */
 async function aggregateWindow(range: DateRange, ctx: WindowContext): Promise<Agg> {
 	// The value date decides which month a movement belongs to when the bank
-	// provides one — card payments started in June and booked in July count in
-	// June, where the money actually moved. The register bounds itself on the
-	// same fragment, which is the point of importing it rather than writing the
-	// expression out again: two copies drifting apart is exactly how the chart
-	// and the list behind it came to measure different months.
+	// provides one, so a card payment started in June and booked in July counts
+	// in June. Imported rather than reimplemented, to match the register's SQL.
 	const day = effectiveDate();
 	const rows = await db
 		.select()
@@ -376,13 +336,9 @@ async function aggregateWindow(range: DateRange, ctx: WindowContext): Promise<Ag
 		.where(and(notOwnTransfer(), sql`${day} >= ${range.start}`, sql`${day} <= ${range.end}`));
 	const splitsByTxn = await loadSplits(rows.map((r) => r.id));
 
-	// A mortgage instalment is two movements sharing one amount, and the
-	// principal half is filed under a category of its own — seeded into the
-	// savings group, and read from the row rather than assumed to be there, so a
-	// household that moved or renamed it is followed. Gated on that row existing
-	// because the register's SQL has no other way to name the principal line: a
-	// record that deleted the category leaves its payments whole on both screens
-	// rather than splitting them on one.
+	// A mortgage instalment is two movements sharing one amount; the principal
+	// half is filed under a category read from the row, not assumed — a record
+	// that deleted the category leaves payments whole rather than splitting them.
 	const principalCategory = ctx.categoryById.get(LOAN_PRINCIPAL_CATEGORY);
 	const loanShares = principalCategory
 		? await loanSharesFor(rows.map((r) => r.id))
@@ -421,13 +377,9 @@ async function aggregateWindow(range: DateRange, ctx: WindowContext): Promise<Ag
 			);
 			const major = toMajor(converted, ctx.base);
 			const filed = line.categoryId ? ctx.categoryById.get(line.categoryId) : undefined;
-			// Where the interest half rides: the group the payment is already
-			// filed under, and the catch-all when nobody has filed it. The
-			// household's own group only counts if the chart draws it as an
-			// expense stage — a payment filed under an income group, or under a
-			// group that has since been deleted, would otherwise leave the totals
-			// without leaving the account. With no stage for it at all the line
-			// stays whole rather than quietly vanishing.
+			// Where the interest half rides: the filed group, or the catch-all — but
+			// only if that group is actually drawn as an expense stage, or the
+			// line would vanish from totals instead of staying whole.
 			const filedIn = filed?.groupKey;
 			const interestKey = filedIn && expenseKeys.has(filedIn) ? filedIn : catchAllKey;
 			if (share && principalCategory && interestKey) {
@@ -441,12 +393,8 @@ async function aggregateWindow(range: DateRange, ctx: WindowContext): Promise<Ag
 					{
 						name: `${share.name} · interest`,
 						groupKey: interestKey,
-						// The category the debit was filed with, which is where the
-						// register keeps this half too. Two leaves then share one
-						// link and together come to what it lists — where the whole
-						// instalment used to be listed under it and neither did.
-						// An unfiled payment has no category to lead to, so that
-						// half leads to the loan instead.
+						// The category the debit was filed with; an unfiled payment has
+						// no category to lead to, so that half leads to the loan instead.
 						categoryId: line.categoryId,
 						href: line.categoryId ? undefined : share.href
 					},
@@ -487,19 +435,13 @@ async function aggregateWindow(range: DateRange, ctx: WindowContext): Promise<Ag
 /**
  * A window's leaves as the four totals and the stages they passed through.
  *
- * Pure, and run once per window, so the figures a comparison is drawn from are
- * the figures the chart is drawn from — a group head that counted savings one
- * way on screen and another way in the window behind it would report the
- * difference between two formulas as a change in what the household did.
+ * Pure, and run once per window, so the on-screen figures and the comparison
+ * figures always come from the same formula.
  *
- * `categories` is here for the ORDER income sources are listed in: the leaf map
- * is keyed, and its insertion order is whatever order the bank exported.
+ * `categories` is here only for the ORDER income sources are listed in.
  */
 function summarise(agg: Agg, groups: GroupRow[], categories: CategoryRow[]): WindowSummary {
 	const incomeKeys = new Set(groups.filter((g) => g.role === 'income').map((g) => g.key));
-	// Savings groups are read from their rows rather than from the key and token
-	// this used to hardcode, so a household that renames or recolours one — or
-	// keeps two — sees that here.
 	const savingsGroups = groups.filter((g) => g.role === 'savings');
 
 	const groupTotal = (groupKey: string) => {
@@ -508,16 +450,10 @@ function summarise(agg: Agg, groups: GroupRow[], categories: CategoryRow[]): Win
 		return sum;
 	};
 
-	// Money put aside is a stage like any other, and a household may keep more
-	// than one place to put it — a brokerage and a pension are both savings and
-	// neither is spending. Every savings-role group gets its own stage, so no
-	// group falls outside both `out` and `saved` and is silently reported as
-	// cash that stayed in the account.
-	//
-	// A group the window took money OUT of is not a stage at all. Nothing was
-	// saved, so calling the magnitude "saved" would understate what was kept by
-	// twice the withdrawal; the drawdown enters on the left instead, as the
-	// source of spending money it actually was.
+	// Every savings-role group gets its own stage (a brokerage and a pension are
+	// both savings, neither is spending). A group the window took money OUT of
+	// is not a stage: the drawdown enters as a source instead, or "saved" would
+	// understate what was kept by twice the withdrawal.
 	const savingsStages: StageFigure[] = [];
 	const drawdowns: SourceFigure[] = [];
 	for (const g of savingsGroups) {
@@ -582,13 +518,8 @@ function summarise(agg: Agg, groups: GroupRow[], categories: CategoryRow[]): Win
 	}));
 	// Not-yet-categorised outflows ride in the catch-all stage so the trunk never
 	// overstates what survived; they show up as an explicit "Unfiled" leaf in the
-	// breakdown the caller builds.
-	//
-	// That used to name 'living' outright. Groups are a household's own now and
-	// any of them can be deleted, so `catchAllGroup` takes the last expense stage
-	// when the seeded catch-all is gone — and when there are no expense stages at
-	// all, the unfiled amount simply has nowhere to ride and is left out of the
-	// trunk rather than silently attached to something it does not belong to.
+	// breakdown the caller builds. With no expense stages at all, the unfiled
+	// amount has nowhere to ride and is left out of the trunk.
 	const catchAllKey = catchAllGroup(groups)?.key;
 	const unfiledOut = -(agg.byLeaf.get('unfiled:out')?.value ?? 0);
 	const ridesIn = unfiledOut > ROUNDING ? stages.find((s) => s.key === catchAllKey) : undefined;
@@ -625,11 +556,9 @@ function summarise(agg: Agg, groups: GroupRow[], categories: CategoryRow[]): Win
  * the waterfall's shape, in base-currency major units — and the window before
  * it, so every figure can be read against what it was.
  *
- * Four totals rather than three. Money put aside is a stage the money passes
- * through like any other — it left the account — and what none of the stages
- * took is cash the household still holds. The old chart called that residual
- * "Saved & invested", which named money nobody had invested and left the
- * savings group's own leaves hanging off a node that did not exist.
+ * Four totals rather than three: money put aside is a stage like any other —
+ * it left the account — and what none of the stages took is cash the
+ * household still holds.
  */
 export async function flowData(period: Period, options: FlowOptions = {}): Promise<FlowData> {
 	const base = await getBaseCurrency();
@@ -794,14 +723,8 @@ interface MonthBar {
  * The oldest and newest months holding a transaction that is not a transfer
  * leg, as `YYYY-MM`, or null on an instance with nothing imported.
  *
- * Neither rule here is a free choice — both are the rules monthlyHistory and
- * flowData already apply. The effective date is the value date when the bank
- * prints one, and transfer legs are excluded. A month whose only movement was
- * between the household's own accounts has no spending to show, so anchoring on
- * it would reproduce the empty chart this exists to fix.
- *
  * Both ends come back from one aggregate because they are always wanted
- * together: the newest is where a screen opens, and the pair is where the month
+ * together: the newest is where a screen opens, the pair is where the month
  * steppers stop.
  */
 async function monthSpanWithData(handle: Queryable = db): Promise<MonthSpan | null> {

@@ -2,16 +2,11 @@
 /**
  * Rows for integration suites to test against.
  *
- * `harness.ts` starts a database; it does not put anything in one. So 74
- * suites hand-rolled their own rows, and 332 inline `insert()` calls grew up
- * around the same seven tables — 29 of them constructing an `account`. A
- * column added to `account` therefore meant editing 29 call sites that did not
- * care about it, which is most of what "the tests are brittle" actually meant.
- *
- * Every builder here fills the columns the schema demands and nothing else,
- * takes overrides for whatever the test is actually about, and returns the
- * inserted row. A test names the two facts it cares about; the rest stops
- * being its problem.
+ * `harness.ts` starts a database; it does not put anything in one. Every
+ * builder here fills the columns the schema demands and nothing else, takes
+ * overrides for whatever the test is actually about, and returns the
+ * inserted row, so a column added to a table does not mean editing every
+ * call site that did not care about it.
  *
  * Builders compose: `makeTransaction` opens an account if handed none,
  * `makeDocumentLink` creates both ends. Pass an id when a test needs the same
@@ -52,12 +47,8 @@ export const FIXTURE_CURRENCY = 'CZK';
 export const FIXTURE_DATE = '2025-01-15';
 
 /**
- * A fingerprint that collides with nothing.
- *
- * Production derives this from the parsed row — see `$lib/server/import/
- * fingerprint` — because it is how a re-imported statement is recognised. A
- * fixture is usually not about dedup, and a unique index on
- * `(accountId, dedupFingerprint)` would turn two otherwise-identical fixture
+ * A fingerprint that collides with nothing. A unique index on
+ * `(accountId, dedupFingerprint)` would otherwise turn two identical fixture
  * rows into a failure about nothing. A suite testing dedup passes its own.
  */
 function uniqueFingerprint(): string {
@@ -303,13 +294,7 @@ export async function makeDocumentLink(
 
 // ---- Sessions ----
 
-/**
- * A session as a route loader sees it.
- *
- * Seventeen suites declared their own `asAdmin`/`asMember` pair, which is the
- * same drift risk as the rows above: the shape is the application's, not each
- * suite's.
- */
+/** A session as a route loader sees it — the shape is the application's, not each suite's. */
 export interface SessionLocals {
 	person: {
 		id: string;
@@ -321,11 +306,9 @@ export interface SessionLocals {
 }
 
 /**
- * A session for each role, ready to hand to a loader.
- *
- * Frozen and shared because they are read, never written; a suite that needs a
- * particular person calls `session()` instead. Ids are derived, so a failure
- * naming one is traceable to the fixture rather than to a fresh uuid.
+ * A session for each role, ready to hand to a loader. Frozen and shared
+ * because they are read, never written; a suite that needs a particular
+ * person calls `session()` instead.
  */
 export function session(
 	role: 'admin' | 'member',

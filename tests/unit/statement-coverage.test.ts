@@ -1,13 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-/**
- * Which months an account's statements cover, and what an empty one means.
- *
- * Two rules carry the whole shelf and both are easy to get subtly wrong. A
- * FILED box spans, because a real statement says how far it reaches. An EMPTY
- * box never spans, because nothing says whether a hole is one missing quarterly
- * statement or three missing monthly ones — and a ribbon that guessed would
- * draw a rhythm nobody stated.
- */
+// A FILED box spans, because a real statement says how far it reaches. An
+// EMPTY box never spans: nothing says whether a hole is one missing quarterly
+// statement or three missing monthly ones, and a ribbon that guessed would
+// draw a rhythm nobody stated.
 import { describe, expect, it } from 'vitest';
 import {
 	coverageDecade,
@@ -131,13 +126,8 @@ describe('coverageRow', () => {
 	});
 });
 
-/**
- * The yearly band, for paper that arrives once a year.
- *
- * A broker's annual report is not a statement that failed to be monthly — it is
- * a different rhythm, and putting it in the twelve-month grid would draw eleven
- * gaps a year for an account that is perfectly up to date.
- */
+// An annual report is not a statement that failed to be monthly — putting it
+// in the twelve-month grid would draw eleven gaps a year for an up-to-date account.
 describe('coverageDecade', () => {
 	it('starts a decade on the round year', () => {
 		expect(decadeStart(2026)).toBe(2020);

@@ -4,7 +4,7 @@
  *
  * The seam exists because the engine is expected to change: tesseract.js is
  * what ships, and a PP-OCRv6/ONNX adapter is deferred behind evidence rather
- * than ruled out (handoff §8). A second implementation of this interface is the
+ * than ruled out. A second implementation of this interface is the
  * whole change when that evidence arrives, instead of a rewrite — and `engine`
  * and `engineVersion` are recorded per run on `document_text` so the confidence
  * distribution collected later can say which engine produced it.

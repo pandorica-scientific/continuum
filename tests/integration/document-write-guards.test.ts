@@ -2,17 +2,10 @@
 /**
  * A write action may not name a document that is not there.
  *
- * Every one of these actions takes an id off a form and acts on it, and a form
- * is not a list: an id posted straight at `updateDocument`, `replaceFile`,
- * `continueExtraction`, `bulkUpdate`, `fileFromQueue` or tax's `detach` has
- * been through no read of the archive at all. So each asks `assertDocumentExists`
- * before it writes, and each answers 404 with the same sentence when the answer
- * is no — one guard, in `visibility.ts`, rather than six spellings of it that
- * can drift apart.
- *
- * This is what survives the per-document visibility rule: the household has one
- * kind of reader now, and everyone in it sees everything, but an id that names
- * nothing must still be refused rather than silently doing nothing.
+ * Every action takes an id straight off a form, unvalidated, so each calls
+ * `assertDocumentExists` (in `visibility.ts`) before writing and answers 404
+ * with the same sentence — one guard rather than six spellings that could
+ * drift apart.
  */
 import { mkdir, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -53,8 +46,7 @@ beforeAll(async () => {
 	process.env.UPLOAD_DIR = DIRECTORY;
 	await mkdir(DIRECTORY, { recursive: true });
 	harness = await startPostgres('document-write-guards', { max: 1 });
-	// The actions reach for the module-level `db`, so pointing that at this
-	// suite's server is what makes the real actions reachable.
+	// Actions use the module-level `db`, so it must point at this suite's server.
 	previousUrl = process.env.DATABASE_URL;
 	process.env.DATABASE_URL = harness.url;
 	await harness.applyMigrations(ALL_MIGRATIONS);

@@ -27,16 +27,8 @@ const graph: SankeyGraph = {
 };
 
 /**
- * The demo's own shape: a leaf column crowded enough that the box has a say in
- * where its names go.
- *
- * The bands at the foot of a column are the thin ones — that is what being at
- * the foot of a column sorted by size means — and a band thinner than its own
- * name is a name the layout has to move. This release put two more of them
- * there, a loan's interest and principal halves, and the last column's names
- * started landing on top of each other. Every invariant below is asserted of
- * this as well as of the roomy graph above, because the crowded column is where
- * they stop being free.
+ * A leaf column crowded enough that the box has a say in where its names go.
+ * Every invariant below is asserted of this as well as the roomy graph above.
  */
 const crowdedLeaves: SankeyGraph = {
 	nodes: [
@@ -103,8 +95,7 @@ describe.each(FIXTURES.flatMap((fixture) => SIZES.map((box) => ({ ...fixture, ..
 		const asked = (column: number) =>
 			subject.nodes.filter((n) => n.column === column).reduce((sum, n) => sum + n.value, 0);
 
-		// The complaint that started this: one fixed layout scaled to fit, so the
-		// type shrank with the box. The geometry has to come from the box instead.
+		// Geometry must come from the box, not a fixed layout scaled to fit.
 		it('fills the box it was given', () => {
 			expect(layout.width).toBe(box.width);
 			expect(layout.height).toBe(box.height);
@@ -119,9 +110,7 @@ describe.each(FIXTURES.flatMap((fixture) => SIZES.map((box) => ({ ...fixture, ..
 			}
 		});
 
-		// Conservation is the adapter's job, not a general graph engine's: a group
-		// with no leaves broken out simply has no node in the last column. What the
-		// engine must not do is invent value or overflow the scale.
+		// The engine must not invent value or overflow the scale.
 		it('never draws a column heavier than the graph total', () => {
 			const byColumn = new Map<number, number>();
 			for (const node of layout.nodes) {
@@ -139,9 +128,8 @@ describe.each(FIXTURES.flatMap((fixture) => SIZES.map((box) => ({ ...fixture, ..
 			expect(drawn(0)).toBeCloseTo(drawn(2), 0);
 		});
 
-		// Flush at both ends, and asserted because it has been given up once: holding
-		// the ribbons back opened a clear channel for the middle names, and left every
-		// band starting in mid-air a hand's width clear of the block it came from.
+		// Regression: holding ribbons back opened a channel for names but left bands
+		// starting in mid-air, clear of the block they came from.
 		it('starts ribbons and ends them flush with their nodes', () => {
 			for (const ribbon of layout.ribbons) {
 				const from = layout.nodes.find((n) => n.key === ribbon.from)!;
@@ -155,13 +143,8 @@ describe.each(FIXTURES.flatMap((fixture) => SIZES.map((box) => ({ ...fixture, ..
 			}
 		});
 
-		// At a node's right edge its outgoing ribbons cover its height exactly — they
-		// sum to its value — so only outside the first and last columns is there any
-		// space a name can occupy without the flow underneath it. That is where the
-		// unplated labels go, and this holds them to it. Labels are measured at the
-		// full width of their margin rather than of their text, so it is true of a
-		// name of any length. The middle columns are the ones that cannot have this,
-		// and carry a plate instead — asserted separately below.
+		// Unplated labels only live outside the first/last columns, where no flow runs
+		// underneath. Middle columns carry a plate instead — asserted separately below.
 		it('never lets a ribbon into the space an unplated label is drawn in', () => {
 			for (const label of layout.labels.filter((l) => l.fits && !l.plate)) {
 				const left = label.anchor === 'end' ? label.x - label.width : label.x;
@@ -207,10 +190,7 @@ describe('buildSankey', () => {
 		expect(x(2)).toBeLessThan(x(3));
 	});
 
-	// A band's tooltip states what flowed along it, and a thickness cannot be
-	// read back into a figure — it is the value times a scale nothing outside
-	// the engine sees. So the value travels with the geometry rather than the
-	// renderer holding the graph as well as the layout to look it up again.
+	// A thickness cannot be read back into a figure, so the value travels with the geometry.
 	it('a ribbon carries the value of its link', () => {
 		const layout = buildSankey(graph, { width: 1000, height: 500 });
 		expect(layout.ribbons).toHaveLength(graph.links.length);
@@ -220,11 +200,8 @@ describe('buildSankey', () => {
 		}
 	});
 
-	// The defect this closes: the engine used to guess a name's width from its
-	// character count, so on a machine whose font was wider than the guess — a
-	// fallback face before the webfont arrives, or another operating system's
-	// idea of sans-serif — the box came out narrower than the name and the
-	// renderer cut it. Nothing in the engine could see that had happened.
+	// Regression: guessing a name's width from its character count broke on any
+	// font wider than the guess.
 	describe('measuring names', () => {
 		const box = { width: 900, height: 460 };
 		const named = (layout: ReturnType<typeof buildSankey>) =>
@@ -285,11 +262,8 @@ describe('buildSankey', () => {
 	});
 });
 
-// Labels are drawn outside their nodes, so the box reserves room for them: a
-// margin left of the first column and a channel right of every other. That
-// reservation used to be a fixed 112px, which both clipped the longer names and
-// spent the same width on a column of short ones. It is measured from the names
-// the column actually holds now.
+// Regression: the label margin used to be a fixed 112px, which clipped longer
+// names and wasted space on short ones. It is measured from the names now.
 /** One large source and four small ones, as a real household's income is. */
 const crowdedSources: SankeyGraph = {
 	nodes: [
@@ -344,17 +318,8 @@ describe('label channels', () => {
 		}
 	});
 
-	/**
-	 * The bug this closes, on the smallest graph that shows it.
-	 *
-	 * One fat band and two thin ones under it: the two thin names sit far enough
-	 * apart to stay separate blocks, and the lowest of them wants a row that is
-	 * past the bottom of the box. The clamp that used to end the relaxation was
-	 * applied to each block on its own, so it pulled that block back inside and
-	 * never looked at the block above — which had not moved, and was now less
-	 * than a label's height away. Two names that had not collided before the
-	 * clamp collided after it.
-	 */
+	// Regression: clamping a block back inside the box could leave it colliding
+	// with an unmoved block above it, since the clamp was applied per-block.
 	it('settles a column whose blocks only collide once the box clamps them', () => {
 		const box = { width: 1240, height: 560 };
 		const layout = buildSankey(
@@ -385,11 +350,7 @@ describe('label channels', () => {
 		expect(bottom.y + bottom.height).toBeLessThanOrEqual(box.height);
 	});
 
-	// Centring is not always possible: four small sources stacked at the bottom of
-	// a column have bands thinner than their own names, and relaxing spreads them
-	// down the card. What was reported as "the smaller ones are pushed down" is
-	// that, and the fix is not to pretend otherwise but to join each name back to
-	// the band it belongs to.
+	// Centring isn't always possible; a leader joins a displaced name back to its band.
 	it('draws a leader from every name that could not stay level with its band', () => {
 		const layout = buildSankey(crowdedSources, { width: 1240, height: 560 });
 		let displaced = 0;
@@ -412,10 +373,7 @@ describe('label channels', () => {
 		expect(displaced).toBeGreaterThan(0);
 	});
 
-	// The point of the rewrite: a name is level with the middle of the band it
-	// names, in every column — not above it, and not level with a neighbour's.
-	// Relaxation moves one only where two bands are thinner than their own names,
-	// which the overlap invariant covers separately.
+	// A name is level with the middle of the band it names, in every column.
 	it('centres every label on the band it names', () => {
 		const layout = buildSankey(graph, { width: 1240, height: 560 });
 		for (const node of layout.nodes) {
@@ -426,11 +384,8 @@ describe('label channels', () => {
 });
 
 /**
- * Ribbons crossing each other was reported from a real cash flow, and the file
- * explained why on its own: the ordering comment promised "two median sweeps"
- * and the code did one forward pass. A forward pass places a node before
- * anything downstream of it exists, so nothing could ever settle a column by
- * where its children ended up.
+ * Regression: a forward pass places a node before anything downstream of it
+ * exists, so it can never settle a column by where its children ended up.
  */
 describe('crossings', () => {
 	/** Two ribbons cross when their ends are ordered oppositely. */
@@ -448,10 +403,7 @@ describe('crossings', () => {
 		return count;
 	}
 
-	// Measured, not assumed. The first version of this test asserted zero
-	// crossings on a graph that had none either way — it passed with the sweep
-	// disabled, which makes it a test of nothing. This shape has three crossings
-	// without the backward sweep and none with it.
+	// This shape has three crossings without the backward sweep and none with it.
 	it('untangles a column whose children are declared in the opposite order', () => {
 		const graph = {
 			nodes: [
@@ -467,8 +419,8 @@ describe('crossings', () => {
 				{ from: 'in', to: 'a', value: 30 },
 				{ from: 'in', to: 'b', value: 30 },
 				{ from: 'in', to: 'c', value: 30 },
-				// The leaves are declared in reverse, so ordering column 1 by its
-				// parents alone — all three share one — leaves every ribbon crossing.
+				// Leaves declared in reverse: ordering column 1 by its shared parent alone
+				// would leave every ribbon crossing.
 				{ from: 'c', to: 'x', value: 30 },
 				{ from: 'b', to: 'y', value: 30 },
 				{ from: 'a', to: 'z', value: 30 }
@@ -479,13 +431,8 @@ describe('crossings', () => {
 		expect(crossings(layout.ribbons)).toBe(0);
 	});
 
-	// The shape that was reported: four income sources, seven groups and a long
-	// tail of small leaves. Ordered by value alone — which is what the code was
-	// really doing, because its "forward pass" read a map that had not been
-	// filled yet — this draws 57 crossings. With the sweeps it draws none.
+	// Ordered by value alone this draws 57 crossings; with the sweeps it draws none.
 	it('draws a household cash flow without a single crossing', () => {
-		// Shaped like the screenshot: four income sources, seven groups, and the
-		// long tail of small leaves that was fanning out and crossing.
 		const input: FlowGraphInput = {
 			sources: [
 				{ key: 'cat:salary', name: 'Salary', amount: 33237 },
@@ -566,9 +513,8 @@ describe('crossings', () => {
 		expect(crossings(layout.ribbons)).toBe(0);
 	});
 
-	// A tenth of its column used to be the test for whether a band was named at
-	// all, which left seventeen of them nameless on a real year. Type size is the
-	// variable now, not the guest list: the column shrinks to fit what it holds.
+	// Regression: a fixed tenth-of-column threshold left seventeen bands nameless
+	// on a real year. Type size now shrinks to fit what the column holds.
 	it('names every band on a real cash flow, at one size per column', () => {
 		const input: FlowGraphInput = {
 			sources: [
@@ -648,8 +594,7 @@ describe('crossings', () => {
 
 		expect(layout.labels).toHaveLength(33);
 		expect(layout.labels.every((l) => l.fits)).toBe(true);
-		// The income side is read as figures, the spending side as names — every
-		// spending figure is already in the breakdown strip under the diagram.
+		// The income side is read as figures; spending figures are already in the breakdown strip.
 		const shows = (column: number) => layout.labels.find((l) => l.column === column)!.showValue;
 		expect(shows(0)).toBe(true);
 		expect(shows(1)).toBe(true);
@@ -697,9 +642,7 @@ describe('crossings', () => {
 		expect(tight.labels.every((l) => l.fits)).toBe(true);
 	});
 
-	// Shrinking covers every household this draws; only a column with more names
-	// than a floor-sized label can stack loses any. The biggest bands keep theirs,
-	// and the rest are still on hover and in the breakdown strip.
+	// The biggest bands keep their labels; the rest are still on hover and in the breakdown strip.
 	it('drops only what a floor-sized label still cannot fit, smallest first', () => {
 		const layout = buildSankey(crowded(40), { width: 900, height: 300 });
 		const named = layout.labels.filter((l) => l.column === 1 && l.fits);
@@ -713,8 +656,7 @@ describe('crossings', () => {
 	});
 
 	it('stacks a node’s incoming bands by where they came from', () => {
-		// Two sources into one target. The bands must arrive in the order the
-		// sources sit in, or they cross each other inside the target.
+		// Bands must arrive in the order the sources sit in, or they cross inside the target.
 		const graph = {
 			nodes: [
 				{ key: 'top', label: 'Top', value: 30, colorVar: '--green', column: 0 },

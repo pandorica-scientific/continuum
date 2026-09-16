@@ -3,15 +3,10 @@
  * Telling a portfolio statement from a bank statement.
  *
  * A holdings snapshot lists what you own; a bank statement lists money moving.
- * Both print balances, which is why the difference has to be stated rather than
- * assumed — Robinhood's monthly document shows an opening and closing balance
- * and not one transaction, because it says outright that the transactions live
- * in the mobile app.
- *
- * Feeding it to the ledger cannot work: the change between its two balances is
- * market movement, not booked movements, so it can never reconcile. Refusing it
- * with "no transactions found" would be true and useless. Naming what it is
- * lets us offer the thing the person actually wants.
+ * Both print balances, so the difference has to be stated rather than assumed.
+ * Feeding a holdings snapshot to the ledger cannot work: the change between its
+ * two balances is market movement, not booked movements, so it can never
+ * reconcile. Naming what it is beats a useless "no transactions found".
  */
 import { normalise } from './tabular/vocabulary';
 

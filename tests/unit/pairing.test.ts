@@ -63,10 +63,8 @@ describe('accountKeysMatch', () => {
 		).toBe(false);
 	});
 
-	// The household holds mBank Polska and Revolut accounts. Requiring a Czech
-	// identity on both sides meant these never matched: the transfer kept
-	// counting as real income and spending, and the import minted a duplicate
-	// account rather than recognising the one it already had.
+	// Regression: requiring a Czech identity on both sides meant foreign accounts
+	// never matched, so the import minted a duplicate account instead of the real one.
 	it('matches a non-Czech national number against its own IBAN', () => {
 		expect(
 			accountKeysMatch(
@@ -86,8 +84,7 @@ describe('accountKeysMatch', () => {
 	});
 
 	it('does not compare a Czech reference as a flat run of digits', () => {
-		// The local form reorders the IBAN's fields, so a digit-core comparison
-		// would be wrong in both directions.
+		// The local form reorders the IBAN's fields, so a digit-core comparison would be wrong.
 		expect(
 			accountKeysMatch(
 				normaliseAccountKey('93531803/5500'),

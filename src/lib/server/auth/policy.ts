@@ -17,15 +17,9 @@ interface PolicyPerson {
 
 /**
  * The one definition of "this person could sign in and administer the instance
- * right now". Two things disqualify an administrator: being deactivated, and
- * having been created by an administrator but never having opened their
- * enrollment link to choose a password.
- *
- * Both halves of every guard below rest on it — the count of administrators
- * still standing, and whether the person being acted on is one of them — so it
- * lives here rather than being spelled out twice in slightly different words.
- * The SQL that produces the count has to mirror it exactly; see
- * lockActiveAdminCount in the settings page.
+ * right now": not deactivated, and has a password (enrolled). Every guard
+ * below rests on it. The SQL that produces the admin count must mirror it
+ * exactly; see lockActiveAdminCount in the settings page.
  */
 export function canSignIn(row: {
 	deactivatedAt: Date | null;
@@ -36,13 +30,8 @@ export function canSignIn(row: {
 
 /**
  * The person an operation acts on, carrying whether they are one of the
- * administrators `activeAdminCount` counts.
- *
- * Testing `role === 'admin'` alone conflated two different people. It refused
- * demoting an administrator who was already deactivated — an operation that
- * cannot reduce the count, reported with a message naming somebody else as the
- * last administrator — and, worse in the other direction, it let an
- * administrator who had never enrolled stand in for a real one.
+ * administrators `activeAdminCount` counts. Deliberately not just `role`,
+ * which conflates "is admin" with "counts toward the last-admin guard".
  */
 export interface PolicyTarget extends PolicyPerson {
 	canSignIn: boolean;
@@ -99,9 +88,7 @@ export function requireAdmin(person: PolicyPerson | null): void {
  * or a tax statement for them, attach paper to it, remove it?
  *
  * A member acts for themself; an administrator acts for anybody; a request
- * with nobody signed in acts for no one. Every screen that takes "whose" from
- * a form or reads it from a row asks this one question, so the answer cannot
- * differ between the salary and tax screens the way it once did.
+ * with nobody signed in acts for no one.
  */
 export function mayActFor(actor: PolicyPerson | null | undefined, personId: string): boolean {
 	if (!actor) return false;

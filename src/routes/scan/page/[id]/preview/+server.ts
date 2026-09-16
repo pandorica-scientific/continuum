@@ -2,10 +2,8 @@
 /**
  * The preview the inspection screen shows.
  *
- * Served as a file rather than returned inside the render response: a preview
- * is a couple of hundred kilobytes, and base64 in JSON would carry it a third
- * larger through a parser that has to hold the whole string. An `<img src>`
- * streams it and the browser caches nothing it should not.
+ * Served as a file rather than base64 in the render response — avoids the ~33%
+ * size overhead and the whole-string parse cost for a few-hundred-KB image.
  */
 import { error } from '@sveltejs/kit';
 import { existsSync } from 'node:fs';
@@ -22,9 +20,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
 	return new Response(new Uint8Array(await readFile(previewPath)), {
 		headers: {
 			'content-type': 'image/png',
-			// Each render overwrites this path, so the client cache-busts with a
-			// token of its own. Nothing here may be held: the same URL is a
-			// different picture after every mode tap.
+			// Each render overwrites this path — the same URL is a different picture each time.
 			'cache-control': 'no-store'
 		}
 	});

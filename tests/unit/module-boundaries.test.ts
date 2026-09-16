@@ -4,13 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * `src/lib/server` held twenty loose files beside nine directories, so where a
- * new domain belonged was a coin toss and the answer drifted: `calendar.ts` sat
- * beside `calendar/`, `policy.ts` beside `auth/policy.ts`, `demo.ts` beside
- * `home/demo.ts`.
- *
- * One rule fixes that permanently — a domain is a directory — and it is only a
- * rule if something checks it.
+ * A domain is a directory in `src/lib/server` — enforced here so it stays true.
  */
 const SERVER = 'src/lib/server';
 
@@ -24,19 +18,8 @@ describe('src/lib/server', () => {
 	});
 
 	/**
-	 * The rule used to be "every directory has an index.ts", and it was enforced
-	 * and defeated at the same time: seven barrels existed because the test
-	 * demanded them and nothing imported any of them, while every real caller
-	 * reached past them into submodules.
-	 *
-	 * A barrel is not the goal — being importable as a unit is, and most domains
-	 * genuinely are. Where one is not, the honest answer is no barrel rather than
-	 * an empty one, because a `export *` over a whole domain has a real cost:
-	 * `import/` deliberately never had one, since it would pull the OCR and PDF
-	 * stacks into every caller that only wanted a type.
-	 *
-	 * So the rule is now about dead ends. An `index.ts` nothing imports is a
-	 * second, unused way in, and it is exactly what accumulated last time.
+	 * An `index.ts` nothing imports is a second, unused way into a domain, not a
+	 * barrel worth keeping.
 	 */
 	it('has no entry point nothing enters through', () => {
 		const sources = [...walk('src'), ...walk('tests')];

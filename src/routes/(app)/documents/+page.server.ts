@@ -115,13 +115,9 @@ import type { Actions, PageServerLoad } from './$types';
 /**
  * What the centre column draws: the list, the shelf's own layout, or Tags.
  *
- * The rail stays put whichever it is — a view is a thing the rail opens, not a
- * screen of its own.
- *
- * A SEARCH always falls back to the list: snippets are where a match is
- * explained, and a card face has nowhere to put a matched line of contents.
- * `?view=list` forces the list on any shelf, and is what the toolbar's own
- * switch writes, so the choice survives a reload and a shared link.
+ * `?view=list` forces the list on any shelf, so the choice survives a reload
+ * and a shared link. A SEARCH always falls back to the list — a match is
+ * explained by a snippet, and a card face has nowhere to put one.
  */
 function centreView(
 	asked: string | null,
@@ -129,28 +125,18 @@ function centreView(
 	engine: ShelfEngine | null
 ): 'tags' | 'list' | 'shelf' {
 	if (asked === 'tags') return 'tags';
-	// A search is explained by the line it was found in, and a card face has
-	// nowhere to put one. Everything has no single engine to draw.
 	if (asked === 'list' || query) return 'list';
 	return engine ? 'shelf' : 'list';
 }
 
-/**
- * How the list groups when nobody has said otherwise.
- *
- * One answer for every shelf, because the list is a secondary view now: the
- * shelf's own engine is what a shelf is FOR, and a per-shelf default grouping
- * for the fallback view was a preference nobody expressed.
- */
+/** How the list groups when nobody has said otherwise. One default for every shelf. */
 const DEFAULT_GROUP = 'type';
 
 /**
  * The types on the shelf, in the order the shelf offers them, then by weight.
  *
  * `shelf_type.ordinal` is what a person dragged into place, so it decides; a
- * type on the shelf that is not in the list follows, heaviest first. This
- * replaces `orderTypeOptions`, which ranked against a hard-coded `expects`
- * array and so could disagree with the list the household had edited.
+ * type on the shelf that is not in the list follows, heaviest first.
  */
 function orderShelfTypes<T extends { code: string; count: number }>(
 	types: T[],
@@ -170,14 +156,10 @@ const PERIOD_BACKWARDS = Symbol('period backwards');
 /**
  * The months a document says it covers, snapped to whole ones.
  *
- * Snapped and not stored verbatim, because that is what the columns MEAN:
- * `document_period_first_of_month` and its mirror have said so since before this
- * shelf existed, and the coverage ribbon works in whole months regardless. So a
- * person typing the 15th is saying "this month", and gets it — rather than a
- * constraint violation for answering the question as asked.
- *
+ * `document_period_first_of_month` and its mirror are whole-month columns, so
+ * a person typing the 15th is answered as "this month" rather than refused.
  * An end with no start is dropped rather than refused: half an answer is a
- * person part-way through filling the pair in, not an error worth a red banner.
+ * person still filling the pair in, not an error.
  */
 function coveredMonths(
 	form: FormData
@@ -198,15 +180,11 @@ const bannerToday = (): string => new Date().toISOString().slice(0, 10);
 /**
  * A shelf's banner figures, with the two only Statements can answer.
  *
- * `accounts` and `gaps` are facts about COVERAGE — which months are accounted
- * for — and `shelf-stats` counts document rows. Answering them there would have
- * meant a second reading of what a gap is, so they are filled from the coverage
- * loader that already knows.
+ * `accounts` and `gaps` are coverage facts, not document-row counts, so they
+ * come from the coverage loader rather than being recomputed here.
  */
 async function tileFactsFor(shelfRow: ShelfRow, dossier: DossierPayload | null) {
 	const facts = await shelfFacts(shelfRow);
-	// A dossier's cards and holes are what its own loader drew; the row count
-	// cannot see a lane.
 	if (dossier)
 		return {
 			...facts,
@@ -214,9 +192,6 @@ async function tileFactsFor(shelfRow: ShelfRow, dossier: DossierPayload | null) 
 			missing: dossierMissing(dossier)
 		};
 	if (templateEngine(shelfRow.template) !== 'completeness') return facts;
-	// A gap is a fact about periods, and the coverage loader is what knows it.
-	// Counting holes a second time from document rows would be a second answer
-	// to one question.
 	return {
 		...facts,
 		cards: await coverageAccountCount(),
@@ -227,8 +202,7 @@ async function tileFactsFor(shelfRow: ShelfRow, dossier: DossierPayload | null) 
 export const load: PageServerLoad = async ({ url, locals }) => {
 	const shelf = url.searchParams.get('shelf') ?? 'all';
 	const query = url.searchParams.get('q') ?? '';
-	// Filters narrow the list and never the rail. Several tags AND together:
-	// "insurance" and "car" is the car's insurance, not everything about either.
+	// Several tags AND together: "insurance" and "car" is the car's insurance.
 	const tagFilters = url.searchParams.getAll('tag').filter(Boolean);
 	const typeFilter = url.searchParams.get('type') ?? '';
 	const entityFilter = url.searchParams.get('entity') ?? '';
@@ -236,10 +210,9 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const openDocumentId = url.searchParams.get('doc') ?? '';
 	const isAdmin = locals.person?.role === 'admin';
 
-	// Other screens open capture pre-addressed by id, never by name:
-	// ?add=1&addShelfKey=tenancy&targetKind=tenancy&targetId=…
-	// `personId=`/`propertyId=` are the two older spellings of the same thing,
-	// kept because links to them are already out in the app.
+	// A contextual capture is pre-addressed by id: ?add=1&addShelfKey=tenancy&
+	// targetKind=tenancy&targetId=… `personId=`/`propertyId=` are older
+	// spellings of the same thing, kept because links to them are already live.
 	const addShelfKey = url.searchParams.get('addShelfKey') ?? '';
 
 	const readable = archiveScopePredicate(includeArchived);
@@ -253,46 +226,29 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	] = await Promise.all([
 		readDocumentsScreen({ readable }),
 		listShelves(),
-		// Behind the same read rule as everything else on this screen: a member
-		// seeing "3" beside the car has been told about a document they cannot
-		// open. The archive scope is deliberately NOT applied to these counts —
-		// see `listSubjects`.
+		// Archive scope is deliberately NOT applied to these counts — see `listSubjects`.
 		listSubjects(db),
-		// The kinds the document side may pick, from the registry — which is the
-		// one list. Whole, because a picker is a list of what could be chosen.
-		// The four hand-written selects this replaces were the reason a receipt's
-		// transaction had no name and an ordinary bank account had no chip: one of
-		// them asked for brokerage accounts only, because one screen once did.
-		// (Names for what the documents point at are read below, by id.)
 		shelfTypesByKey(),
 		listDocumentTypes()
 	]);
 
-	// The shelf being looked at, and how it draws. Both come off the row now:
-	// a shelf is one question, one unit, one template, and a shelf the household
-	// made carries all three exactly as a seeded one does.
+	// A shelf is one question, one unit, one template, all read off the row.
 	const shelfRow = shelf === 'all' ? null : (shelves.find((s) => s.key === shelf) ?? null);
 	const engine = shelfRow ? templateEngine(shelfRow.template) : null;
 	const view = centreView(url.searchParams.get('view'), query, engine);
 
-	// About offers only what belongs on this shelf. A document belongs to one
-	// shelf and never links across shelves, so a car's paper is offered the cars
-	// and not the boiler.
+	// A document belongs to one shelf and never links across shelves, so a
+	// car's paper is offered the cars and not the boiler.
 	const shelfTargets = await pickableTargetsForShelf(shelfRow, db);
 
-	// Drawn before the tiles, because `missing` is a fact about the cells and
-	// counting holes a second time from document rows would be a second answer
-	// to one question.
-	// The Inbox IS the queue: filing is what the shelf is for, so it draws the
-	// decision rather than a link to a page that carries it.
+	// The Inbox IS the queue: filing is what the shelf is for.
 	const queue =
 		view === 'shelf' && engine === 'queue'
 			? await loadQueue(db, bannerToday(), openDocumentId)
 			: null;
 
 	// Drawn whatever the view: the band answers the SHELF's question, and the
-	// question does not change because somebody pressed List. Opening the list
-	// used to report "missing 0" on a shelf with three holes in it.
+	// question does not change because somebody pressed List.
 	const dossier =
 		engine === 'dossier' && shelfRow
 			? await loadDossier(
@@ -311,9 +267,6 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		pickable: boolean;
 	}
 
-	// A prefilled capture is addressed by kind and id and resolved through the
-	// registry, so a screen added later needs nothing here: `targetKind=loan`
-	// works the day `loan` is registered.
 	const requested = [
 		...url.searchParams.getAll('targetId').map((id) => ({
 			kind: url.searchParams.get('targetKind') ?? '',
@@ -323,17 +276,9 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		...url.searchParams.getAll('propertyId').map((id) => ({ kind: 'property', id }))
 	];
 
-	// Names are read for the records THESE documents point at, and for whatever
-	// a contextual add pre-addresses — by id, never by table. Unfiltered, the
-	// registry reads every kind whole, and `transaction` whole is the household's
-	// entire ledger, each row formatted in JS, to label the two receipts on
-	// screen.
-	//
-	// The Tags view draws no list, so it needs no name; the inspector can still
-	// be open beside it (`?view=tags&doc=…`), and its links must arrive named —
-	// a Save from a panel holding unnamed links is exactly the forgetting this
-	// screen was fixed for. So the narrowing is "what is on screen", which for
-	// the Tags view is the open document alone and usually nothing at all.
+	// Names are read only for what's on screen: the links these documents
+	// carry, and any contextual-add prefill. The Tags view draws no list, so
+	// only the open document's links (if any) need a name there.
 	const namesNeeded = new Set<string>();
 	for (const link of docLinks) {
 		if (view === 'tags' && link.documentId !== openDocumentId) continue;
@@ -352,8 +297,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const prefillTargets: DocumentLinkRow[] = [];
 	for (const { kind, id } of requested) {
 		if (!id || !isDocumentTargetKind(kind)) continue;
-		// Resolved rather than trusted: an id off a URL that names nothing is a
-		// hidden input the capture form would post into a foreign key violation.
+		// Resolved rather than trusted: a URL id that names nothing must not
+		// become a hidden input the capture form posts as a foreign key violation.
 		const row = targetRow(kind, id);
 		if (row) prefillTargets.push(row);
 	}
@@ -370,9 +315,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const targetsByDoc = new Map<string, DocumentLinkRow[]>();
 	const archivedByDoc = new Set<string>();
 	for (const link of docLinks) {
-		// `document_link` points at `entity`, which includes kinds that are not
-		// places to file paper — another document, a tag. The registry is what
-		// says which of them the screen draws.
+		// `document_link` also points at kinds that aren't filing targets
+		// (another document, a tag); the registry says which ones are.
 		if (!isDocumentTargetKind(link.kind)) continue;
 		const row = targetRow(link.kind, link.targetId);
 		if (!row) continue;
@@ -382,9 +326,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		if (row.archived) archivedByDoc.add(link.documentId);
 	}
 
-	// Registry order, then by name: the chips under the inspector's About read
-	// the same way round on every document, and the read-only kinds sit last
-	// because that is where the registry puts them.
+	// Registry order, then by name, so the chips under About read the same way
+	// on every document.
 	const kindOrder = new Map(DOCUMENT_TARGET_KINDS.map((kind, index) => [kind, index]));
 	for (const links of targetsByDoc.values()) {
 		links.sort(
@@ -409,8 +352,6 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		return row ? { kind: row.kind, country: row.country, number: row.number ?? null } : null;
 	};
 
-	// Searching happens in SQL, not over the loaded array: the tiers are what
-	// make a name match outrank a mention on page forty.
 	const search = query
 		? await searchDocuments(query, {
 				includeArchived,
@@ -423,9 +364,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const readableTotal = railCounts.reduce((sum, r) => sum + r.n, 0);
 
 	// The Inbox is where paper waits, not a shelf among the others: nothing in
-	// it appears under Everything until it has been filed. A search still finds
-	// it — a person hunting for a document they dropped in an hour ago should
-	// not be told it does not exist — and the row says "Inbox".
+	// it appears under Everything until filed. A search still finds it.
 	const onShelf = docs.filter((d) =>
 		shelf === 'all' ? Boolean(query) || d.shelfKey !== 'inbox' : d.shelfKey === shelf
 	);
@@ -444,18 +383,10 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		return true;
 	});
 
-	// What the filters can offer: every tag, type and entity that appears on
-	// the shelf in view, with how many documents each would leave. Derived from
-	// the scope rather than the whole archive, so a filter never offers a
-	// choice that empties the list.
+	// What the filters can offer, derived from the scope rather than the whole
+	// archive, so a filter never offers a choice that empties the list.
 	const tagCounts = new Map<string, number>();
 	const typeCounts = new Map<string, number>();
-	// The whole row travels with the count, not just its name. Every kind is
-	// named now, so the second lookup that used to search every document's links
-	// for the kind of one id — and then a four-kind map for its name — has
-	// nothing left to do; and the filter needs the heading and the second line
-	// as much as the chips do, because "Alza 2026-03-04" sitting between
-	// "Robert" and "Vinohrady flat" in one flat list is unreadable.
 	const entityCounts = new Map<string, { row: DocumentLinkRow; count: number }>();
 	for (const d of onShelf) {
 		for (const t of tagsByDoc.get(d.id) ?? []) tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1);
@@ -470,20 +401,13 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
 			.map(([name, n]) => ({ name, count: n })),
 		// What the shelf expects first, then by how many documents each would
-		// leave: opening Identity's type filter should start with Identity
-		// document rather than with whatever happens to be most numerous.
+		// leave: Identity's type filter starts with Identity document, not
+		// whatever happens to be most numerous.
 		types: orderShelfTypes(
 			[...typeCounts.entries()].map(([code, n]) => ({ code, count: n })),
-			// The household's own list, which the seed only started. Its ORDER is
-			// the answer now: `shelf_type.ordinal` is what a person dragged, and a
-			// registry that re-sorted it would be a second opinion about the same
-			// question.
 			shelfTypes.get(shelf) ?? []
 		),
-		// Registry order first, so the groups the screen draws come out in the
-		// same order as the chips under About; then by how many documents each
-		// would leave. The view groups on `groupLabel` and never re-sorts, which
-		// is what keeps one opinion about order rather than two.
+		// Registry order first, matching the chips under About; then by count.
 		entities: [...entityCounts.values()]
 			.filter((e) => e.row.name)
 			.sort(
@@ -511,11 +435,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			shelfKey: d.shelfKey,
 			shelfLabel: d.shelfLabel,
 			entities: entitiesByDoc.get(d.id) ?? [],
-			// The same links the row already carries by name, with the id and the
-			// kind a layout groups by. Named separately from `entities` because
-			// that one is a sub-line and this one is a section header: the list
-			// wants "Robert, Vinohrady flat" and the wallet wants to know which of
-			// those two is the person.
+			// Same links as `entities`, by id and kind, for a layout that groups
+			// by section header rather than a sub-line of names.
 			about: (targetsByDoc.get(d.id) ?? []).map(({ id, kind, name }) => ({ id, kind, name })),
 			tags: tagsByDoc.get(d.id) ?? [],
 			addedOn: d.addedOn,
@@ -524,10 +445,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			expiresOn: d.expiresOn,
 			expiryVerb: d.expiryVerb,
 			subjectArchived: archivedByDoc.has(d.id),
-			// What a wallet card draws: the kind it calls itself and the country
-			// whose artwork it is on. The document NUMBER is deliberately absent —
-			// a card face is glanced at with other people in the room, and a field
-			// that never reaches the browser cannot be read off a screen.
+			// The document NUMBER is deliberately absent — a card face is glanced
+			// at with other people in the room.
 			identity: identityFor(d.id),
 			ext: d.ext,
 			hasFile: d.storedName !== null,
@@ -555,9 +474,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const inboxKey = shelves.find((s) => s.system && s.key === 'inbox')?.key ?? 'inbox';
 	const selected = openDocumentId ? docs.find((d) => d.id === openDocumentId) : undefined;
 
-	// The lanes of the card the open document names, for the inspector's Lane
-	// picker. A lane belongs to one card, so a document naming no card has none
-	// to choose from — and off a dossier shelf there are no lanes at all.
+	// A lane belongs to one card, so a document naming no card has none to
+	// choose from — and off a dossier shelf there are no lanes at all.
 	const selectedLanes =
 		selected && engine === 'dossier' ? await lanesForDocument(selected.id, shelfRow, db) : [];
 
@@ -570,13 +488,10 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		filterOptions,
 		includeArchived,
 		isAdmin,
-		// The shelf's own default, so Finance opens by year and Identity by who it
-		// is about; the control still nulls the parameter at whatever the shelf
-		// would have done on its own.
+		// The shelf's own default, so Finance opens by year and Identity by who
+		// it is about.
 		group: url.searchParams.get('group') ?? DEFAULT_GROUP,
 		defaultGroup: DEFAULT_GROUP,
-		// Every kind of paper this household files, built-in and its own. Drawn
-		// from here rather than from the enum, which is only what ships.
 		documentTypes,
 		/** The layout being drawn, or null whenever the centre column is the list. */
 		layout: view === 'shelf' ? engine : null,
@@ -584,17 +499,11 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		shelfLayout: engine,
 		emptyHint: shelfRow?.question ?? null,
 		/**
-		 * The three figures the banner shows, or null where there is no one shelf
-		 * to describe: "Everything" is not a shelf, and a result set is not one
-		 * either — a banner over search results would be describing the shelf you
-		 * left rather than what is on screen.
-		 */
-		/**
 		 * What the screen is called and what it is for.
 		 *
 		 * The shelf IS the screen: its name is the title and its question is the
-		 * caption. Everything says "Documents" only on Everything, which is not a
-		 * shelf and has no one question.
+		 * caption. "Documents" is shown only on Everything, which has no one
+		 * question.
 		 */
 		screen: shelfRow
 			? {
@@ -606,9 +515,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			: {
 					emoji: '🗂️',
 					label: 'Everything',
-					// `everywhereCount` is a row array, not a number — line 719 already
-					// reads it as `everywhereCount[0]?.n`. Passed whole, the header
-					// rendered "[object Object] documents".
+					// `everywhereCount` is a row array, read as `everywhereCount[0]?.n`.
 					count: everywhereCount[0]?.n ?? 0,
 					question:
 						'One archive for the household. Shelf is where in life, type is what kind, links are what it concerns.'
@@ -617,35 +524,24 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		tiles: shelfRow
 			? shelfTiles(engine!, await tileFactsFor(shelfRow, dossier))
 			: archiveTiles(await archiveFacts()),
-		/**
-		 * The organisations the household deals with, for the rail's third
-		 * section. Counted behind the same read rule as everything else here.
-		 */
+		/** The rail's third section. Counted behind the same read rule as everything else here. */
 		organisations: await listOrganisations(db),
 		/**
 		 * What the lanes think should be filed, and where.
 		 *
 		 * Computed, never stored: a stored proposal goes stale the moment a lane
-		 * is edited or the document is filed by hand, and then the screen argues
-		 * with the archive.
+		 * is edited or the document is filed by hand.
 		 */
 		proposals: view === 'shelf' && engine === 'dossier' ? await loadProposals(db) : [],
 		/** The cards, or null when the centre column draws the list. */
 		dossier: view === 'shelf' ? dossier : null,
 		/** The Inbox's own queue, or null. */
 		queue,
-		/**
-		 * The lanes of the card the OPEN document names, for the inspector's
-		 * Lane picker. Empty off a dossier shelf and empty for a document that
-		 * names no card: a lane belongs to one card.
-		 */
+		/** The lanes of the OPEN document's card, for the inspector's Lane picker. */
 		selectedLanes,
 		/** Card ids collapsed to one line. In the address, so a bookmark keeps it. */
 		closed: (url.searchParams.get('closed') ?? '').split(',').filter(Boolean),
-		/**
-		 * The ribbon, or null whenever it is not what the centre column draws —
-		 * the list is one press away and does not need this payload.
-		 */
+		/** The ribbon, or null whenever the centre column doesn't draw it. */
 		coverage:
 			view === 'shelf' && engine === 'completeness'
 				? await loadCoverage(
@@ -656,7 +552,6 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 					)
 				: null,
 		sort: url.searchParams.get('sort') ?? 'newest',
-		// What the screen is allowed to say about what it could not find.
 		honesty: search?.honesty ?? null,
 		prefill,
 		shelves: [
@@ -668,9 +563,6 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 				count: readableTotal - (shelfCounts.get(inboxKey) ?? 0),
 				system: true,
 				emoji: '',
-				// Everything is a view of all the shelves rather than one of them,
-				// so it has no list of its own to offer or to edit. Typed, so the
-				// rail's editor sees one shape of `types` across every shelf.
 				types: [] as DocumentTypeKey[]
 			},
 			...shelves.map((s) => ({
@@ -680,15 +572,11 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 				emoji: s.emoji,
 				system: s.system,
 				count: shelfCounts.get(s.key) ?? 0,
-				// The rail's type editor reads this; the filter above uses the same
-				// rows, so what a shelf offers is stated once.
 				types: shelfTypes.get(s.key) ?? []
 			}))
 		],
-		// The rail's SUBJECTS section. Archived ones travel too, and the view
-		// draws them only under `?archived=1` — the rail says how many it is
-		// keeping back, because a subject that vanished from the only screen
-		// that can un-archive it would be a one-way door.
+		// Archived subjects travel too, drawn only under `?archived=1`, with the
+		// rail saying how many it is keeping back.
 		subjects: subjects.map((s) => ({
 			id: s.id,
 			name: s.name,
@@ -697,39 +585,26 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			count: s.documentCount
 		})),
 		inboxCount: shelfCounts.get(inboxKey) ?? 0,
-		// How many the archive scope is currently hiding — the affordance's number.
 		archivedHidden: Math.max(0, (everywhereCount[0]?.n ?? 0) - readableTotal),
 		rows: visible.map(rowOf),
 		total: visible.length,
 		selected: selected
 			? {
 					...rowOf(selected),
-					// `PDF · 412 kB · added 2026-02-11` — the header's own sub-line.
+					// `PDF · 412 kB · added 2026-02-11`.
 					fileSize: selected.storedName ? await uploadSize(selected.storedName) : null,
-					// The inspector is the one place the number is shown, and it is
-					// masked there until asked for. Sent for every selected document,
-					// not only for identity ones: a document retyped away from
-					// `id_document` keeps its fields, and the screen decides whether
-					// to draw them from the type it is currently showing.
+					// Masked until asked for; sent for every selected document since a
+					// retyped document keeps its identity fields.
 					identityDetail: identityByDoc.get(selected.id) ?? null,
-					// Inspector-only, like the number they sit beside: a card face
-					// never shows one, so no row on the shelf needs to carry them.
 					identityNumbers: await identityNumbersFor(selected.id),
 					links: targetsByDoc.get(selected.id) ?? [],
-					// Which lane on its card holds it, or null for history.
 					laneId: selected.laneId
 				}
 			: null,
-		// Every tag the household has, so the tag field offers them rather than
-		// letting a near-miss create a second one.
 		knownTags: tags.map((t) => t.name).sort((a, b) => a.localeCompare(b)),
-		// Records the document side may pick, in registry order and carrying the
-		// heading each belongs under — never suggestions to retype. A kind it may
-		// NOT pick reaches the screen on the document's own `links` instead: it is
-		// shown, and it can be unlinked, but it cannot be chosen from a list of
-		// every transaction the household has.
-		// Narrowed to the shelf: a document belongs to one shelf and never links
-		// across shelves, so a car's paper is offered the cars and not the boiler.
+		// A kind the document side may NOT pick reaches the screen on the
+		// document's own `links` instead — shown and unlinkable, but not
+		// choosable from a list of every transaction the household has.
 		pickableTargets: shelfTargets.map((row) => ({
 			...row,
 			groupLabel: documentTargetSpec(row.kind).groupLabel
@@ -739,8 +614,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 
 /**
  * The one place capture, the inspector and the bulk bar agree on what the
- * tag field posts: one `tags` input per tag, and a bare comma-separated string
- * still accepted from a plain input.
+ * tag field posts: one `tags` input per tag, a comma-separated string still accepted.
  */
 async function readTags(form: FormData): Promise<string[]> {
 	return form
@@ -751,12 +625,7 @@ async function readTags(form: FormData): Promise<string[]> {
 }
 
 export const actions: Actions = {
-	/**
-	 * Capture: a file, a generated name, and the Inbox.
-	 *
-	 * No required enrichment, ever (D10). Everything else on the form is
-	 * optional, and a contextual add pre-applies what Continuum already knows.
-	 */
+	/** Capture: a file, a generated name, and the Inbox. No required enrichment, ever. */
 	addDocument: async ({ request }) => {
 		const form = await request.formData();
 		const shelfKey = String(form.get('shelf') ?? '') || 'inbox';
@@ -767,9 +636,7 @@ export const actions: Actions = {
 			return fail(400, { message: 'That shelf no longer exists.' });
 		}
 
-		// Several files at once is the ordinary case — a folder's worth of scans,
-		// a phone's camera roll. Each becomes its own document, named after its
-		// file; the optional fields on the form apply to all of them.
+		// Several files at once becomes several documents, named after each file.
 		const files = form.getAll('file').filter((f): f is File => f instanceof File && f.size > 0);
 		const typedName = String(form.get('name') ?? '').trim();
 		if (files.length === 0 && !typedName) {
@@ -787,10 +654,6 @@ export const actions: Actions = {
 				String(form.get('expiryVerb') ?? 'expires'),
 				'expires'
 			),
-			// Every record this document was pointed at, ticked in its picker or
-			// pre-applied by the screen that sent us here, arrives on `linkIds` and
-			// of any registered kind — a per-kind field here could not have carried
-			// a tenancy or a loan anyway: no screen ever wrote a `loanIds` input.
 			targetIds: form.getAll('linkIds').map(String).filter(Boolean),
 			newSubjectName: String(form.get('newSubject') ?? '').trim() || undefined,
 			tagNames: await readTags(form)
@@ -804,7 +667,6 @@ export const actions: Actions = {
 				name: typedName,
 				storedName: null,
 				ext: 'PDF',
-				// No file, no bytes to fingerprint.
 				contentHash: null,
 				...shared
 			});
@@ -839,9 +701,6 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const id = String(form.get('id') ?? '').trim();
 		if (!id) return fail(400, { message: 'Which document?' });
-		// Existence is a fact about the document, not about the list it was read
-		// from. An id posted straight at this action has been through no list at
-		// all, so the question is asked here before anything is written.
 		const present = await assertDocumentExists(id);
 		if (!present.ok) return fail(present.status, { message: present.message });
 
@@ -858,16 +717,9 @@ export const actions: Actions = {
 		const type = asDocumentType(form.get('type'), await documentTypeKeys());
 		const wanted = form.getAll('linkIds').map(String).filter(Boolean);
 
-		// Two edits would quietly orphan the salary a month is credited with —
-		// retyping the payslip, and unticking the person the entry belongs to.
-		// The rule itself is `salaryGuardedDocuments`, because the bulk bar has
-		// to ask the same question about forty documents at once and two
-		// spellings of it are two places for it to drift.
-		//
-		// Refused rather than cascaded: taking the salary entry away as a side
-		// effect of an edit to a document would be a far bigger thing than the
-		// edit asked for. Removing the payslip is how the entry goes, and that
-		// decision belongs on the Salary screen where the figure is visible.
+		// A retype or unlink can orphan the salary a payslip evidences; refused
+		// here rather than cascaded, since dropping the entry is a bigger thing
+		// than the edit asked for. Removing the payslip is how the entry goes.
 		const guarded = await salaryGuardedDocuments([id], { type, keptTargetIds: wanted });
 		if (guarded.length > 0) return fail(409, { message: SALARY_ENTRY_REFUSAL });
 
@@ -894,18 +746,11 @@ export const actions: Actions = {
 				})
 				.where(eq(document.id, id));
 
-			// A diff, not a replacement. The form carries every link the document
-			// has — the pickable kinds as checkboxes, the rest as hidden inputs
-			// behind their read-only chips — so what comes back IS the intended
-			// set, and what is missing from it was unticked on purpose. Deleting
-			// them all first and re-inserting the form's list destroyed every link
-			// the picker could not offer: a receipt's transaction, a tax
-			// attachment's statement, a bank statement's account.
-			// Only the kinds the screen can draw are compared. A link to something
-			// the registry does not know is not on the form because no chip could
-			// be drawn for it, so leaving it out of `held` is what keeps a save
-			// from removing a link nobody was shown — the same failure in a
-			// different key.
+			// A diff, not a replacement: the form carries every link the document
+			// has, so re-inserting it wholesale would destroy links the picker
+			// can't offer (a receipt's transaction, a statement's account). Only
+			// the kinds the screen can draw are compared, so an unlisted link is
+			// never mistaken for one that was unticked.
 			const held = await tx
 				.select({ targetId: documentLink.targetId })
 				.from(documentLink)
@@ -929,32 +774,23 @@ export const actions: Actions = {
 					.onConflictDoNothing();
 			}
 
-			// The identity fields, when this is the kind of paper that has them.
-			//
-			// Written only for `id_document`, and never cleared for anything else:
-			// a document retyped to Other keeps what somebody typed off its face,
-			// so a mis-set dropdown costs a click rather than five fields. The
-			// screen stops showing them, which is the whole of what "not an
-			// identity document any more" means here.
+			// Identity fields are written only for `id_document`, never cleared for
+			// anything else — a mis-set dropdown costs a click, not five fields.
 			if (type === 'id_document') {
 				await upsertIdentity(id, readIdentityFields(form), tx);
-				// After the upsert, never before: the rows hang off the identity
-				// record, so writing them first would have nothing to hang from on a
-				// document being given its identity fields for the first time.
+				// After the upsert: the numbers hang off the identity record.
 				await replaceIdentityNumbers(id, readIdentityNumbers(form), tx);
 			}
 
-			// Tags are replaced with what the form holds: the field shows every tag
-			// the document has, so what comes back IS the intended set.
+			// Tags are replaced with what the form holds.
 			await tx.delete(tagLink).where(eq(tagLink.targetId, id));
 			for (const tagName of form.getAll('tags').map(String).filter(Boolean)) {
 				const resolved = await upsertTag(tagName, tx);
 				await tx.insert(tagLink).values({ tagId: resolved.id, targetId: id }).onConflictDoNothing();
 			}
 
-			// Last, and only when the picker was shown: the lane is checked against
-			// the links, and those were only just written. An empty value is
-			// history, which is a real answer rather than an absence.
+			// Last, and only when the picker was shown: the lane is checked
+			// against the links just written.
 			if (form.has('laneId')) await assignLane(id, String(form.get('laneId')) || null, tx);
 		});
 		return { ok: true };
@@ -969,14 +805,11 @@ export const actions: Actions = {
 		if (!(file instanceof File) || file.size === 0) {
 			return fail(400, { message: 'Choose a file to put in its place.' });
 		}
-		// Before the upload is saved, not after: a refusal that had already
-		// written a file would leave litter behind it.
+		// Before the upload is saved: a refusal after would leave litter behind it.
 		const present = await assertDocumentExists(id);
 		if (!present.ok) return fail(present.status, { message: present.message });
-		// `replaceDocumentFile` hashes the bytes itself (it needs them for the
-		// document's contentHash), so this can't hand off to `saveUploadAndHash`
-		// the way the other actions do — but the read still belongs inside the
-		// try, same as theirs, so a broken file fails plainly here too.
+		// `replaceDocumentFile` hashes the bytes itself, so this reads the file
+		// directly rather than through `saveUploadAndHash`.
 		let bytes: Uint8Array;
 		let storedName: string;
 		try {
@@ -1009,7 +842,6 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const id = String(form.get('id') ?? '').trim();
 		if (!id) return fail(400, { message: 'Which document?' });
-		// A document that is not there has no more of itself to read.
 		const present = await assertDocumentExists(id);
 		if (!present.ok) return fail(present.status, { message: present.message });
 		await enqueueExtraction(id);
@@ -1017,16 +849,12 @@ export const actions: Actions = {
 		return { ok: true };
 	},
 
-	/**
-	 * Remove a document from the household: the record, its links, the salary
-	 * month a payslip evidenced, and the file.
-	 */
+	/** Remove a document: the record, its links, its salary month, and the file. */
 	deleteDocument: async ({ request }) => {
 		const form = await request.formData();
 		const id = String(form.get('id') ?? '').trim();
 		if (!id) return fail(400, { message: 'Which document?' });
-		// Not `deleteDocument`: a payslip's salary entry has to be dealt with
-		// before the row goes.
+		// Not a plain delete: a payslip's salary entry has to be dealt with first.
 		const outcome = await removeDocument(id);
 		if (!outcome.ok) return fail(outcome.status, { id, message: outcome.message });
 		return { ok: true };
@@ -1037,47 +865,29 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const selected = form.getAll('ids').map(String).filter(Boolean);
 		if (selected.length === 0) return fail(400, { message: 'Nothing was selected.' });
-		// Narrowed to the ids that are really there, and the rest is dropped.
-		// Refusing forty documents over one stale id is a louder answer than the
-		// question.
+		// Narrowed to ids that are really there; a stale id doesn't refuse the batch.
 		const ids = await existingDocumentIds(selected);
 		if (ids.length === 0) return fail(404, { message: NO_SUCH_DOCUMENT });
 
 		const shelfKey = String(form.get('shelf') ?? '');
 		const type = String(form.get('type') ?? '');
-		// Normalised once, here — the inspector's own `updateDocument` already
-		// normalises before its guard call; this bar used to guard on the raw
-		// string and only normalise at the write below, two readings of the same
-		// field that happened to agree only because nothing but an exact
-		// 'payslip' match takes either branch differently. One value now feeds
-		// both, the same way the inspector's does. Empty stays empty — asEnumValue
-		// would otherwise fall back to the truthy 'other' and turn "no type was
-		// selected" into "retype everything to Other".
+		// Empty stays empty here — asEnumValue would otherwise fall back to
+		// 'other' and turn "no type selected" into "retype everything to Other".
 		const normalisedType = type ? asDocumentType(type, await documentTypeKeys()) : '';
 		const addTags = await readTags(form);
 		const linkIds = form.getAll('linkIds').map(String).filter(Boolean);
 
-		// The same guard the inspector applies, answered for the whole selection
-		// at once. A retype reached the UPDATE unchecked here, so the change the
-		// inspector refuses could be made to the same payslip by ticking it in
-		// the list instead — and the salary entry was orphaned with nothing said.
-		//
-		// Skipped rather than refused: nothing the person asked for is impossible,
-		// and answering a forty-document edit with a failure because one of them
-		// is a payslip is a bigger answer than the question. Only `type` is held
-		// back — a shelf, a tag or another link takes nothing away from the entry.
-		//
-		// No `keptTargetIds`: this bar only ADDS links, so it can never untick
-		// the person an entry belongs to.
+		// Same salary guard as the inspector, applied to the whole selection.
+		// Skipped rather than refused — a 40-document edit shouldn't fail
+		// because one of them is a payslip. Only `type` is held back; no
+		// `keptTargetIds`, since this bar only adds links.
 		const guarded = normalisedType
 			? await salaryGuardedDocuments(ids, { type: normalisedType })
 			: [];
 		const retype = ids.filter((id) => !guarded.includes(id));
 
 		await db.transaction(async (tx) => {
-			// Shelf and type REPLACE: a document has one of each. Links and tags
-			// ADD: they are sets, and a bulk edit that silently cleared them would
-			// be a destructive action disguised as a convenience.
+			// Shelf and type REPLACE (a document has one of each); links and tags ADD.
 			if (shelfKey) {
 				const shelfId = await shelfIdByKey(shelfKey, tx);
 				await tx.update(document).set({ shelfId }).where(inArray(document.id, ids));
@@ -1099,9 +909,6 @@ export const actions: Actions = {
 					.onConflictDoNothing();
 			}
 		});
-		// Said out loud, in the bar's own result slot. A silent skip is the same
-		// failure as a silent orphan: the person believes forty documents were
-		// retyped, and one of them was not.
 		return {
 			ok: true,
 			skipped: guarded.length,
@@ -1117,8 +924,7 @@ export const actions: Actions = {
 	},
 	// ---- The rail's own edits: rename, reorder, add, reassign-then-delete ----
 	// Deleting a shelf is never a delete: `ON DELETE RESTRICT` on
-	// `document.shelf_id` refuses one that still holds paper, so the dialog's
-	// "move them to" is the mechanism rather than a courtesy.
+	// `document.shelf_id` refuses one that still holds paper.
 
 	renameShelf: async ({ request }) => {
 		const form = await request.formData();
@@ -1130,22 +936,15 @@ export const actions: Actions = {
 	},
 
 	/**
-	 * Which types a shelf offers first.
-	 *
-	 * A list, never a rule: the picker gets shorter and nothing gets refused, so
-	 * an unticked type is still filed the moment somebody chooses it. Allowed on
-	 * a system shelf too — what Identity holds cannot be deleted, and what it
-	 * suggests is the household's business.
+	 * Which types a shelf offers first. A list, never a rule: the picker gets
+	 * shorter but nothing is refused.
 	 */
 	setShelfTypes: async ({ request }) => {
 		const form = await request.formData();
 		const id = String(form.get('id') ?? '');
 		if (!id) return fail(400, { message: 'Which shelf?' });
-		// Filtered against what this household HAS, not against what the app
-		// ships: filtering on the enum silently dropped every type the household
-		// had added — the checkbox ticked, the form posted it, and the shelf came
-		// back without it. The foreign key would otherwise refuse the write with
-		// a constraint name nobody should have to read.
+		// Filtered against what this household HAS, not the shipped enum —
+		// otherwise the foreign key refuses the write with a raw constraint name.
 		const known = new Set(await documentTypeKeys());
 		const types = form
 			.getAll('types')
@@ -1157,9 +956,7 @@ export const actions: Actions = {
 
 	/**
 	 * A kind of paper this household files that the app did not ship.
-	 *
-	 * Idempotent by key, so adding one that already exists selects it rather
-	 * than refusing: two people naming the same thing have agreed.
+	 * Idempotent by key: adding one that exists selects it rather than refusing.
 	 */
 	addDocumentType: async ({ request }) => {
 		const form = await request.formData();
@@ -1230,9 +1027,8 @@ export const actions: Actions = {
 	},
 
 	// ---- The rail's own edits: subjects ----
-	// Archiving is the only "removal" a subject has. A subject that once held
-	// paper is history, and history is put away rather than deleted — so there
-	// is no `removeSubject` here and there will not be one.
+	// Archiving is the only "removal" a subject has: history is put away
+	// rather than deleted, so there is no `removeSubject`.
 
 	addOrganisation: async ({ request }) => {
 		const form = await request.formData();
@@ -1361,16 +1157,10 @@ export const actions: Actions = {
 	},
 
 	/**
-	 * File the document in front of the queue, and move on.
-	 *
-	 * Three steps in one post: the shelf, the card on it, the lane on that card.
-	 * A card can be made on the way past — `newCardName` — because the moment a
-	 * person knows the paper is the Octavia's is the moment they know the shelf
-	 * needs a card for it, and sending them elsewhere to make one loses the
-	 * document they were holding.
-	 *
-	 * Skip is not an action: passing over a document changes nothing, so it never
-	 * reaches the server.
+	 * File the document in front of the queue: the shelf, the card on it, the
+	 * lane on that card, in one post. A card can be made on the way past
+	 * (`newCardName`) so the paper isn't lost sending the person elsewhere.
+	 * Skip is not an action — passing over a document never reaches the server.
 	 */
 	fileFromQueue: async ({ request, locals }) => {
 		if (!locals.person) return fail(401, { message: 'Sign in first.' });
@@ -1417,11 +1207,8 @@ export const actions: Actions = {
 					})
 					.where(eq(document.id, id));
 
-				// The identity fields, on the same terms the inspector writes them:
-				// only for `id_document`, and the extra numbers only after the
-				// record they hang off exists. Filing was the one route into the
-				// wallet that skipped this, which is why cards arrived with generic
-				// artwork and no flag.
+				// Same terms as the inspector: identity fields only for
+				// `id_document`, numbers only after the record exists.
 				if (type === 'id_document') {
 					await upsertIdentity(id, readIdentityFields(form), tx);
 					await replaceIdentityNumbers(id, readIdentityNumbers(form), tx);
@@ -1433,7 +1220,7 @@ export const actions: Actions = {
 						.values({ documentId: id, targetId: cardId })
 						.onConflictDoNothing();
 
-				// After the link, because a lane may only hold paper on its own card.
+				// After the link: a lane may only hold paper on its own card.
 				if (laneId) await assignLane(id, laneId, tx);
 
 				for (const tagName of await readTags(form)) {
@@ -1452,11 +1239,8 @@ export const actions: Actions = {
 
 	/**
 	 * A card on a dossier shelf: a subject or an organisation, with the lanes
-	 * its shelf seeds.
-	 *
-	 * One action for both, because from the screen they are one gesture — "this
-	 * shelf needs a card for the Octavia" — and which table it lands in is a
-	 * fact about the shelf, not about what the person did.
+	 * its shelf seeds. One action for both — which table it lands in is a fact
+	 * about the shelf, not about what the person did.
 	 */
 	addCard: async ({ request, locals }) => {
 		if (!locals.person) return fail(401, { message: 'Sign in first.' });
@@ -1494,14 +1278,7 @@ export const actions: Actions = {
 		return { ok: true };
 	},
 
-	/**
-	 * The rail's rename row, which edits the name and the emoji at once.
-	 *
-	 * Both, because one HTML form posts to one action and the row holds both
-	 * controls — exactly as `renameShelf` does. The two server functions stay
-	 * separate underneath: `setSubjectEmoji` is what the emoji alone means, and
-	 * a caller that has not touched the name should not have to send one.
-	 */
+	/** The rail's rename row, which edits the name and the emoji at once. */
 	renameSubject: async ({ request }) => {
 		const form = await request.formData();
 		const id = String(form.get('id') ?? '').trim();
@@ -1527,13 +1304,7 @@ export const actions: Actions = {
 		return { ok: true };
 	},
 
-	/**
-	 * Archive a subject: its paper leaves the default view, nothing is deleted.
-	 *
-	 * The refusal for the household comes back as a sentence a person reads,
-	 * not as a control the rail quietly withholds — the rail withholds it too,
-	 * but a screen is not where a rule like that may live alone.
-	 */
+	/** Archive a subject: its paper leaves the default view, nothing is deleted. */
 	archiveSubject: async ({ request }) => {
 		const form = await request.formData();
 		const id = String(form.get('id') ?? '').trim();
@@ -1556,10 +1327,7 @@ export const actions: Actions = {
 		return { ok: true };
 	},
 
-	/**
-	 * Remove a tag. Everything carrying it is untagged by the cascade, and any
-	 * rule that applied it stops applying it.
-	 */
+	/** Remove a tag. Everything carrying it is untagged by the cascade. */
 	deleteTag: async ({ request }) => {
 		const form = await request.formData();
 		const id = String(form.get('id') ?? '').trim();

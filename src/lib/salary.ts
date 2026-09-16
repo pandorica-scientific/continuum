@@ -79,12 +79,8 @@ const NET_PAY_KEYWORDS = [
 ];
 
 // Two printing conventions, both of which real payslips use. The comma-grouped
-// alternative comes first and has to: without it "45,231.00" fell through to
-// the bare `\d{1,3}[.,]\d{2}` tail and matched its first four characters, so an
-// English payslip was filed as 45.23 instead of 45 231 — silently, with no
-// throw and no null, straight into the salary history and the tax prefill.
-// NET_PAY_KEYWORDS carries "net pay", "take home" and "amount paid", so English
-// payslips are an intended input and comma-grouped thousands are how they print.
+// alternative must come first: without it "45,231.00" falls through to the
+// bare `\d{1,3}[.,]\d{2}` tail and matches only its first four characters.
 const AMOUNT_RE =
 	/\d{1,3}(?:,\d{3})+(?:\.\d{2})?|\d{1,3}(?:[\u00A0\u202F .]\d{3})+(?:[.,]\d{2})?|\d{4,9}(?:[.,]\d{2})?|\d{1,3}[.,]\d{2}/g;
 
@@ -99,12 +95,8 @@ export function parsePrintedAmount(raw: string, currency: string): bigint | null
 	const toMinor = (whole: string, fraction?: string): bigint | null => {
 		if (!/^\d+$/.test(whole)) return null;
 		try {
-			// Scaled by the currency's own minor units, not a fixed 100: the
-			// amount a person types into the payslip form is parsed by
-			// parseAmountToMinor, and learnAmountLabel compares the two for
-			// equality — a fixed 100 here meant that comparison could never
-			// match in a currency without exactly two minor units, so the
-			// reader silently never learned the label.
+			// Scaled by the currency's own minor units, not a fixed 100, so this
+			// stays comparable in currencies without exactly two minor units.
 			const scaled = BigInt(whole) * 10n ** BigInt(digits);
 			if (digits === 0) return scaled;
 			return scaled + BigInt((fraction ?? '').padEnd(digits, '0').slice(0, digits) || '0');
@@ -125,13 +117,9 @@ export function parsePrintedAmount(raw: string, currency: string): bigint | null
 }
 
 /**
- * A label as it is stored and compared.
- *
- * Trailing punctuation goes, dot leaders included. A payslip that rules its
- * page with dots prints "LÍQUIDO A PERCIBIR ......................." — the
- * words are the label and the dots are the ruler, and leaving them on meant the
- * wording never matched at its end, so the tight test could not fire and a
- * digit sequence out of an IBAN answered instead.
+ * A label as it is stored and compared. Trailing punctuation is stripped,
+ * dot leaders included (e.g. "LÍQUIDO A PERCIBIR ......."), so the label's
+ * own wording still matches at its end.
  */
 function cleanLabel(text: string): string {
 	return text
@@ -198,24 +186,17 @@ const HEADING_ROWS = [
 ];
 
 /**
- * Amounts labelled by the column heading ABOVE them rather than the text beside
- * them.
+ * Amounts labelled by the column heading ABOVE them rather than the text
+ * beside them — some payrolls print a real table, headings on one row and
+ * figures on the next, which `extractCandidates` alone cannot read.
  *
- * Some payrolls print a payslip as a real table: a row of headings, and the
- * figures on the line underneath. `extractCandidates` reads a line at a time and
- * sees only "40:00 405 750 279 091" — three numbers labelled by other numbers —
- * so a whole layout was unreadable, and the same employer's older slips had to
- * be typed in by hand while its newer ones read themselves.
+ * A value's label is every heading cell over its COLUMN BAND: from just after
+ * the heading belonging to the value on its left, to just before the one on
+ * its right. That keeps neighbouring headings like "Gross salary" and "Net
+ * salary" apart while still gathering a split phrase into one label.
  *
- * A value's label is every heading cell standing over its COLUMN BAND: from
- * just after the heading belonging to the value on its left, to just before the
- * one belonging to the value on its right. That is what keeps "Gross salary"
- * and "Net salary" apart when they head neighbouring columns, while still
- * gathering "LIQUIDO TOTAL A PERCIBIR" — one phrase the extractor split into
- * three cells — into a single label.
- *
- * Heading rows made entirely of figures are skipped rather than used: a row of
- * amounts is another value row, not a name for one.
+ * Heading rows made entirely of figures are skipped — a row of amounts is
+ * another value row, not a name for one.
  */
 export function columnCandidates(
 	lines: readonly LabelledLine[],
@@ -235,10 +216,8 @@ export function columnCandidates(
 			if (amountMinor === null || amountMinor <= 0n) continue;
 			if (!isAmountCell(value.cells[j], currency, amountMinor)) continue;
 
-			// The nearest line above whose own cell over this column is a name —
-			// and failing that, the nearest below. Some payrolls rule the figure
-			// first and name it underneath, which is the same table read upside
-			// down, not a different kind of evidence.
+			// The nearest line above whose own cell over this column is a name,
+			// then the nearest below (some payrolls name the figure underneath it).
 			let heading: LabelledLine | null = null;
 			let headingXs: number[] = [];
 			for (const offset of HEADING_ROWS) {
@@ -290,11 +269,8 @@ function fold(text: string): string {
 }
 
 /**
- * Gross wordings payslips actually print.
- *
- * A slip states gross AND net; they are two facts, not two readings of one
- * number, which is why `salary_entry` carries a column for each. Until v0.4.6
- * only the net list existed and whatever it found was filed as gross.
+ * Gross wordings payslips actually print. A slip states gross AND net as two
+ * separate facts, hence separate keyword lists.
  *
  * Longer wordings come first: `pickBy` returns on the first keyword with any
  * hit, and "hrubá mzda" is a substring of "hrubá mzda celkem".
@@ -393,18 +369,11 @@ const COST_KEYWORDS = [
 ];
 
 /**
- * A learned label with the amounts taken out of it.
- *
- * `extractPdfLines` joins a table row's cells, so a label routinely carries the
- * COLUMNS to its left — and those are figures that change every month. Learning
- * "social security of employer 46 944,93 net salary" in January produced a
- * label that read "…46 760,18 net salary" in February and could never match
- * again: every wording learned before v0.5.2 was dead the moment it was stored,
- * which is why a year of hand corrections taught the reader nothing.
- *
- * Stripping the digits leaves the words, which are what identify the line.
- * Applied to both sides of the comparison, so labels stored under the old shape
- * start matching without a migration.
+ * A learned label with the amounts taken out of it. A joined table row
+ * routinely carries columns of figures that change every month next to the
+ * label text, so digits alone would never match twice. Stripping them leaves
+ * the words, which are what identify the line, and is applied to both sides
+ * of any comparison.
  */
 const AMOUNT_IN_LABEL = /\d[\d\s\u00A0\u202F.,]*\d|\d/g;
 
@@ -413,13 +382,11 @@ export function labelKey(label: string): string {
 }
 
 /**
- * Does this label END at the keyword — is the amount the one printed next to it?
- *
- * The distinction that matters on a real payslip. `extractPdfLines` joins a
- * table row's cells with spaces, so one physical row arrives as one long line
- * carrying several amounts, and `extractCandidates` labels each amount with
- * everything before it on that line. Every column to the RIGHT of "Hrubá mzda"
- * therefore gets a label that still contains it:
+ * Does this label END at the keyword — is the amount the one printed next to
+ * it? A joined table row arrives as one line carrying several amounts, and
+ * `extractCandidates` labels each with everything before it on that line, so
+ * every column to the RIGHT of "Hrubá mzda" gets a label that still contains
+ * it:
  *
  *   "hrubá mzda"                                          =  70 135  ← gross
  *   "hrubá mzda 70 135 hod.vč.přesč. 176 sp zaměstnanec"   =   4 980  ← insurance
@@ -435,20 +402,17 @@ function endsAt(label: string, keyword: string): boolean {
  * The candidate a list of wordings points at, or null.
  *
  * A learned label wins, then the amount printed NEXT TO a keyword, and only
- * then a looser match anywhere in the label. Excluded labels can never be
- * returned, whatever matched them.
+ * then a looser match anywhere in the label. Excluded labels are never
+ * returned.
  *
- * Tightness beats keyword rank: an exact hit on a later wording is a better
- * answer than a trailing-column hit on an earlier one, so both passes run over
- * the whole keyword list rather than resolving each keyword in turn.
+ * Tightness beats keyword rank: an exact hit on a later wording beats a
+ * trailing-column hit on an earlier one, so both passes run over the whole
+ * keyword list rather than resolving each keyword in turn. Within one pass
+ * the LAST match wins, since a slip that prints components before its total
+ * puts the total later.
  *
- * Within one pass the LAST match wins, because a slip that prints its
- * components before its total puts the total later.
- *
- * There is deliberately no "largest amount on the slip" fallback. It is what
- * filed net pay as gross for every slip with no matching wording, and pointed at
- * gross it would find total employment cost instead. Null is a question the form
- * can ask once and learn from; a wrong number is silent.
+ * Deliberately no "largest amount on the slip" fallback — null lets the form
+ * ask and learn once; a wrong guessed number is silent.
  */
 function pickBy(
 	candidates: AmountCandidate[],
@@ -456,36 +420,28 @@ function pickBy(
 	learnedLabels: readonly string[],
 	exclude: readonly string[] = []
 ): AmountCandidate | null {
-	// Folded ONCE per candidate and once per wording, rather than once per pair
-	// of them. The wording lists run to fifty entries apiece across seven
-	// languages and a slip offers hundreds of candidates, so folding inside the
-	// match loops normalised the same strings tens of thousands of times for one
-	// payslip — and the column pass roughly doubled the candidate count.
+	// Folded ONCE per candidate and once per wording, not once per pair — the
+	// wording lists and candidate counts are large enough that folding inside
+	// the match loops would be quadratic.
 	const excluded = exclude.map(fold);
 	const allowed = candidates
 		.map((candidate) => ({ candidate, label: fold(candidate.label) }))
 		.filter((c) => !excluded.some((k) => c.label.includes(k)));
 	if (allowed.length === 0) return null;
 
-	// Every wording learned for this person, newest first — not just the last
-	// one. A person with two jobs in a year has two payroll systems printing two
-	// different wordings, and one slot per person meant each correction wiped the
-	// other employer's: alternating between them relearned the same two labels
-	// forever, and neither was ever there when its own slip arrived.
-	//
-	// Keeping several is safe because a learned label only matches a label that
-	// is literally on the slip — the wrong employer's simply never matches.
+	// Every wording learned for this person, newest first, not just the last —
+	// a person with two jobs in a year has two payroll systems printing two
+	// different wordings, and a learned label only ever matches a label that is
+	// literally on the slip, so keeping several is safe.
 	if (learnedLabels.length > 0) {
-		// Keyed once too — up to six learned wordings each rescanned every
-		// candidate and recomputed the same key for it.
+		// Keyed once, not per learned wording.
 		const keys = allowed.map((c) => labelKey(c.candidate.label));
 		for (const learnedLabel of learnedLabels) {
 			const key = labelKey(learnedLabel);
 			if (!key) continue;
-			// Compared with the amounts stripped from both sides: a label that
-			// carries a neighbouring column has a different number in it every
-			// month. The same label can appear more than once; the last is the
-			// total line.
+			// Compared with amounts stripped from both sides, since a label
+			// carrying a neighbouring column has a different number each month.
+			// The same label can appear more than once; the last is the total line.
 			let learned: AmountCandidate | null = null;
 			for (let i = 0; i < allowed.length; i++) {
 				if (keys[i] === key) learned = allowed[i].candidate;
@@ -511,15 +467,10 @@ function pickBy(
 
 /**
  * Which line to learn a stated figure from: the one labelled most tightly.
- *
- * A joined table row offers the same amount under several labels — "gross
- * salary" and "gross salary 189 294 income tax base" are the same 189 294 read
- * from two columns. The short one names the figure; the long one names it plus
- * whatever sits to its right, and is a worse thing to remember even with the
- * amounts stripped, because it points at the wrong column the month the two
- * figures differ.
- *
- * Ties go to the earliest, which on a left-to-right row is the leftmost cell.
+ * A joined table row offers the same amount under several labels — the
+ * shortest names the figure; a longer one also names whatever sits to its
+ * right, and points at the wrong column once the two figures diverge. Ties go
+ * to the earliest (leftmost) cell.
  */
 export function tightestLabelFor(
 	candidates: readonly AmountCandidate[],
@@ -725,11 +676,8 @@ const BONUS_KEYWORDS = [
 ];
 
 /**
- * Is this learned bonus wording present on the slip in front of us?
- *
- * The same test `detectBonus` uses to decide a learned label applies, exported
- * so the learner can tell "this employer's wording, which the correction has
- * just restated" from "some other employer's, which it says nothing about".
+ * Is this learned bonus wording present on the slip in front of us? The same
+ * test `detectBonus` uses to decide a learned label applies.
  */
 export function bonusLabelOnSlip(candidateLabel: string, learnedLabel: string): boolean {
 	return endsAt(candidateLabel, learnedLabel);
@@ -737,17 +685,11 @@ export function bonusLabelOnSlip(candidateLabel: string, learnedLabel: string): 
 
 /**
  * What of this slip's gross was a bonus, or null when it says nothing.
- *
- * Null and zero are different answers: null is "the slip did not itemise one",
- * zero would be "it stated there was none". Only the first is honest about a
- * plain slip.
- *
- * Several lines are summed — a month can carry a standing premium and a one-off
- * award separately, and reporting the first alone understates it.
- *
- * `learnedLabel` wins over the keywords, the same way the pay amount's learned
- * label does: a correction teaches the reader rather than being re-entered
- * every month.
+ * Null and zero differ: null is "the slip did not itemise one", zero would be
+ * "it stated there was none" — only the first is honest about a plain slip.
+ * Several lines are summed since a month can carry a standing premium and a
+ * one-off award separately. `learnedLabel` wins over the keywords, so a
+ * correction teaches the reader instead of being re-entered every month.
  */
 export function detectBonus(
 	candidates: AmountCandidate[],
@@ -784,10 +726,9 @@ export function detectBonus(
 		if (learned.length > 0) return sum(learned);
 	}
 
-	// Tight first, for the same reason pickBy does it: on a joined table row every
-	// column right of "AIP bonus" keeps a label containing it, so summing every
-	// match added the tax columns to the award — 65 251 became 367 766, larger
-	// than the gross it was supposedly part of.
+	// Tight first, same reason as pickBy: on a joined table row, every column
+	// right of a bonus keyword keeps a label containing it, so a loose match
+	// would sum in the tax columns too.
 	const tight = candidates.filter((c) => BONUS_KEYWORDS.some((k) => endsAt(c.label, k)));
 	if (tight.length > 0) return sum(tight);
 
@@ -804,22 +745,16 @@ export function detectBonus(
 const SUBSET_CAP = 12;
 
 /**
- * Which bonus lines add up to the total somebody typed.
- *
- * A correction states one number; the slip may have reached it from two lines,
- * and learning has to name both or it learns nothing. Matching a single
- * candidate on equality was the v0.4.5 contract, which meant a two-line bonus
- * could never be learned — silently, on exactly the months worth correcting.
- *
- * The search is over the BONUS-KEYWORD lines only, never every amount on the
- * slip, so a total that happens to equal gross cannot be "explained" by the
- * gross line. The smallest matching set wins: fewer labels learned means fewer
- * wrong lines swept up next month.
+ * Which bonus lines add up to the total somebody typed. A correction states
+ * one number, but the slip may reach it from two lines, so learning has to
+ * name both. The search is over the BONUS-KEYWORD lines only, never every
+ * amount on the slip, so a total that happens to equal gross cannot be
+ * "explained" by the gross line. The smallest matching set wins.
  */
 export function bonusLabelSubset(candidates: AmountCandidate[], total: bigint): string[] | null {
 	const named = candidates.filter((c) => c.label.length > 0);
-	// Same tight-first rule as detectBonus. A pool holding a row's tax columns
-	// lets the subset search "explain" a stated total out of the wrong lines.
+	// Same tight-first rule as detectBonus, so the subset search can't "explain"
+	// a total using a row's tax columns.
 	const tight = named.filter((c) => BONUS_KEYWORDS.some((k) => endsAt(c.label, k)));
 	const loose = named.filter((c) => BONUS_KEYWORDS.some((k) => fold(c.label).includes(fold(k))));
 	const pool = (tight.length > 0 ? tight : loose).slice(0, SUBSET_CAP);
@@ -842,12 +777,9 @@ export function bonusLabelSubset(candidates: AmountCandidate[], total: bigint): 
 }
 
 /**
- * Words a payslip puts in front of the period it covers.
- *
- * Ranked ahead of everything else because a slip carries several dates and only
- * one of them is the month being paid: "Period:October 2025 Processed:
- * 07.11.2025" was read as November, so three months of pay were filed against
- * the month they happened to be processed in.
+ * Words a payslip puts in front of the period it covers. Ranked ahead of
+ * everything else: a slip carries several dates ("Period: October 2025
+ * Processed: 07.11.2025") and only one is the month being paid.
  */
 const PERIOD_MARKERS = ['period', 'perioda', 'období', 'obdobi', 'month', 'měsíc', 'mesic'];
 
@@ -855,25 +787,19 @@ const PERIOD_MARKERS = ['period', 'perioda', 'období', 'obdobi', 'month', 'měs
 const FOLDED_MARKERS = PERIOD_MARKERS.map((marker) => ({ marker, folded: fold(marker) }));
 
 /**
- * Day, month, two-digit year — "01/01/23", "26.01.23", "26-01-23".
- *
- * Day first, which is what every layout this has been measured against prints.
- * A middle field above 12 is not a month in any ordering, so the pattern simply
- * cannot read one; the risk it carries is the genuinely ambiguous "03/05/23",
- * and against that it is ranked below every form that states its year in full.
+ * Day, month, two-digit year — "01/01/23", "26.01.23", "26-01-23". Day first,
+ * matching every layout observed. Ambiguous cases like "03/05/23" are why this
+ * is ranked below every form that states its year in full.
  */
 const SHORT_YEAR_DATE = /\b(?:0?[1-9]|[12]\d|3[01])[/.-](0[1-9]|1[0-2])[/.-](\d{2})\b/;
 
 /**
- * The month names, compiled once.
- *
- * `monthByName` runs over every line of a slip and the table is a hundred-odd
- * names across seven languages, so building the patterns inside the loop
- * compiled some seventeen thousand regexes to read one payslip.
+ * The month names, compiled once — `monthByName` runs over every line of a
+ * slip, so building patterns inside the loop would be wasteful.
  *
  * An ordered list rather than one alternation: first-name-in-the-table wins is
- * not the same answer as leftmost-match-in-the-text wins, and "maj" against
- * "maja", "marzec" against "marca" are exactly where the two differ.
+ * not the same as leftmost-match-in-the-text wins, which matters for pairs
+ * like "maj"/"maja" or "marzec"/"marca".
  */
 const MONTH_PATTERNS: readonly (readonly [RegExp, number])[] = Object.entries(MONTHS).map(
 	([name, month]) => [new RegExp(`(?<!\\p{L})${name}(?!\\p{L})\\s*(20\\d{2})`, 'u'), month] as const
@@ -909,15 +835,11 @@ function monthByShortYear(text: string): string | null {
 /**
  * The month a payslip covers: "08/2026", "2026-08", "srpen 2026", "01/01/23".
  *
- * Ranked passes over the WHOLE slip, not pattern-by-pattern down each line. A
- * payslip carries several dates — when it was processed, when the job started,
- * when the money moves — and only one of them is the month being paid, so the
- * order these are tried in IS the accuracy of the result.
- *
- * Each pass runs over every line before the next begins. Interleaving them cost
- * five months of pay: a per-line loop reached a two-digit employment start date
- * near the top of the page and answered with it, while the four-digit period the
- * same slip printed further down never got looked at.
+ * Ranked passes over the WHOLE slip, not pattern-by-pattern down each line —
+ * a payslip carries several dates (processed, job start, money moved) and
+ * only one is the month being paid, so each pass runs over every line before
+ * the next begins; interleaving them risks answering with an unrelated date
+ * higher up the page before the real period further down is even read.
  */
 export function detectPeriod(lines: string[]): string | null {
 	// 1. What the slip itself calls the period. Any date form will do here —
@@ -932,12 +854,10 @@ export function detectPeriod(lines: string[]): string | null {
 			if (found) return found;
 		}
 	}
-	// 2. Then the date forms, in order of how easily each is confused with some
-	//    other date on the page: a month spelled out (a slip prints its own month
-	//    in words far more often than an unrelated one), then a year stated in
-	//    full, and only then a two-digit year. THIS LIST IS THE RANKING — the
-	//    reason it is a list is that a fourth format must join it in the right
-	//    place rather than be written as a fourth identical loop.
+	// 2. Then the date forms, ranked by how easily each is confused with some
+	//    other date on the page: month spelled out, then year in full, then a
+	//    two-digit year. THIS LIST IS THE RANKING — a new format must be
+	//    inserted in the right place, not appended as another identical loop.
 	for (const read of [monthByName, monthByFullYear, monthByShortYear]) {
 		for (const line of lines) {
 			const found = read(line);
@@ -948,13 +868,10 @@ export function detectPeriod(lines: string[]): string | null {
 }
 
 /**
- * Symbols payslips print instead of an ISO code.
- *
- * A format fact of real slips, exactly like the month names above: a Czech slip
- * prints "Kč" and never "CZK", and an exporter that strips diacritics prints
- * "Kc". Deliberately short — a mark that names more than one currency ("kr" is
- * Swedish, Norwegian and Danish) teaches nothing, and a wrong currency is worse
- * than asking.
+ * Symbols payslips print instead of an ISO code — a format fact of real
+ * slips, like the month names above. Deliberately short: a mark that names
+ * more than one currency ("kr" is Swedish, Norwegian and Danish) teaches
+ * nothing, and a wrong currency is worse than asking.
  */
 const CURRENCY_MARKS: Record<string, readonly string[]> = {
 	CZK: ['kč', 'kc'],
@@ -973,17 +890,14 @@ function markHits(text: string, mark: string): number {
 }
 
 /**
- * Which currency a payslip is printed in, or null when it does not say plainly.
+ * Which currency a payslip is printed in, or null when it does not say
+ * plainly. The currency is a fact about the slip, not about the household's
+ * base currency — they can differ.
  *
- * The currency of a payslip is a fact about the slip. It was taken from the
- * household's base currency until v0.5.1, which is right only when the two
- * happen to agree: a Czech slip filed by a household keeping its books in euro
- * was stored as 135 887 EUR, and every conversion downstream then multiplied a
- * koruna figure by the euro rate.
- *
- * Restricted to `allowed` — the currencies the app can actually convert — so a
- * mark for a currency with no rate never becomes an answer. A tie returns null
- * rather than a guess: the form asks, and what a person states is a decision.
+ * Restricted to `allowed`, the currencies the app can actually convert, so a
+ * mark for a currency with no rate never becomes an answer. A tie returns
+ * null rather than a guess: the form asks, and what a person states is a
+ * decision.
  */
 export function detectCurrency(
 	lines: readonly string[],
@@ -1032,13 +946,9 @@ export interface SalaryYear {
 	/** age that year, when the birth year is known */
 	age: number | null;
 	/**
-	 * Average monthly GROSS, over the months that have one.
-	 *
-	 * Gross and net are kept apart rather than averaged together, and this is the
-	 * whole point of the pair. A payslip states gross; a bank credit is net. A
-	 * year with payslips for four months and bank credits for twelve would
-	 * otherwise average four gross figures with eight net ones and call the
-	 * result a salary — a number that is neither, and lower than the truth.
+	 * Average monthly GROSS, over the months that have one. Kept apart from
+	 * net rather than averaged together — a payslip states gross, a bank
+	 * credit states net, and mixing them would misreport both.
 	 */
 	grossAvgMinor: bigint | null;
 	grossMonths: number;
@@ -1052,19 +962,23 @@ export interface SalaryYear {
 	/** The year's net months added up — what actually landed in the account. */
 	netTotalMinor: bigint;
 	/**
-	 * Whether the net total covers a whole year.
+	 * Shares that vested this year, valued at the close on their vest day.
 	 *
-	 * An annual total over three months is not a small year, it is a partial
-	 * one, and beside a complete year it reads as a collapse. The screen marks
-	 * it rather than hiding it or quietly annualising it.
+	 * Beside bonus and outside base on purpose: a grant is compensation, and it
+	 * is not a raise. `baseDeltaPct` never sees it.
+	 */
+	equityTotalMinor: bigint;
+	/** The part of that the employer already put through a payslip, so gross carries it once. */
+	equityOnPayslipMinor: bigint;
+	/**
+	 * Whether the net total covers a whole year — a partial year reads as a
+	 * collapse beside a complete one if not marked as such.
 	 */
 	netComplete: boolean;
 	/**
-	 * Year-on-year change in the BASE, apart from the change in the total.
-	 *
-	 * A one-off bonus moves the total up one year and down the next, which reads
-	 * as a raise followed by a pay cut when neither happened. The base answers
-	 * what the salary did.
+	 * Year-on-year change in the BASE, apart from the total — a one-off bonus
+	 * moves the total up one year and down the next, which would misread as a
+	 * raise then a pay cut.
 	 */
 	baseDeltaPct: number | null;
 	/** Whichever of the two the year is best evidenced by, for the chart. */
@@ -1087,26 +1001,40 @@ export interface SalaryMonth {
 }
 
 /**
- * Average monthly salary per year, gross and net kept apart.
+ * Average monthly salary per year, gross and net kept apart. Salary reaches
+ * this from two places: a payslip (GROSS) and a bank salary credit (NET) — a
+ * month can carry both, and a year reports each over the months that have it.
  *
- * Salary reaches this from two places now: a payslip, which states GROSS, and a
- * salary credit on a bank statement, which is NET. They are not competing
- * readings of one number and neither wins — a month can carry both, and a year
- * reports each over the months that actually have it.
- *
- * `avgMonthlyMinor` is the series the chart draws, and it takes whichever half
- * the year is better evidenced by, saying which via `avgIsGross`. The
- * year-on-year change is only computed between years of the SAME kind: gross
- * against net would report a pay cut where somebody simply started uploading
- * payslips.
+ * `avgMonthlyMinor` is the series the chart draws, taking whichever half the
+ * year is better evidenced by (`avgIsGross`). Year-on-year change is only
+ * computed between years of the SAME kind, or it would report a pay cut where
+ * somebody simply started uploading payslips.
  */
-export function salaryStats(months: SalaryMonth[], birthYear: number | null): SalaryYear[] {
-	const byYear = new Map<number, { gross: bigint[]; net: bigint[]; bonus: bigint }>();
+export interface VestSummary {
+	year: number;
+	valueMinor: bigint;
+	onPayslip: boolean;
+}
+
+export function salaryStats(
+	months: SalaryMonth[],
+	birthYear: number | null,
+	vests: VestSummary[] = []
+): SalaryYear[] {
+	const byYear = new Map<
+		number,
+		{ gross: bigint[]; net: bigint[]; bonus: bigint; equity: bigint; equityOnPayslip: bigint }
+	>();
+	const bucketFor = (year: number) => {
+		if (!byYear.has(year)) {
+			byYear.set(year, { gross: [], net: [], bonus: 0n, equity: 0n, equityOnPayslip: 0n });
+		}
+		return byYear.get(year)!;
+	};
 	for (const month of months) {
 		const year = Number(month.periodMonth.slice(0, 4));
 		if (!Number.isInteger(year)) continue;
-		if (!byYear.has(year)) byYear.set(year, { gross: [], net: [], bonus: 0n });
-		const bucket = byYear.get(year)!;
+		const bucket = bucketFor(year);
 		if (month.grossMinor !== null && month.grossMinor !== undefined) {
 			bucket.gross.push(month.grossMinor);
 		}
@@ -1118,14 +1046,21 @@ export function salaryStats(months: SalaryMonth[], birthYear: number | null): Sa
 		// but means something different to the reader looking at the month.
 		if (month.bonusMinor) bucket.bonus += month.bonusMinor;
 	}
+	// A vest is compensation in the year it lands, whether or not a payslip
+	// for that month exists yet.
+	for (const vest of vests) {
+		const bucket = bucketFor(vest.year);
+		bucket.equity += vest.valueMinor;
+		if (vest.onPayslip) bucket.equityOnPayslip += vest.valueMinor;
+	}
 
 	const mean = (values: bigint[]): bigint | null =>
 		values.length ? values.reduce((sum, v) => sum + v, 0n) / BigInt(values.length) : null;
 
 	const rows: SalaryYear[] = [];
 	for (const year of [...byYear.keys()].sort()) {
-		const { gross, net, bonus } = byYear.get(year)!;
-		if (gross.length === 0 && net.length === 0) continue;
+		const { gross, net, bonus, equity, equityOnPayslip } = byYear.get(year)!;
+		if (gross.length === 0 && net.length === 0 && equity === 0n) continue;
 
 		const grossTotal = gross.reduce((sum, v) => sum + v, 0n);
 		const netTotal = net.reduce((sum, v) => sum + v, 0n);
@@ -1138,7 +1073,9 @@ export function salaryStats(months: SalaryMonth[], birthYear: number | null): Sa
 		// Gross when the year has any, because it is the figure a salary is
 		// normally quoted as — and the one comparable across employers.
 		const avgIsGross = grossAvg !== null;
-		const avg = (avgIsGross ? grossAvg : netAvg) as bigint;
+		// An equity-only year has no monthly figure at all; zero keeps the chart
+		// honest rather than pretending the vest was a salary.
+		const avg = (avgIsGross ? grossAvg : netAvg) ?? 0n;
 		const monthCount = avgIsGross ? gross.length : net.length;
 
 		// Like against like. The previous LISTED year may be of the other kind,
@@ -1162,6 +1099,8 @@ export function salaryStats(months: SalaryMonth[], birthYear: number | null): Sa
 			bonusTotalMinor: bonus,
 			baseTotalMinor: baseTotal,
 			netTotalMinor: netTotal,
+			equityTotalMinor: equity,
+			equityOnPayslipMinor: equityOnPayslip,
 			netComplete: net.length >= 12,
 			baseDeltaPct:
 				baseAvg !== null && prevBaseAvg !== null && prevBaseAvg > 0n
@@ -1179,17 +1118,13 @@ export function salaryStats(months: SalaryMonth[], birthYear: number | null): Sa
 }
 
 /**
- * Every person's years added into one household series.
+ * Every person's years added into one household series. The arithmetic runs
+ * on the TOTALS, not on per-person averages — averaging two averages weights
+ * a person paid for two months the same as one paid for twelve.
  *
- * The Salary screen offers a "Both" view the way the Tax screen does, and the
- * arithmetic has to be done on the TOTALS rather than on the per-person
- * averages. Averaging two averages weights a person paid for two months the
- * same as one paid for twelve, and reports a household monthly figure neither
- * of them earned.
- *
- * The two comparisons are recomputed from the merged series for the same
- * reason: a delta carried over from one person's row would describe that
- * person, under a label saying it described the household.
+ * The comparisons are recomputed from the merged series for the same reason:
+ * a delta carried over from one person's row would describe that person under
+ * a label saying it described the household.
  */
 export function mergeSalaryYears(perPerson: SalaryYear[][]): SalaryYear[] {
 	const byYear = new Map<number, SalaryYear[]>();
@@ -1208,6 +1143,8 @@ export function mergeSalaryYears(perPerson: SalaryYear[][]): SalaryYear[] {
 		const netTotal = total((r) => r.netTotalMinor);
 		const bonusTotal = total((r) => r.bonusTotalMinor);
 		const baseTotal = total((r) => r.baseTotalMinor);
+		const equityTotal = total((r) => r.equityTotalMinor);
+		const equityOnPayslip = total((r) => r.equityOnPayslipMinor);
 		const grossMonths = parts.reduce((n, r) => n + r.grossMonths, 0);
 		const netMonths = parts.reduce((n, r) => n + r.netMonths, 0);
 
@@ -1237,6 +1174,8 @@ export function mergeSalaryYears(perPerson: SalaryYear[][]): SalaryYear[] {
 			bonusTotalMinor: bonusTotal,
 			baseTotalMinor: baseTotal,
 			netTotalMinor: netTotal,
+			equityTotalMinor: equityTotal,
+			equityOnPayslipMinor: equityOnPayslip,
 			// Complete only when EVERY contributor's year was: one person's partial
 			// year makes the household total partial too, however many months the
 			// other one covered.
@@ -1257,15 +1196,10 @@ export function mergeSalaryYears(perPerson: SalaryYear[][]): SalaryYear[] {
 }
 
 /**
- * The most recent year the BASE actually rose, or null.
- *
- * Base rather than total, because a one-off bonus lifts the total one year and
- * drops it the next — which reads as a raise followed by a pay cut when neither
- * happened. `baseDeltaPct` already has the bonus taken out.
- *
- * A fall is not an increase and neither is standing still: both return the last
- * real rise, or null. Calling the latest CHANGE an increase would put a red
- * figure under a green label.
+ * The most recent year the BASE actually rose, or null. Base rather than
+ * total, since a one-off bonus lifts the total one year and drops it the
+ * next. A fall or flat year is not an increase — both return the last real
+ * rise, or null.
  */
 export function lastBaseIncrease(years: SalaryYear[]): { year: number; pct: number } | null {
 	const risen = years.filter((y) => y.baseDeltaPct !== null && y.baseDeltaPct > 0);

@@ -112,12 +112,7 @@ export function delimiterCandidates(lines: string[]): DelimiterCandidate[] {
  * Records, not lines. A newline inside a quoted field belongs to the field —
  * a wrapped payment note, a two-line merchant address — and splitting the text
  * on every newline before parsing quotes cuts one movement into two rows that
- * neither carry a date nor an amount between them. `csvLines` has always known
- * this and the five adapters have always used it; the generic reader did not,
- * so every statement with a wrapped description fragmented, recovered a
- * fraction of its rows, and was refused for failing to reconcile. That is 60
- * files in the synthetic corpus, and their transactions were never anywhere
- * near the ledger.
+ * neither carry a date nor an amount between them.
  */
 export function gridFromText(text: string, delimiter: string, encoding?: string): Grid {
 	const rows = csvLines(text).map((line) =>
@@ -136,36 +131,20 @@ export function gridFromText(text: string, delimiter: string, encoding?: string)
 /**
  * A reading in which fields that look like one split number are rejoined.
  *
- * Delimited files are not always well formed. When the delimiter and the
- * decimal mark are the same character, `799,56` is indistinguishable from two
- * fields `799` and `56` by any reader that only looks at the text — and an
- * unquoted comma inside a description does the same thing for a different
- * reason.
+ * When the delimiter and the decimal mark are the same character, `799,56` is
+ * indistinguishable from two fields `799` and `56` by any reader that only
+ * looks at the text. The statement's own balances can answer whether a given
+ * join was right, so this is offered as an extra CANDIDATE beside the
+ * unrepaired reading and survives only if it proves itself — a wrong join
+ * produces a chain that does not close.
  *
- * Only looking at the text is the mistake. The statement states its own
- * balances, so whether a particular set of joins was the right one is a
- * question the ARITHMETIC can answer, and that is the instrument used
- * everywhere else here: this is offered as an extra CANDIDATE beside the
- * unrepaired reading, and it survives only if it proves itself. A wrong join
- * produces a chain that does not close, and the proof gate refuses it exactly
- * as it refuses any other misreading.
- *
- * Nothing here tries to work out how many joins are needed. Guessing the
- * table's width from the rows is circular — on a file where every movement row
- * has split, the split rows ARE the majority, and the width they agree on is
- * the broken one. So every pair that could be a split number is joined, and the
- * balances decide whether that was right.
- *
- * One limit is worth knowing, because it decides when this can be settled at
- * all: dropping the cents from an amount AND from the balance beside it leaves
- * a chain that still closes. `6127 - 425 = 5702` exactly as
- * `6127.92 - 425.23 = 5702.69` does. What separates the two readings is a
- * BORROW across the decimal point — `6127.92 - 425.99 = 5701.93`, where the
- * truncated figures give 5702 and the broken chain breaks. Over a real
- * statement that occurs within the first few movements, which is why the
- * repaired reading wins on proof class there. Over a handful of rows that
- * happen not to borrow, both readings prove themselves, and the reading is
- * refused as genuinely undecided rather than guessed at.
+ * Nothing here tries to work out how many joins are needed, since guessing the
+ * table's width from the rows is circular when every movement row has split.
+ * So every pair that could be a split number is joined, and the balances
+ * decide whether that was right. One limit: dropping the cents from both an
+ * amount and its balance can leave a chain that still closes without a BORROW
+ * across the decimal point to distinguish the readings, in which case both
+ * prove themselves and the file is refused as genuinely undecided.
  */
 const SPLIT_LEFT = /^[-+(]?\s*\d[\d\s.'\u00A0]*$/;
 /**
@@ -229,18 +208,14 @@ export function candidateGrids(buffer: Uint8Array): Grid[] {
 /**
  * A label written once across several columns still names all of them.
  *
- * A spreadsheet merges cells to write one heading over a group — `Amount` above
- * a pair of `Debit` and `Credit` columns, or an account name spanning a block.
- * The file stores that value in the top-left cell only and leaves the rest
- * empty, so the row arrives as a label followed by blanks: the header detector
- * counts one named column where the sheet shows several, and every column but
- * the first loses its name.
+ * A spreadsheet merges cells to write one heading over a group — `Amount`
+ * above a pair of `Debit` and `Credit` columns — storing the value in the
+ * top-left cell only, so the header detector would otherwise count one named
+ * column where the sheet shows several.
  *
- * Only HORIZONTAL merges are spread, and that restriction is the whole safety
- * of this. A merge across columns is a label written wide; a merge DOWN rows is
- * one value that applies to a group of rows, and copying it into each of them
- * would manufacture data — a date repeated onto movements that never carried
- * one, which the reader would then happily file.
+ * Only HORIZONTAL merges are spread: a merge DOWN rows is one value applying
+ * to a group of rows, and copying it into each would manufacture data — a date
+ * repeated onto movements that never carried one.
  */
 function spreadMergedHeaders(worksheet: XLSX.WorkSheet, rows: string[][]): void {
 	const merges = worksheet['!merges'];

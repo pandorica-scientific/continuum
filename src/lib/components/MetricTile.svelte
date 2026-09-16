@@ -16,10 +16,8 @@
 		color?: string;
 		/**
 		 * A hue token name — `teal`, `green` — whose wash becomes the ground.
-		 *
-		 * The tile's identity, not its state: `--green-wash` under "Saved" says
-		 * which of the four flow figures this is, the way the swatch beside a
-		 * category name does. A figure that is a WARNING says so with `color`.
+		 * The tile's identity, not its state; a figure that is a warning uses
+		 * `color` instead.
 		 */
 		wash?: string;
 		/** Inside a panel, where the tile is a detail rather than the headline. */
@@ -33,8 +31,7 @@
 	style:--wash={wash ? `var(--${wash.replace(/^--/, '')}-wash)` : 'var(--surface)'}
 >
 	<span class="label">{label}</span>
-	<!-- `display`, not `mono`: this is the one class of number the v0.8.1 type
-	     rule exempts. Table figures, dates and IDs stay mono — see app.css. -->
+	<!-- `display`, not `mono`: table figures, dates and IDs stay mono — see app.css. -->
 	<span class="value display" style:color={color ?? 'var(--fg1)'}>
 		{value}{#if unit}<span class="unit">{unit}</span>{/if}
 	</span>

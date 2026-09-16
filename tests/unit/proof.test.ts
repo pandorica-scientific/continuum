@@ -72,9 +72,7 @@ describe('proof classes', () => {
 	});
 
 	it('refuses outright when stated totals CONTRADICT the rows', () => {
-		// Two movements dropped so the endpoints still close — but the stated
-		// totals no longer match. Evidence that disagrees is not weaker evidence;
-		// it is proof that something is wrong, so this is P0, not a lesser pass.
+		// Contradicting evidence is proof something is wrong, not weaker evidence — still P0.
 		const base = chained();
 		const mutilated: ParsedStatement = {
 			...base,
@@ -91,10 +89,8 @@ describe('proof classes', () => {
 	});
 
 	it('refuses a closing chain whose printed closing balance disagrees', () => {
-		// A chain closes over the rows it HAS, so a movement missing from the end
-		// leaves every remaining step following perfectly. Only the printed
-		// closing balance notices — a real German statement read 9 of its 10
-		// movements exactly this way and was rated strong enough to file.
+		// A chain closes over the rows it HAS, so a movement missing from the end leaves
+		// every remaining step following perfectly; only the printed closing balance notices.
 		const truncated = chained();
 		truncated.rows = truncated.rows.slice(0, 2);
 		const proof = proveStatement(truncated);
@@ -129,8 +125,7 @@ describe('the chain', () => {
 	});
 
 	it('refuses a chain that closes internally but not against the opening balance', () => {
-		// Every step follows, yet the first row does not follow from the opening
-		// balance: the movements are internally consistent and still wrong.
+		// The movements are internally consistent, yet the first row doesn't follow from opening.
 		const adrift = chained({ openingBalanceMinor: 999999n, closingBalanceMinor: 115000n });
 		const proof = proveStatement(adrift);
 		expect(status(proof.checks, 'running balance')).toBe('fail');
@@ -161,9 +156,8 @@ describe('lexical soundness', () => {
 	});
 
 	it('catches the uniform scale error that arithmetic alone cannot', () => {
-		// Every amount and balance misread by a factor of a thousand still closes
-		// the chain perfectly. It shows up as impossible precision for the
-		// currency, which is the only place it CAN show up.
+		// A uniform scale error still closes the chain; it only shows up as
+		// impossible precision for the currency.
 		const proof = proveStatement(chained(), facts({ amountTexts: ['-50,00000', '300,00000'] }));
 		expect(proof.lexicallyUnsound).toBe(true);
 		expect(proof.proofClass).toBe('P0');
@@ -202,11 +196,8 @@ describe('the import policy', () => {
 	});
 
 	it('holds weaker arithmetic until someone has confirmed the layout', () => {
-		// P1 is the endpoints agreeing and nothing corroborating them, which two
-		// omitted movements that offset each other leave intact. A confirmed
-		// mapping is the human check that lifts it, and it was the documented
-		// rule all along — but both branches returned `autoImport: true`, so the
-		// parameter decided nothing and every P1 filed unattended.
+		// Regression: both branches returned `autoImport: true`, so a confirmed
+		// mapping never actually gated a P1 import.
 		const aggregate = proveStatement({
 			...chained(),
 			rows: chained().rows.map((r) => ({ ...r, balanceAfterMinor: undefined }))
@@ -217,9 +208,7 @@ describe('the import policy', () => {
 	});
 
 	it('still refuses a layout nothing could check, however confidently it was mapped', () => {
-		// The confirmed mapping says what the columns MEAN. It says nothing about
-		// whether the rows under them are all there, and P0 means the file cannot
-		// answer that either.
+		// A confirmed mapping says what the columns MEAN, not whether the rows are all there.
 		const bare = proveStatement({
 			...chained(),
 			openingBalanceMinor: undefined,
@@ -249,11 +238,8 @@ describe('the import policy', () => {
 
 describe('a running balance that does not follow', () => {
 	it('refuses the statement even when the endpoints happen to agree', () => {
-		// Two amounts transposed leave the sum unchanged, so opening + movements
-		// still meets the closing balance while the printed chain visibly does not.
-		// That failure was recorded in the evidence and then not consulted by the
-		// test for contradicting evidence, so the reading reached P1 and filed
-		// itself carrying a check that said in words that it had failed.
+		// Regression: a recorded running-balance failure wasn't consulted by the
+		// contradicting-evidence check, so this reached P1 despite failing visibly.
 		const broken: ParsedStatement = {
 			bank: 'tabular',
 			format: 'csv',

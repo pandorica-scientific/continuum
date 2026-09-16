@@ -1,13 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * An organisation as a record.
- *
- * The whole reason it is an entity kind rather than a table of its own: the far
- * end of a `document_link` is an `entity`, so a payslip can be filed against an
- * employer the moment the row exists — with no new link table and no per-kind
- * code anywhere. This suite holds the registration that makes that true, since
- * none of it is written by hand: `entitySql` loops `ENTITY_KINDS` and generates
- * the trigger, the generated column and the composite foreign key.
+ * Organisation is an entity kind, not its own table, so a payslip can link to
+ * an employer via `document_link` with no per-kind code. `entitySql` generates
+ * the trigger, column and FK from `ENTITY_KINDS`; this suite checks that holds.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { shelfIdByKey } from '$lib/server/documents/shelves';

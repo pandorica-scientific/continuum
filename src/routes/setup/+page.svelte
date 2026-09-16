@@ -23,10 +23,7 @@
 	// Rows the wizard shows: what came back, never fewer than two, plus any the
 	// person added by hand.
 	let extraRows = $state(0);
-	/** Asked for explicitly, and never a default: see auth/open-mode.ts. */
-	// The initial value, read once. Deliberately not reactive: a rejected
-	// submission re-renders with what was typed, and re-deriving here would fight
-	// the tick somebody has since changed.
+	// Read once, not reactive: re-deriving would fight a change made since the re-render.
 	let openMode = $state(untrack(() => Boolean(entered?.openMode)));
 	const peopleCount = $derived(Math.max(enteredPeople.length, 2) + extraRows);
 </script>
@@ -44,8 +41,7 @@
 		hard-coded.
 	</p>
 
-	<!-- The one thing a household needs to know before anything else: what to
-	     type on the phone. Worked out from the machine, not configured. -->
+	<!-- Worked out from the machine, not configured. -->
 	<div class="card addresses">
 		<p class="addresses-title">Reach it from any device in the house at</p>
 		<ul>
@@ -101,8 +97,7 @@
 							? 'No password'
 							: `Password (${passwordHint(data.passwordMinLength)})`}
 					/>
-					<!-- The only password on a fresh instance, so it is asked twice. A
-					     typo here used to lock the owner out with nothing to fall back on. -->
+					<!-- Asked twice: a typo here would lock the owner out with nothing to fall back on. -->
 					<input
 						name="personPasswordConfirm"
 						type="password"
@@ -145,9 +140,8 @@
 
 <style>
 	.wrap {
-		/* Four fields per person — name, birth year, password, repeat — need more
-		   than the 560px this used to be, where the fourth wrapped onto its own
-		   row and read as a field belonging to nobody. */
+		/* Four fields per person (name, birth year, password, repeat) need this width
+		   or the fourth wraps onto its own row. */
 		max-width: 640px;
 		margin: 0 auto;
 		padding: 48px 20px 80px;
@@ -247,10 +241,7 @@
 	.note {
 		color: var(--fg3);
 	}
-	/* Below the width where four boxes stay usable, the row becomes two lines —
-	   who they are, then the password twice — rather than four stacked boxes
-	   that lose which pair belongs together. Two declared columns and four
-	   children auto-flow into exactly that shape. */
+	/* Two columns, four auto-flowing children: name/year on one row, password pair below. */
 	@media (max-width: 640px) {
 		.person-row {
 			grid-template-columns: minmax(0, 1fr) 84px;

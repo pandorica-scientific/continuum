@@ -66,9 +66,7 @@ describe('a bank with no adapter at all', () => {
 	});
 
 	it('REFUSES when the date order is undecidable, however sound the arithmetic', async () => {
-		// Every day and month is 12 or lower, and no period is printed, so
-		// 03/04 could be 3 April or 4 March. The balances still close — and that
-		// is precisely the case where closing balances are not enough.
+		// All days/months are ≤12 with no period printed, so date order is undecidable even though balances close.
 		const ambiguous = [
 			'Saldo inicial;1000,00 EUR',
 			'Saldo final;1150,00 EUR',
@@ -82,9 +80,7 @@ describe('a bank with no adapter at all', () => {
 	});
 
 	it('a confirmed layout answers the question the file cannot', async () => {
-		// Every date is 12 or lower and no period is printed, so unaided this is
-		// refused. A profile is a person's answer to exactly that question,
-		// recorded once.
+		// Unaided this is refused; a saved profile answers the date-order question instead.
 		const ambiguous = [
 			'Saldo inicial;1000,00 EUR',
 			'Saldo final;1150,00 EUR',
@@ -114,11 +110,8 @@ describe('a bank with no adapter at all', () => {
 	});
 
 	it('does not let a confirmed layout excuse numbers read at the wrong scale', async () => {
-		// A profile says what the columns MEAN. It cannot vouch for amounts
-		// carrying more decimals than the currency has, so the lexical gate
-		// stands whatever the profile says.
-		// HUF has no minor unit, so a two-decimal forint amount is money-shaped
-		// but cannot be a forint figure — the scale is wrong.
+		// A profile can't vouch for amounts with more decimals than the currency has; HUF has no minor unit,
+		// so a two-decimal forint amount is money-shaped but the wrong scale.
 		const overPrecise = [
 			'Saldo inicial;1000,00 HUF',
 			'Saldo final;1150,00 HUF',
@@ -162,16 +155,14 @@ describe('a bank with no adapter at all', () => {
 describe('PDF geometry', () => {
 	it('rejoins an amount the text layer split across items', async () => {
 		const { joinSplitNumbers } = await import('$lib/server/import/tabular/frompdf');
-		// CaixaBank prints "-1 000,00 €" and the text layer emits three items.
-		// A cell-wise reader sees "-1".
+		// CaixaBank prints "-1 000,00 €" as three text items; a cell-wise reader sees "-1".
 		expect(joinSplitNumbers(['-1', '000,00', '€'], [100, 112, 150]).cells).toEqual(['-1 000,00 €']);
 	});
 
 	it('does NOT fuse two adjacent money columns', async () => {
 		const { joinSplitNumbers } = await import('$lib/server/import/tabular/frompdf');
-		// "300,00" then "377,93" is an amount and a balance, not one number —
-		// and it has the same shape as a thousands group. The left part already
-		// carrying a decimal is what tells them apart.
+		// "300,00" then "377,93" is an amount and a balance, not one thousands-grouped number —
+		// the left part already carrying a decimal is what tells them apart.
 		expect(joinSplitNumbers(['300,00', '377,93'], [100, 200]).cells).toEqual(['300,00', '377,93']);
 	});
 });
@@ -213,8 +204,7 @@ describe('spreadsheets and photographs', () => {
 			['Saldo final', '1150,00 EUR'],
 			[],
 			['Fecha', 'Concepto', 'Importe', 'Saldo'],
-			// A day above twelve, so the date order is settled by the data itself
-			// rather than left for someone to answer.
+			// A day above twelve settles the date order from the data itself.
 			['17/03/2025', 'NOMINA', '300,00', '1300,00'],
 			['21/03/2025', 'COMPRA', '-50,00', '1250,00'],
 			['28/03/2025', 'ALQUILER', '-100,00', '1150,00']
@@ -232,8 +222,7 @@ describe('spreadsheets and photographs', () => {
 	});
 
 	it('will not read a photograph on the request path', async () => {
-		// Recognising a page takes seconds, and nothing that slow belongs on a
-		// request someone is waiting on — the background reader turns OCR on.
+		// OCR is too slow for a request path; it runs via the background reader instead.
 		const png = new Uint8Array([
 			0x89,
 			0x50,

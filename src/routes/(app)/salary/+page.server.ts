@@ -1,15 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Salary: what was earned each month, and the payslips it was read from.
-//
-// Moved out of Retirement in v0.4.4. It sat beside a projection that never read
-// it, and "what did I earn" is a Money question — it now lives one tab from the
-// Tax screen that asks what was paid on it.
 import { asRowId } from '$lib/ids';
 import { fail } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { mayActFor } from '$lib/server/auth/policy';
-import { person, salaryEntry } from '$lib/server/db/schema';
+import {
+	createGrant,
+	engagementOwner,
+	forfeitPending,
+	grantOwner,
+	grantsWithTranches,
+	parseSchedule,
+	recordSale,
+	recordSettlement,
+	replaceSchedule,
+	trancheOwner
+} from '$lib/server/equity';
+import { engagement, organisation, person, salaryEntry } from '$lib/server/db/schema';
 import {
 	learnBonusLabel,
 	learnGrossLabel,
@@ -18,6 +25,7 @@ import {
 	entryWithOwner,
 	filePayslipDocument,
 	loadSalaryHistory,
+	vestValues,
 	payslipMatchingContent,
 	payslipStatementsFor,
 	readPayslip,
@@ -46,6 +54,8 @@ function serialiseYear(y: SalaryYear) {
 		baseTotalMinor: y.baseTotalMinor.toString(),
 		bonusTotalMinor: y.bonusTotalMinor.toString(),
 		netTotalMinor: y.netTotalMinor.toString(),
+		equityTotalMinor: y.equityTotalMinor.toString(),
+		equityOnPayslipMinor: y.equityOnPayslipMinor.toString(),
 		grossMonths: y.grossMonths,
 		netMonths: y.netMonths,
 		netComplete: y.netComplete,
@@ -63,24 +73,45 @@ export const load: PageServerLoad = async ({ url }) => {
 	const convert = (amount: bigint, from: string, to: string, day: string) =>
 		convertOrFace(rates, amount, from, to, day);
 
-	// Who is asking travels into the query. A member gets every month and every
-	// figure; the slips they may not see arrive with no file behind them.
-	const history = await loadSalaryHistory(baseCurrency, convert);
+	// A member gets every month/figure; slips they may not see arrive with no file behind them.
+	const vests = await vestValues(baseCurrency, convert);
+	const history = await loadSalaryHistory(baseCurrency, convert, db, vests);
 
-	// The household series, computed here rather than in the screen: merging
-	// TOTALS is the only honest way to it, and doing that in markup invites the
-	// shortcut of averaging the per-person averages.
+	// For the grant dialog: jobs a grant can hang off, plus grants already recorded.
+	const [engagements, grantRows] = await Promise.all([
+		db
+			.select({
+				id: engagement.id,
+				personId: engagement.personId,
+				employer: organisation.name,
+				role: engagement.role,
+				endsOn: engagement.endsOn
+			})
+			.from(engagement)
+			.innerJoin(organisation, eq(organisation.id, engagement.organisationId)),
+		grantsWithTranches()
+	]);
+	const grants = grantRows.map(({ grant, tranches }) => ({
+		id: grant.id,
+		personId: grant.personId,
+		ticker: grant.ticker,
+		label: grant.label,
+		totalUnits: grant.totalUnits,
+		currency: grant.currency,
+		vestYears: [...new Set(tranches.map((t) => Number((t.settledOn ?? t.vestsOn).slice(0, 4))))]
+	}));
+
+	// Computed here, not in markup: merging must sum totals, not average the per-person averages.
 	const household = mergeSalaryYears(history.map((p) => p.years));
 
 	return {
-		// ?add=1 opens the upload form on arrival — the convention the quick-add
-		// menu already uses for /documents. A shortcut that lands you on a screen
-		// you then have to find a button on is half a shortcut.
+		// ?add=1 opens the upload form on arrival, same convention as /documents.
 		openAdd: url.searchParams.get('add') === '1',
+		openGrant: url.searchParams.get('add') === 'grant',
+		engagements,
+		grants,
 		baseCurrency,
-		// Every currency the app can convert. A payslip states its own currency —
-		// the household's base is where it is REPORTED, not what it was paid in —
-		// so the dialog has to be able to offer any of them.
+		// A payslip's own currency need not match the household's base (reporting) currency.
 		currencies,
 		people: history.map((p) => ({ id: p.id, name: p.name })),
 		household: household.map(serialiseYear),
@@ -91,11 +122,7 @@ export const load: PageServerLoad = async ({ url }) => {
 			payslips: p.payslips.map((s) => ({
 				id: s.id,
 				periodMonth: s.periodMonth,
-				// Each figure names itself. A number on this screen with no stated
-				// kind is the whole defect v0.4.6 exists to remove.
-				// Base is gross with the award taken out, the same split the year rows
-				// draw. Computed here rather than in markup so the screen never has
-				// to subtract two formatted strings.
+				// Base = gross minus bonus, computed here so the screen never subtracts formatted strings.
 				base:
 					s.grossMinor === null
 						? null
@@ -103,15 +130,10 @@ export const load: PageServerLoad = async ({ url }) => {
 				gross: s.grossMinor === null ? null : formatMinor(s.grossMinor, s.currency),
 				net: s.netMinor === null ? null : formatMinor(s.netMinor, s.currency),
 				bonus: s.bonusMinor === null ? null : formatMinor(s.bonusMinor, s.currency),
-				// The symbol goes beside every figure on the row, the way the Tax
-				// screen prints a statement's. The code travels alongside it because
-				// the ⋯ menu's currency select has to send back a currency, and "Kč"
-				// is not one.
+				// currencyCode is separate because the ⋯ menu's select needs the code, not "Kč".
 				currency: displayCurrency(s.currency),
 				currencyCode: s.currency,
-				// The document, and the extension the overlay needs: the file is
-				// served through the document now, so the stored name never has to
-				// reach the browser.
+				// Served through the document, so the stored name never reaches the browser.
 				documentId: s.documentId,
 				fileExt: s.file ? (s.file.split('.').pop() ?? 'pdf').toUpperCase() : null
 			}))
@@ -140,21 +162,32 @@ function optionalAmount(
 
 /** The one sentence a refused payslip upload answers with. */
 const NOT_YOUR_PAYSLIP = 'You can only file your own payslips.';
+const NOT_YOUR_EQUITY = 'You can only record your own equity.';
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** A units figure off the form, or a refusal sentence. */
+function unitsField(form: FormData, field: string, allowZero = false): number {
+	const n = Number(String(form.get(field) ?? '').replace(',', '.'));
+	if (!Number.isFinite(n) || n < 0 || (!allowZero && n === 0)) {
+		throw new Error(
+			`${field} must be a ${allowZero ? 'non-negative' : 'positive'} number of units.`
+		);
+	}
+	return n;
+}
+
+function userSentence(err: unknown, fallback: string): string {
+	return err instanceof Error ? err.message : fallback;
+}
 
 /**
  * Whose payslips this person may file: their own, or anybody's if an admin.
  *
- * An upload is not only an insert. `payslipMatchingContent` recognises a
- * re-uploaded slip by its bytes and the action then RESTATES what it matched —
- * the document's name, the month it is filed under, and the salary entry
- * hanging off it. It matches by content hash alone, restricted slips included,
- * so without this gate a member could rename paper they are not allowed to
- * know exists and move somebody else's pay into another month.
- *
- * The check lives here and not in the match on purpose. Narrowing the match by
- * the read rule would make a member's upload MISS the slip it is a copy of: a
- * second document, a second salary entry, and a month reporting double pay —
- * the exact failure content matching was added to prevent.
+ * `payslipMatchingContent` matches by content hash alone, restricted slips
+ * included, so without this gate a member could restate paper they are not
+ * allowed to know exists. The check stays here rather than narrowing the
+ * match itself, or a member's upload would miss the slip it duplicates and
+ * create a second entry reporting double pay.
  */
 function mayFilePayslipsFor(actor: App.Locals['person'], personId: string): boolean {
 	return mayActFor(actor, personId);
@@ -169,7 +202,7 @@ export const actions: Actions = {
 		}
 		const owner = (await db.select().from(person).where(eq(person.id, personId)))[0];
 		if (!owner) return fail(400, { message: 'Pick whose payslip this is.' });
-		// The reader's learned labels stay keyed by name; the link is by id.
+		// Learned labels stay keyed by name; the link is by id.
 		const subject = owner.name;
 
 		const file = form.get('file');
@@ -177,28 +210,19 @@ export const actions: Actions = {
 		let contentHash: string | null = null;
 		let reading = null;
 		/**
-		 * The slip already filed that IS this file.
-		 *
-		 * A month may hold more than one payslip since v0.5.5, so nothing keyed on
-		 * the month catches a re-upload any more — the same file dropped in twice
-		 * made two documents, two entries and a month reporting double pay. The
-		 * bytes are what recognise it; two jobs paying alike are still two slips.
+		 * The slip already filed that IS this file. A month can hold more than one
+		 * payslip, so identity is by content bytes, not by month.
 		 */
 		let sameSlip: { id: string; periodMonth: string | null } | null = null;
 		if (file instanceof File && file.size > 0) {
 			const data = new Uint8Array(await file.arrayBuffer());
 			contentHash = hashBytes(data);
-			// Reading the PDF is the long pole of this request and it shares no
-			// data with the shelf lookup, so neither waits for the other. Only the
-			// save below depends on the answer.
+			// Reading the PDF shares no data with the shelf lookup, so run them together.
 			[sameSlip, reading] = await Promise.all([
 				payslipMatchingContent(personId, contentHash),
 				readPayslip(data, subject)
 			]);
-			// A recognised slip keeps the copy already on the volume. Saving a
-			// second identical file would leave the first orphaned by whichever
-			// document lost the race, and there is nothing in it that the stored
-			// one does not already have.
+			// A recognised slip keeps the copy already on the volume rather than duplicating it.
 			if (!sameSlip) {
 				try {
 					storedName = await saveUploadBytes(data, file.name);
@@ -208,13 +232,8 @@ export const actions: Actions = {
 			}
 		}
 
-		// Which fields the person actually EDITED.
-		//
-		// The dialog prefills gross, net and bonus from a read of the same file so
-		// they can be checked before anything is written — but a figure that
-		// arrived that way is still a reading, not a decision. Without this every
-		// prefill would be stored as a hand-correction, immune to later re-reads,
-		// and would teach the reader a label nobody chose.
+		// Which fields the person actually edited — a reader-filled prefill is
+		// still a reading, not a decision, and should not teach the reader itself.
 		const touched = new Set(
 			String(form.get('touched') ?? '')
 				.split(',')
@@ -226,9 +245,8 @@ export const actions: Actions = {
 			.trim()
 			.toUpperCase();
 
-		// Whatever was typed goes back with the failure, so a rejected upload is
-		// corrected rather than retyped. The file cannot be handed back — a
-		// browser will not let a file input be repopulated — so the form says so.
+		// Whatever was typed goes back with the failure so it can be corrected, not retyped
+		// (the file itself cannot be handed back — a browser will not repopulate a file input).
 		const typedBack = {
 			personId,
 			gross: String(form.get('gross') ?? ''),
@@ -239,15 +257,8 @@ export const actions: Actions = {
 		};
 		const reject = (message: string) => fail(400, { message, values: typedBack, reopen: true });
 
-		// The currency the slip is PRINTED in, which is not the currency the
-		// household reports in. Taking the base currency for it is the v0.4.4
-		// defect this replaces: six Czech payslips were filed as 135 887 EUR, and
-		// every conversion downstream then multiplied koruna by the euro rate.
-		//
-		// Mandatory, with no fallback. The dialog fills it in from the slip when
-		// the slip says, and asks when it does not — and what a person states
-		// there is an answer, where a default is only ever a guess that nobody is
-		// shown.
+		// The currency the slip is PRINTED in, not the household's reporting currency.
+		// Mandatory, with no fallback: a default would be a guess nobody sees.
 		const currencies = await availableCurrencies();
 		const currency = stated || reading?.currency || '';
 		if (!currency) {
@@ -278,22 +289,13 @@ export const actions: Actions = {
 			return reject('Which month does this payslip cover?');
 		}
 
-		// A currency the person CHOSE teaches the reader, so the next slip for the
-		// same job arrives with the field already right. Plenty of payslips print
-		// no currency anywhere on the page, and without this the question has to
-		// be answered by hand every month for an employer that has not changed.
-		//
-		// Outside the `if (reading)` below on purpose: a month filed with no file
-		// at all still states a currency, and that statement is worth just as
-		// much. `touched` is what separates a decision from the reader's own
-		// prefill — learning a prefill back would teach it nothing.
+		// A currency the person CHOSE teaches the reader for next time. Outside the
+		// `if (reading)` block below on purpose: a month with no file still states one.
 		if (touched.has('currency')) {
 			await learnPayslipCurrency(subject, currency);
 		}
 
-		// A figure the person STATED, that matches a line on the slip, teaches the
-		// reader. A prefill the reader produced teaches it nothing — it would only
-		// be learning its own answer back.
+		// A figure the person stated teaches the reader; a reader-produced prefill would not.
 		if (reading) {
 			if (touched.has('gross') && typedGross.value !== null) {
 				await learnGrossLabel(subject, typedGross.value, reading.candidates);
@@ -306,27 +308,12 @@ export const actions: Actions = {
 			}
 		}
 
-		/**
-		 * A month used to identify an entry, so a re-upload REPLACED the slip
-		 * already filed for it. It cannot any more: a month worked twice has two
-		 * payslips, and "replace August's" would throw away the other job.
-		 *
-		 * So an upload only ever ADDS, and nothing deletes a stored file behind
-		 * the person's back. Filing the same slip twice leaves two rows, which is
-		 * visible on the screen and removed from its ⋯ menu — where a silently
-		 * destroyed payslip was neither.
-		 */
+		// A month worked twice has two payslips, so upload only ever ADDS — never
+		// replaces by month, which would throw away the other job's slip.
 		const alreadyFiled = sameSlip ? [] : await payslipStatementsFor(personId, periodMonth);
 
-		/**
-		 * A recognised slip corrects the statement it already produced.
-		 *
-		 * Its document is reused rather than replaced, so `recordSalary` finds ITS
-		 * OWN row by document id and writes over it — figures, currency and the
-		 * month alike. `filePayslipDocument` restates the month as part of that:
-		 * the same file cannot be two statements, so filing it again with a
-		 * corrected month moves the row rather than leaving the old one behind.
-		 */
+		// A recognised slip's document is reused, not replaced, so `recordSalary`
+		// finds its own row by document id and writes over it.
 		const documentId = await filePayslipDocument({
 			personId,
 			subject,
@@ -340,9 +327,7 @@ export const actions: Actions = {
 			personId,
 			periodMonth,
 			currency,
-			// A re-upload restates the month, its currency included: filing the
-			// same month again with a corrected currency has to move the label as
-			// well as the figures, or the koruna digits stay under a euro sign.
+			// A re-upload restates the currency too, or a corrected currency's digits stay mislabelled.
 			restateCurrency: true,
 			grossMinor,
 			netMinor,
@@ -371,14 +356,11 @@ export const actions: Actions = {
 			});
 		}
 
-		// Said out loud rather than acted on: a second slip for a month is exactly
-		// what two jobs look like, and also what a mistaken re-upload looks like.
+		// Said out loud rather than acted on: a second slip for a month can mean two
+		// jobs or a mistaken re-upload — the person decides which.
 		return {
 			ok: true,
 			alsoFiled: alreadyFiled.length > 0 ? { periodMonth, count: alreadyFiled.length } : null,
-			// Said out loud too, and the opposite news: nothing was added, the
-			// statement this file already made was corrected. Silence here would
-			// look exactly like a second upload that did nothing.
 			sameSlip: sameSlip
 				? {
 						periodMonth,
@@ -389,23 +371,14 @@ export const actions: Actions = {
 	},
 
 	/**
-	 * File a year of payslips in one go.
-	 *
-	 * Deliberately NOT the same action as `addPayslip`. That one exists so a
-	 * single slip can be checked before it is written — the figures are read,
-	 * shown, and corrected, and a correction teaches the reader. Nobody checks
-	 * twelve slips in a dialog, so this one files only what it can read with
-	 * confidence and hands back, by name, every file it could not.
-	 *
-	 * Nothing here is stored as a decision: every figure lands as a reading, so a
-	 * later re-read may still correct it and no label is learned from a number
-	 * nobody looked at.
+	 * File a year of payslips in one go. Unlike `addPayslip`, nobody checks
+	 * twelve slips in a dialog, so this files only what it can read with
+	 * confidence and hands back, by name, every file it could not — and nothing
+	 * here is stored as a decision, since no figure was looked at.
 	 */
 	addPayslips: async ({ request, locals }) => {
 		const form = await request.formData();
 		const personId = asRowId(form.get('personId')).trim();
-		// The same gate as the single upload: this action files and restates
-		// payslips too, a dozen at a time.
 		if (!mayFilePayslipsFor(locals.person, personId)) {
 			return fail(403, { message: NOT_YOUR_PAYSLIP });
 		}
@@ -416,9 +389,7 @@ export const actions: Actions = {
 		const files = form.getAll('files').filter((f): f is File => f instanceof File && f.size > 0);
 		if (files.length === 0) return fail(400, { message: 'Choose at least one payslip file.' });
 
-		// A currency for the slips that do not name one. Optional: most do, or the
-		// reader has learned this person's from an earlier upload. Where neither is
-		// true the file is refused by name rather than filed under a guess.
+		// Fallback for slips that do not name a currency; otherwise the file is refused, not guessed.
 		const currencies = await availableCurrencies();
 		const fallback = String(form.get('currency') ?? '')
 			.trim()
@@ -430,14 +401,9 @@ export const actions: Actions = {
 		const filed: { name: string; periodMonth: string }[] = [];
 		const skipped: { name: string; reason: string }[] = [];
 		/**
-		 * Files that were already on the shelf, listed back rather than filed again.
-		 *
-		 * Its own bucket, not `skipped`. Skipped means "this one needs you" — a
-		 * slip nothing could be read from. A file already filed needs nothing;
-		 * saying so is only so that eleven of twelve landing does not read as a
-		 * failure. Nothing is re-read either: unlike the single-slip dialog, no
-		 * figure here was checked by anybody, so there is no correction to carry
-		 * back into the statement the file already made.
+		 * Files already on the shelf, listed back rather than filed again. A
+		 * separate bucket from `skipped` (which needs the person's help) so eleven
+		 * of twelve landing does not read as a failure.
 		 */
 		const already: { name: string; periodMonth: string | null }[] = [];
 		/** Fingerprints filed by THIS run, so one drop of the same file twice is
@@ -468,8 +434,7 @@ export const actions: Actions = {
 				continue;
 			}
 
-			// Every refusal from here on removes the file it just stored. An upload
-			// nothing points at is invisible and stays on the disk for ever.
+			// Every refusal from here on removes the file it just stored, or it would linger unreferenced.
 			const refuse = async (reason: string) => {
 				await removeUpload(storedName);
 				skipped.push({ name: file.name, reason });
@@ -512,10 +477,8 @@ export const actions: Actions = {
 				// `overridden` stays false: nobody looked at these figures.
 			});
 			if (!recorded.ok) {
-				// The document was made a moment ago and nothing was recorded
-				// against it, so this is a rollback rather than a deletion — but it
-				// goes through the same removal as any other, because a
-				// half-successful re-upload could have left a row behind.
+				// Rollback of the just-made document, via the same removal path as any
+				// other deletion in case a half-successful re-upload left a row behind.
 				await removeDocument(documentId);
 				skipped.push({ name: file.name, reason: recorded.message.toLowerCase() });
 				continue;
@@ -527,12 +490,7 @@ export const actions: Actions = {
 		return { ok: true, filed, skipped, already };
 	},
 
-	/**
-	 * Correct one figure of one month.
-	 *
-	 * Replaces `setPayslipAmount`, which wrote to the document and — having no
-	 * caller in the UI — was never reachable at all.
-	 */
+	/** Correct one figure of one month. */
 	setPayslipFigure: async ({ request }) => {
 		const form = await request.formData();
 		const field = String(form.get('field') ?? '');
@@ -551,15 +509,8 @@ export const actions: Actions = {
 			return fail(400, { message: 'The amount must be a positive number.' });
 		}
 
-		/**
-		 * Base is gross with the award taken out, so setting it sets gross.
-		 *
-		 * It used to be read-only for exactly that reason — an editable derived
-		 * figure has to decide which of its inputs it writes. It writes gross and
-		 * leaves the bonus alone, because that is what correcting a base means:
-		 * "the award was right, the pay under it was not". Correcting the award
-		 * itself is the bonus field, one column over.
-		 */
+		// Base is gross minus bonus, so setting it writes gross and leaves the bonus
+		// alone: correcting an award is the separate bonus field.
 		let grossMinor: bigint | null = null;
 		if (field === 'gross') grossMinor = parsed.value;
 		if (field === 'base') grossMinor = parsed.value + (entry.bonusMinor ?? 0n);
@@ -576,11 +527,8 @@ export const actions: Actions = {
 		});
 		if (!recorded.ok) return fail(recorded.status, { message: recorded.message });
 
-		// A correction against THIS month's stored slip teaches the reader.
-		//
-		// Base is excluded on purpose: what a person typed there is gross minus an
-		// award, and no line on the slip prints that sum. Teaching the reader to
-		// look for it would point the gross label at a number the slip never had.
+		// A correction against this month's stored slip teaches the reader. Base is
+		// excluded: no line on the slip prints gross-minus-bonus directly.
 		const slip = entry.documentId ? await slipDocument(entry.documentId) : null;
 		if (slip?.storedName && field !== 'base') {
 			const reading = await readStoredPayslip(slip.storedName, owner.name);
@@ -591,17 +539,9 @@ export const actions: Actions = {
 	},
 
 	/**
-	 * Correct which currency a month was paid in.
-	 *
-	 * A RELABEL, never a conversion. The figures are the digits printed on the
-	 * slip; what was wrong is the name attached to them, and multiplying them by
-	 * a rate would destroy the only true thing on the row. Reporting into the
-	 * base currency happens on the way out, from this currency, so fixing the
-	 * label is the whole fix.
-	 *
-	 * It exists because the currency used to be taken from the household's base:
-	 * every month filed before v0.5.1 carries that base rather than what the
-	 * slip said, and a re-upload is not always possible — the file may be gone.
+	 * Correct which currency a month was paid in — a relabel, never a
+	 * conversion. The digits on the slip are the only true thing on the row;
+	 * multiplying them by a rate would destroy that.
 	 */
 	setPayslipCurrency: async ({ request }) => {
 		const form = await request.formData();
@@ -617,25 +557,18 @@ export const actions: Actions = {
 		if (!found) return fail(404, { message: 'That payslip is no longer here.' });
 		const { entry, owner } = found;
 
-		// The entry is the only place a payslip's currency lives, so the correction
-		// is one write. The stored document is the FILE and says nothing about
-		// money, which is what stops an old currency reappearing behind this.
+		// The entry is the only place a payslip's currency lives, so this is one write.
 		await db.update(salaryEntry).set({ currency }).where(eq(salaryEntry.id, entry.id));
 
-		// A correction is the strongest statement there is about this person's
-		// pay, so it teaches the reader too — fixing one month should not leave
-		// the next upload asking the same question again.
+		// Teach the reader too, so the next upload does not ask the same question again.
 		await learnPayslipCurrency(owner.name, currency);
 		return { ok: true };
 	},
 
 	/**
-	 * Correct what of a month was a bonus.
-	 *
-	 * Stored on the salary entry rather than on the document, because a month
-	 * can be evidenced by a payslip and a bank credit both, and the bonus is a
-	 * fact about the month rather than about one piece of paper. An empty field
-	 * clears it back to "the slip did not say", which is not the same as zero.
+	 * Correct what of a month was a bonus. Stored on the salary entry, not the
+	 * document — a month can be evidenced by both a payslip and a bank credit.
+	 * An empty field clears it to "the slip did not say", not zero.
 	 */
 	setBonus: async ({ request }) => {
 		const form = await request.formData();
@@ -657,9 +590,7 @@ export const actions: Actions = {
 		});
 		if (!recorded.ok) return fail(recorded.status, { message: recorded.message });
 
-		// THIS statement's own slip. Not "any document linked to this person that
-		// happens to have a file", and — now that a month can hold two — not
-		// whichever of the month's slips came back first either.
+		// This statement's own slip specifically, not any document linked to this person.
 		if (parsed.value !== null) {
 			const slip = entry.documentId ? await slipDocument(entry.documentId) : null;
 			if (slip?.storedName) {
@@ -671,20 +602,10 @@ export const actions: Actions = {
 	},
 
 	/**
-	 * Remove a payslip and the month it evidenced.
-	 *
-	 * The payslip's whole statement goes, not just the payslip-side fields —
-	 * but a bank credit that had been merged into it does not. That figure was
-	 * proved by money arriving, and it comes back as the credit-only row it was
-	 * before any slip claimed it; the transaction in the ledger is untouched.
-	 *
-	 * Through `removeDocument` rather than deleting the row here and the
-	 * document after: the two have to happen in one transaction, in that order,
-	 * or the foreign key's SET NULL turns the statement into a second unclaimed
-	 * row for its month and the partial unique index refuses it.
-	 *
-	 * A statement with no document is a bank credit or a hand-typed figure and
-	 * has no paper to remove, so that one is deleted here.
+	 * Remove a payslip and the month it evidenced. A merged bank credit reverts
+	 * to its credit-only row rather than being deleted too. Goes through
+	 * `removeDocument` (row + document in one transaction) or the FK's SET NULL
+	 * would leave a second unclaimed row that the partial unique index refuses.
 	 */
 	deletePayslip: async ({ request }) => {
 		const form = await request.formData();
@@ -693,14 +614,109 @@ export const actions: Actions = {
 		const { entry } = found;
 
 		if (entry.documentId) {
-			// This ONE statement of the month, and the file it was read from. A
-			// month worked twice keeps its other job: the removal is keyed to the
-			// document, and deleting by month took both.
+			// Keyed to the document, not the month, so a month worked twice keeps its other job.
 			const outcome = await removeDocument(entry.documentId);
 			if (!outcome.ok) return fail(outcome.status, { message: outcome.message });
 			return { ok: true };
 		}
 		await db.delete(salaryEntry).where(eq(salaryEntry.id, entry.id));
 		return { ok: true };
+	},
+
+	// ---- Equity grants. Same ownership rule as payslips: the person the grant
+	// is for is stated in the form for a new one and read from the row after.
+
+	addGrant: async ({ request, locals }) => {
+		const form = await request.formData();
+		const personId = asRowId(form.get('personId')).trim();
+		if (!mayActFor(locals.person, personId)) return fail(403, { message: NOT_YOUR_EQUITY });
+		const currency = String(form.get('currency') ?? '').toUpperCase();
+		if (!(await availableCurrencies()).includes(currency)) {
+			return fail(400, { message: `${currency} is not a currency this instance can convert.` });
+		}
+		const grantedOn = String(form.get('grantedOn') ?? '');
+		if (!ISO_DATE.test(grantedOn)) return fail(400, { message: 'Pick the grant date.' });
+		try {
+			const engagementId = form.get('engagementId') ? asRowId(form.get('engagementId')) : null;
+			if (engagementId && (await engagementOwner(engagementId)) !== personId) {
+				return fail(400, { message: 'That job belongs to somebody else.' });
+			}
+			await createGrant({
+				personId,
+				engagementId,
+				ticker: String(form.get('ticker') ?? ''),
+				currency,
+				grantedOn,
+				totalUnits: unitsField(form, 'totalUnits'),
+				label: String(form.get('label') ?? '').trim() || null,
+				documentId: null,
+				note: String(form.get('note') ?? '').trim() || null,
+				schedule: parseSchedule(form)
+			});
+		} catch (err) {
+			return fail(400, { message: userSentence(err, 'That grant did not save.') });
+		}
+		return { ok: true };
+	},
+
+	editSchedule: async ({ request, locals }) => {
+		const form = await request.formData();
+		const grantId = asRowId(form.get('grantId'));
+		const owner = await grantOwner(grantId);
+		if (!owner) return fail(404, { message: 'That grant is no longer here.' });
+		if (!mayActFor(locals.person, owner)) return fail(403, { message: NOT_YOUR_EQUITY });
+		try {
+			await replaceSchedule(grantId, unitsField(form, 'totalUnits'), parseSchedule(form));
+		} catch (err) {
+			return fail(400, { message: userSentence(err, 'That schedule did not save.') });
+		}
+		return { ok: true };
+	},
+
+	recordSettlement: async ({ request, locals }) => {
+		const form = await request.formData();
+		const trancheId = asRowId(form.get('trancheId'));
+		const owner = await trancheOwner(trancheId);
+		if (!owner) return fail(404, { message: 'That tranche is no longer here.' });
+		if (!mayActFor(locals.person, owner)) return fail(403, { message: NOT_YOUR_EQUITY });
+		const settledOn = String(form.get('settledOn') ?? '');
+		if (!ISO_DATE.test(settledOn)) return fail(400, { message: 'Pick the settlement date.' });
+		try {
+			await recordSettlement(trancheId, {
+				settledOn,
+				deliveredUnits: unitsField(form, 'deliveredUnits', true),
+				withheldUnits: unitsField(form, 'withheldUnits', true),
+				onPayslip: form.get('onPayslip') === 'on'
+			});
+		} catch (err) {
+			return fail(400, { message: userSentence(err, 'That settlement did not save.') });
+		}
+		return { ok: true };
+	},
+
+	recordSale: async ({ request, locals }) => {
+		const form = await request.formData();
+		const trancheId = asRowId(form.get('trancheId'));
+		const owner = await trancheOwner(trancheId);
+		if (!owner) return fail(404, { message: 'That tranche is no longer here.' });
+		if (!mayActFor(locals.person, owner)) return fail(403, { message: NOT_YOUR_EQUITY });
+		try {
+			await recordSale(trancheId, unitsField(form, 'soldUnits'));
+		} catch (err) {
+			return fail(400, { message: userSentence(err, 'That sale did not save.') });
+		}
+		return { ok: true };
+	},
+
+	forfeitGrant: async ({ request, locals }) => {
+		const form = await request.formData();
+		const grantId = asRowId(form.get('grantId'));
+		const owner = await grantOwner(grantId);
+		if (!owner) return fail(404, { message: 'That grant is no longer here.' });
+		if (!mayActFor(locals.person, owner)) return fail(403, { message: NOT_YOUR_EQUITY });
+		const forfeitedOn = String(form.get('forfeitedOn') ?? '');
+		if (!ISO_DATE.test(forfeitedOn)) return fail(400, { message: 'Pick the leaving date.' });
+		const count = await forfeitPending(grantId, forfeitedOn);
+		return { ok: true, forfeited: count };
 	}
 };

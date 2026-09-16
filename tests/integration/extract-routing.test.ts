@@ -19,15 +19,10 @@ vi.mock('$env/dynamic/private', () => ({
 }));
 
 /**
- * Routing is per PAGE, not per file.
+ * Routing is per PAGE, not per file: a whole-file decision either OCRs typed
+ * pages worse than they went in, or leaves a scanned signature page blank.
  *
- * A born-digital contract with a scanned signature page is the ordinary case in
- * a household, and a whole-file decision gets it wrong in both directions: OCR
- * everything and the typed pages come back worse than they went in; trust the
- * text layer and the signed page is blank.
- *
- * The OCR engine is faked here on purpose. What is under test is the routing,
- * the chunking and the provenance — tesseract's own accuracy is proved once, in
+ * The OCR engine is faked here on purpose — accuracy is proved once, in
  * `tests/unit/ocr-provider`.
  */
 let harness: Harness;

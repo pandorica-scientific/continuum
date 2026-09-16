@@ -1,14 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // GENERATED FILE — DO NOT EDIT.
 //
-// Written by `npm run fetch:geodata` from the projected world outline, so the
-// stamp on a past trip can be inked in its country's own colour without the
-// stamp wall loading a world atlas to find out what that colour is.
-//
-// The assignment itself lives in `country-colour.ts` and is spatial: two
-// countries that share a border cannot share a slot. Re-running the script
-// rewrites this file; editing it by hand puts the map and the stamps into
-// different colours for the same place.
+// Written by `npm run fetch:geodata` so the stamp wall can ink a country's
+// colour without loading a world atlas. Assignment logic is in
+// `country-colour.ts`; editing this file by hand desyncs map and stamp colours.
 //
 // fingerprint: f6be197a7c1d
 import type { CountryColour } from './country-colour';

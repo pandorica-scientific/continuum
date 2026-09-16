@@ -3,31 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 
 /**
- * The detector segments on brightness, and it assumed which side of that split
- * was the thing being photographed: the bright one.
+ * Regression: the detector assumed the bright side of a brightness split was
+ * always the object, which returns no crop at all for a dark object on a
+ * light background (e.g. a black wallet on a white floor).
  *
- * That assumption is invisible on the case it was tuned for — white paper on a
- * dark desk — and total everywhere else. A black wallet on a white floor, a
- * dark passport cover, an ID card on a pale counter: the mask came back as the
- * GROUND with the object as a hole in it. Not a bad crop; no crop at all.
- *
- * There were TWO of them, and either alone was fatal:
- *   1. `THRESH_BINARY` made the bright side the foreground.
- *   2. `edgeContrast` returned a SIGNED `inside - outside`, so a dark object
- *      scored negative on 45% of judgeQuad's marks and was thrown out by
- *      searchQuad's `< CONTRAST_FLOOR` gate before scoring at all.
- *
- * Read from source rather than executed: OpenCV cannot be loaded under Vitest
- * (Vite tries to transform the 10 MB Emscripten bundle and never finishes),
- * which is why every scan test in this directory is written this way. The
- * behaviour was verified out of band against the real detector — a 320x427
- * frame with a rectangle covering 0.314 of it:
- *
- *   light-on-dark, no invert     detected   cov=0.309
- *   dark-on-light, invert        detected   cov=0.309
- *   dark-on-light, NO invert     searching  cov=0.000   <- the bug
- *   dark-on-light, detectBest    detected   cov=0.309
- *   light-on-dark, detectBest    detected   cov=0.309
+ * Read from source rather than executed: OpenCV cannot load under Vitest
+ * (Vite hangs transforming the 10 MB Emscripten bundle), so every scan test
+ * in this directory is written this way.
  */
 const detect = readFileSync('src/lib/scan/core/detect.ts', 'utf8');
 const refine = readFileSync('src/lib/scan/core/refine.ts', 'utf8');
@@ -38,9 +20,8 @@ describe('which side of the split is the object', () => {
 	});
 
 	it('reverses the sense of the split when segmenting on saturation', () => {
-		// On brightness the object is usually the LIGHT side; on saturation it is
-		// the DULL one, because paper is nearly grey and a carpet is not. Getting
-		// this backwards masks the furniture and calls it the page.
+		// On brightness the object is usually LIGHT; on saturation it is DULL
+		// (paper is nearly grey, a carpet is not). Backwards masks the page as furniture.
 		expect(detect).toMatch(/const wantsInverse = segment === 'saturation' \? !invert : invert;/);
 	});
 
@@ -53,10 +34,7 @@ describe('which side of the split is the object', () => {
 	});
 
 	it('refuses a quad that scores like nothing at all', () => {
-		// The judge chooses rather than vetoes, with one exception: a reading can
-		// produce a quad that is not a page, and offering more readings makes that
-		// more likely rather than less. Measured, genuine pages scored 0.795 and
-		// up while a shadow read as an object scored 0.388.
+		// Genuine pages score well above shadows read as objects; the floor rejects the latter.
 		expect(detect).toMatch(/const MIN_JUDGED_SCORE = 0\.6;/);
 		expect(detect).toMatch(/bestScore < MIN_JUDGED_SCORE/);
 	});
@@ -69,9 +47,8 @@ describe('edge contrast', () => {
 	});
 
 	it('takes the absolute of the MEDIAN, never the median of absolutes', () => {
-		// A boundary whose samples disagree in sign is noise, not an edge. The
-		// signed median collapses it to zero; absolutes first would dress it up
-		// as strong contrast and hand back a quad drawn around nothing.
+		// A boundary whose samples disagree in sign is noise, not an edge; the
+		// signed median collapses it to zero. Absolutes-first would hide that.
 		expect(refine).not.toMatch(/differences\.push\(Math\.abs\(/);
 		expect(refine).toMatch(/differences\.push\(gray\.ucharPtr/);
 	});

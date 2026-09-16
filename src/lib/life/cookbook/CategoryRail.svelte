@@ -1,11 +1,8 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	/**
-	 * The shelf list down the left of the Cookbook.
-	 *
-	 * The same treatment as the Documents rail, including the contained
-	 * overscroll — a long list of categories over a scrolling page hands the
-	 * wheel on at its end otherwise, and scrolling back moves the wrong thing.
+	 * The shelf list down the left of the Cookbook. Same treatment as the
+	 * Documents rail, including contained overscroll.
 	 */
 	import Icon from '$lib/components/Icon.svelte';
 
@@ -35,8 +32,7 @@
 </script>
 
 <nav class="rail" aria-label="Recipe categories">
-	<!-- Not a shelf and so nothing to edit: "Everything" is the absence of a
-	     filter, which is why it has no row in the table either. -->
+	<!-- Not a shelf, so nothing to edit — "Everything" is the absence of a filter. -->
 	<div class="row" class:active={selected === null}>
 		<button
 			class="pick"
@@ -51,14 +47,11 @@
 	</div>
 
 	{#if categories.length === 0}
-		<!-- A cold start: the rail is otherwise one row saying nought, which reads
-		     as a screen that failed rather than one waiting to be filled. -->
 		<p class="nothing">No shelves yet. Every recipe goes on one.</p>
 	{/if}
 
 	{#each categories as category (category.id)}
-		<!-- A row of two buttons rather than one: picking a shelf and changing it
-		     are different errands, and a button cannot live inside a button. -->
+		<!-- Two buttons, not one: a button cannot live inside a button. -->
 		<div class="row" class:active={selected === category.id}>
 			<button
 				class="pick"
@@ -133,8 +126,7 @@
 		color: inherit;
 		text-align: left;
 	}
-	/* Only on hover or keyboard focus: a column of pencils beside every shelf is
-	   a rail about editing shelves rather than about choosing one. */
+	/* Shown only on hover/focus so the rail reads as choosing, not editing. */
 	.edit {
 		flex: none;
 		display: grid;
@@ -213,7 +205,7 @@
 		.name {
 			flex: none;
 		}
-		/* There is no hover on a phone, so the pencil is simply there. */
+		/* No hover on a phone, so the pencil is always shown. */
 		.edit {
 			opacity: 1;
 		}

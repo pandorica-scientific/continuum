@@ -1,16 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Filling in the other half of a re-fixation offer.
-//
-// A bank quotes a rate and a payment together. The dialog asked for both and
-// previewed nothing until it had them, so the person had to work out the
-// payment themselves before they could see what the offer did — which is the
-// question they opened the dialog to answer.
+// Filling in the other half of a re-fixation offer: a bank quotes a rate and
+// a payment together, and this solves for whichever one the person hasn't
+// entered yet.
 //
 // Both directions are solved against `amortise` rather than the textbook
-// annuity formula. The schedule that matters is the one this app computes, with
-// the loan's own day-count convention, accrual style and payment day; a
-// closed-form answer would be close, disagree in the haléř, and disagree
-// differently for each convention.
+// annuity formula, since the loan's own day-count convention, accrual style
+// and payment day make a closed-form answer disagree by rounding.
 
 import type { FixationPeriod, LoanTerms } from './amortise';
 import { applyFixation, project } from './simulate';
@@ -53,9 +48,8 @@ export function paymentForRate(
 	let low = 1n;
 	// The whole debt in one instalment always clears it, so the answer is inside.
 	const high0 = terms.owedMinor;
-	// A schedule that never clears is *later* than any target. Coalescing null to
-	// an empty string sorted it before every date instead, so an impossible
-	// request looked satisfiable and the search returned a bound rather than null.
+	// A schedule that never clears is *later* than any target — must not be
+	// treated as sorting before every date.
 	const fastest = payoffMonth(terms, periods, startsOn, annualRatePct, high0);
 	if (fastest === null || fastest > targetMonth) return null;
 	let high = high0;

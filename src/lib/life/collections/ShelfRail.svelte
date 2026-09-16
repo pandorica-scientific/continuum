@@ -1,12 +1,9 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	/**
-	 * The shelves down the left of Collections.
-	 *
-	 * Built for three shelves and shipped with one. The Cellar is the only kind
-	 * v0.9.0 knows how to draw, but the rail is a list from the start — not a
-	 * heading pretending to be one — so books and records land in it without the
-	 * screen being rebuilt around them.
+	 * The shelves down the left of Collections. Built as a list from the start
+	 * (not a heading pretending to be one), so future shelf types beyond the
+	 * Cellar land in it without the screen being rebuilt.
 	 */
 	import Icon from '$lib/components/Icon.svelte';
 
@@ -43,9 +40,7 @@
 		</button>
 	{/each}
 
-	<!-- Disabled rather than absent: the shape of what is coming is part of
-	     understanding what this screen is, and a rail with one row and no hint
-	     reads as a rail that is broken. -->
+	<!-- Disabled rather than absent, so the rail doesn't read as broken with one row. -->
 	<button class="add" type="button" disabled>
 		<Icon name="plus" size={14} /> New shelf
 	</button>

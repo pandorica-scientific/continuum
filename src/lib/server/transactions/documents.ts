@@ -3,18 +3,10 @@
  * Receipts filed against a transaction — the register's own read of
  * `documentsAbout`.
  *
- * Attaching and detaching went through `attachDocumentToTransaction` and
- * `detachDocumentFromTransaction` here until Task 16, which is when the
- * transactions screen moved onto the same `DocumentsCard` every other record
- * screen uses. Those two are gone: `targets.ts`'s `attachDocument` and
- * `detachDocument` replace them, existence-checked in a way the
- * transaction-only versions were not.
- *
- * What stays is this one function. The register pages up to fifty rows and
- * needs a receipt count and its filed papers for every one of them at once;
- * `documentsAbout` answers for a single record, so this is that same read in
- * one query keyed by transaction rather than fifty round trips to ask it fifty
- * times.
+ * The register pages up to fifty rows and needs a receipt count and its filed
+ * papers for every one of them at once; `documentsAbout` answers for a single
+ * record, so this is that same read in one query keyed by transaction rather
+ * than fifty round trips to ask it fifty times.
  */
 
 import { eq, inArray } from 'drizzle-orm';

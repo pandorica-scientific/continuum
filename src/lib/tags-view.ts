@@ -38,11 +38,8 @@ interface TagReach {
  *
  * The untag total counts every carrier the delete actually removes —
  * `tagged` plus the two kinds with no chip in the item list — never gated on
- * whether `tagged` itself is positive. A tag used only on a whole transaction
- * or only on a split line used to render nothing here at all, reading as
- * "nothing to lose" while `deleteTag`'s cascade quietly removed it anyway; a
- * total of zero now says so explicitly, "untags nothing", rather than leaving
- * the reader looking at a blank space beside "Delete?".
+ * whether `tagged` itself is positive, so a tag used only on transactions or
+ * splits still says "untags nothing" explicitly rather than showing blank.
  */
 export function reach(t: TagReach): string {
 	const total = t.tagged + t.transactions + t.splitLines;

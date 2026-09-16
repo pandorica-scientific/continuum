@@ -1,19 +1,7 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
-	// The first Overview anybody sees, and the only screen in the app that is
-	// nothing but a question.
-	//
-	// Before this, a new person was handed four panels chosen for them and had
-	// to find Customise to learn there were fourteen more. So the board starts
-	// empty and this stands above it: every panel their modules allow, each
-	// saying what it draws, and the suggested board one press away for anyone
-	// who would rather not decide.
-	//
-	// It stays put while panels are picked — the board fills in below it and a
-	// chip leaves this grid as it is placed — because choosing one panel is not
-	// an answer to the question this is asking. Done is. Both routes out go
-	// through the board's own add and reset, so there is no second way for an
-	// arrangement to be stored.
+	// Stays put while panels are picked — choosing one panel is not an answer
+	// to "which panels do you want", Done is.
 	import PanelChip from './PanelChip.svelte';
 	import type { PanelDefinition } from './panels';
 
@@ -23,8 +11,7 @@
 		onsuggested,
 		ondone
 	}: {
-		/** The panels available to place — module-gated ones are already gone,
-		 *  and one already on the board has left this list. */
+		/** The panels available to place — module-gated ones and ones already on the board are excluded. */
 		panels: PanelDefinition[];
 		onadd: (key: string) => void;
 		onsuggested: () => void;
@@ -86,9 +73,6 @@
 		gap: var(--space-4);
 		flex-wrap: wrap;
 	}
-	/* Wide enough that a description reads as a line rather than a column of
-	   two-word fragments, and no wider: on a phone that is one chip across, and
-	   on a full-width board it is six. */
 	.grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));

@@ -16,16 +16,16 @@ vi.mock('$env/dynamic/private', () => ({
 /**
  * The most serious thing a save could do: forget.
  *
- * The inspector deleted every `document_link` a document had and re-inserted
- * what the form posted, and the form's picker offered people, property and
- * subjects. So a receipt's transaction, a tax attachment's statement and a
- * statement's account were destroyed by opening the document and pressing Save
- * — silently, with nothing on screen to say a link had been there.
+ * The inspector deletes every `document_link` a document has and re-inserts
+ * what the form posted, but the form's picker only offers people, property and
+ * subjects — so a receipt's transaction, a tax attachment's statement or a
+ * statement's account can be destroyed by opening the document and pressing
+ * Save, silently.
  *
  * These go through the page's own `load` and its own `updateDocument`, because
- * both halves are the bug: the picker could not offer those kinds, AND the save
- * removed what the picker did not post. Posting a hand-written list of ids here
- * would test the half that was never broken.
+ * both halves matter: the picker must offer those kinds, AND the save must not
+ * remove what the picker did not post. A hand-written list of ids would test
+ * only the half that was never broken.
  */
 let harness: Harness;
 let testDb: TestDb;

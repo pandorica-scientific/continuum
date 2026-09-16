@@ -20,7 +20,6 @@
 	const innerH = H - PAD.top - PAD.bottom;
 	const slot = $derived(innerW / Math.max(1, years.length));
 	const barW = $derived(Math.min(46, slot * 0.72));
-	// label every bar when there is room, else thin out to every nth year
 	const labelEvery = $derived(Math.max(1, Math.ceil(years.length / 14)));
 </script>
 

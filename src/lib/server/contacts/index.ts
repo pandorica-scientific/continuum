@@ -158,15 +158,9 @@ export const emptyLinks = (): ContactLinks => ({
  *
  * Delete-then-insert rather than a diff: the sets are a handful of ids, and
  * computing a minimal patch would be more code with more ways to leave a stale
- * row behind.
- *
- * There used to be four link tables here, one per kind, each handled by its own
- * closure so that no cast could hide a link written into the wrong column. One
- * `contact_link` removes that hazard rather than guarding against it: the target
- * is an `entity`, so there is no per-kind column to confuse, and the composite
- * foreign key on the concrete table means a target id genuinely is a record of
- * the kind it claims. What the caller still has to get right is which bucket an
- * id came from, and that is checked when the links are read back.
+ * row behind. One `contact_link` table with the target as an `entity` means
+ * there is no per-kind column to confuse; what the caller must still get
+ * right is which bucket an id came from, checked when links are read back.
  */
 export async function replaceContactLinks(id: string, links: ContactLinks): Promise<void> {
 	const unique = (ids: string[]) => [...new Set(ids)].filter(Boolean);

@@ -224,9 +224,8 @@ describe('quadWinding', () => {
 	});
 
 	it('is negative for the same shape mirrored', () => {
-		// Swapping left for right is the whole bug: four lines bound a quad
-		// without saying which side is the top, and a page warped through the
-		// mirrored labelling comes out as a mirror image of itself.
+		// Four lines bound a quad without saying which side is the top; mirrored
+		// labelling warps the page into a mirror image of itself.
 		const mirrored = { tl: rough.tr, tr: rough.tl, br: rough.bl, bl: rough.br };
 		expect(quadWinding(mirrored)).toBeLessThan(0);
 	});
@@ -260,8 +259,7 @@ describe('quad angles', () => {
 	});
 
 	it('are far from square for the skewed quads that produce rubbish', () => {
-		// The shape the detector used to hand over when the hull ballooned into
-		// the background: a dart, not a page.
+		// What the detector hands over when the hull balloons into the background.
 		const dart: Corners = { tl: P(10, 40), tr: P(300, 10), br: P(280, 300), bl: P(150, 120) };
 		expect(worstCornerSkew(dart)).toBeGreaterThan(35);
 	});

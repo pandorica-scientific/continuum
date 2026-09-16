@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // The camera, and the four ways it can be unavailable.
 //
-// getUserMedia requires a secure context, so a self-hosted Continuum at
-// http://192.168.1.50:3000 gets no viewfinder, ever — and it fails with the
-// same DOMException as a machine with no camera at all. The states below keep
-// them apart, because the recovery is completely different: one is "open it on
-// your phone", the other is "your phone camera app still works, use that".
+// getUserMedia requires a secure context, so an insecure host gets no
+// viewfinder and fails with the same DOMException as no camera at all. The
+// states below keep the two apart since their recovery differs: one needs a
+// different origin, the other needs the phone's own camera app.
 
 export type CameraState =
 	| { kind: 'idle' }
@@ -36,8 +35,8 @@ export function createCamera() {
 	let track: MediaStreamTrack | null = null;
 
 	async function start() {
-		// Checked before asking, so the user gets the screen that names the real
-		// problem rather than a permission prompt that cannot succeed.
+		// Checked before asking, so the user sees the real problem rather than a
+		// permission prompt that cannot succeed.
 		if (!isSecureForCamera(window.location)) {
 			state = { kind: 'insecure' };
 			return;
@@ -57,10 +56,8 @@ export function createCamera() {
 				}
 			});
 			track = stream.getVideoTracks()[0] ?? null;
-			// Torch is Chrome-on-Android only and is absent from iOS Safari
-			// entirely. HIDE the control when it is missing rather than disabling
-			// it, or half of users get a dead button in the one band they can
-			// actually reach one-handed.
+			// Torch is Chrome-on-Android only. Hide the control rather than disable
+			// it, so it isn't a dead button on iOS Safari.
 			const capabilities = track?.getCapabilities?.() as { torch?: boolean } | undefined;
 			state = { kind: 'live', stream, torch: capabilities?.torch === true };
 		} catch (error) {
@@ -89,7 +86,7 @@ export function createCamera() {
 		get state() {
 			return state;
 		},
-		/** For ImageCapture: the still comes off the TRACK, not the video element. */
+		/** For ImageCapture: the still comes off the track, not the video element. */
 		get track() {
 			return track;
 		},

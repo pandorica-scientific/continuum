@@ -4,13 +4,9 @@
 // One PDF means the order of the tiles IS the order of the pages — getting it
 // wrong is not a display preference, it is a wrong document.
 //
-// The phone now holds NO PAGE AT ALL. It used to keep each rendered page
-// encoded, because a rendered A4 page is about 35 MB as pixels and twenty of
-// them is more memory than a phone has; now the rendered page lives on the
-// server and what is kept here is its id and a URL to a small preview. The old
-// retention guarantee — that nothing full-resolution outlives the preview that
-// produced it — has become something stronger: nothing full-resolution is ever
-// in the browser.
+// The phone holds no page pixels at all: a rendered A4 page is about 35 MB,
+// and twenty of them is more memory than a phone has. The rendered page lives
+// on the server; what's kept here is its id and a small preview URL.
 
 import { defaultFilename, type PageMode } from '../core/index.ts';
 
@@ -24,8 +20,7 @@ export interface ScanPage {
 
 /**
  * A very old phone struggles on a long session. Capping and SAYING SO beats an
- * out-of-memory crash — and the cap is now enforced by the server as well,
- * because this one has become advice that the endpoint does not depend on.
+ * out-of-memory crash; the server enforces the same limit independently.
  */
 export const MAX_PAGES = 20;
 
@@ -69,8 +64,7 @@ export function createSession() {
 		},
 
 		remove(id: string) {
-			// The server keeps the page's artefact until the session ends. Nothing
-			// is revoked here any more because nothing was ever allocated: a
+			// The server keeps the page's artefact until the session ends; a
 			// removed page simply stops being asked for.
 			pages = pages.filter((p) => p.id !== id);
 		},

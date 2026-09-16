@@ -21,9 +21,7 @@ import { readinessWord, worstOf } from '$lib/life/readiness';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
-	// A trip that has ended has been where it said it was going. Done on read
-	// rather than on a timer: there is no scheduler to trust, and a household
-	// opening the app after a holiday is exactly when this should happen.
+	// Done on read rather than on a timer — there's no scheduler to trust.
 	await writeVisitsForEndedTrips();
 
 	const [trips, ideas, figures, people] = await Promise.all([
@@ -35,9 +33,7 @@ export const load: PageServerLoad = async () => {
 
 	const hues = personHues(people.map((p) => p.id));
 
-	// Readiness only for trips still to come. A passport that expired after a
-	// holiday somebody already took is not news, and checking every past trip
-	// would be one query per row for an answer nobody reads.
+	// Readiness only for trips still to come — a past trip's expired passport isn't news.
 	const upcoming = trips.filter((trip) => trip.upcoming);
 	const readiness = new Map(
 		await Promise.all(
@@ -64,8 +60,7 @@ export const load: PageServerLoad = async () => {
 	};
 
 	return {
-		// Labelled here rather than in the component: "Porto, Portugal" needs the
-		// country's name, and a component that looked it up would do so per row.
+		// Labelled here rather than in the component, to avoid a per-row lookup there.
 		trips: trips.map((trip) => ({
 			...trip,
 			readiness: pillFor(trip.id),
@@ -77,9 +72,7 @@ export const load: PageServerLoad = async () => {
 		ideas,
 		figures: {
 			...figures,
-			// Amber only when something genuinely wants attention. A nought here is
-			// the state the block exists to reach, and a red nought is an alarm
-			// about nothing.
+			// Amber/red only when something genuinely needs attention — zero is the target state, not an alarm.
 			needsALook: upcoming.filter((trip) => {
 				const hue = pillFor(trip.id)?.hue;
 				return hue === 'yellow' || hue === 'red';
@@ -99,12 +92,8 @@ export const actions: Actions = {
 	},
 
 	/**
-	 * Put a removed idea back.
-	 *
-	 * The undo bar restores the whole card rather than un-deleting a row: the
-	 * original is gone by then, so what comes back is what the bar was holding.
-	 * The artwork is resolved again from the same name and country, which is
-	 * what makes it come back looking the same.
+	 * Put a removed idea back. The original row is already gone by the time the
+	 * undo bar fires, so this re-adds it from what the bar was holding.
 	 */
 	restoreIdea: async ({ request }) => {
 		const form = await request.formData();
@@ -123,9 +112,7 @@ export const actions: Actions = {
 	addIdea: async ({ request }) => {
 		const form = await request.formData();
 		const name = String(form.get('name') ?? '').trim();
-		// `on` names which dialog the message belongs to. Both dialogs read the
-		// same `form` object, so without it a rejected idea reopens the trip
-		// form and shows the error there.
+		// `on` names which dialog the message belongs to — both dialogs share the same `form` object.
 		if (!name) return fail(400, { on: 'idea', message: 'An idea needs somewhere to go.' });
 		await addIdea({
 			name,
@@ -156,10 +143,8 @@ export const actions: Actions = {
 			return fail(400, { on: 'trip', message: 'Where is it going? Two letters, like PT.' });
 		}
 
-		// Optional, so `asOptionalRowId`: the required variant turns an absent
-		// field into the nil uuid, which is a real value that no idea has — and
-		// the foreign key then rejects the whole trip with a 500. An id that is
-		// present but names nothing is dropped for the same reason.
+		// `asOptionalRowId`, not the required variant — that turns an absent field into
+		// the nil uuid, a real value no idea has, and the foreign key rejects it with a 500.
 		const fromIdeaId = (await ideaExists(asOptionalRowId(form.get('fromIdeaId'))))
 			? asOptionalRowId(form.get('fromIdeaId'))!
 			: null;
@@ -181,12 +166,9 @@ export const actions: Actions = {
 			art: form.get('art')
 		});
 
-		// Promoting an idea takes it off the board: it is the same plan, and
-		// leaving it in Someday would ask the household to tidy up after itself.
+		// Promoting an idea takes it off the board — it's the same plan now, not a duplicate.
 		if (fromIdeaId) await removeIdea(fromIdeaId);
 
-		// Straight to the trip that was just made. A dialog that closed back onto
-		// the board would leave the household to find what it had just created.
 		redirect(303, `/trips/${id}`);
 	}
 };

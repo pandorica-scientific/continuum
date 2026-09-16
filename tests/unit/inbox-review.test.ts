@@ -11,14 +11,7 @@ import {
 	startSession
 } from '$lib/inbox-review';
 
-/**
- * Skip is safe to press because it does nothing.
- *
- * The cadence this screen is built for is email triage — decide, or pass — and
- * a Skip that quietly filed or deleted would make a fast lap dangerous. These
- * are the two behaviours that rot silently inside a component, which is why
- * they are here instead.
- */
+// Skip must never file or delete — a quiet side effect would make a fast lap dangerous.
 describe('the review session', () => {
 	it('wraps to the first skipped document and re-labels the counter', () => {
 		let s = startSession(['a', 'b', 'c']);
@@ -37,8 +30,6 @@ describe('the review session', () => {
 	});
 
 	it('is a no-op over a full lap of skipping', () => {
-		// This is what makes Skip safe to press: it never files and never
-		// deletes, so a lap changes nothing on disk.
 		const before = startSession(['a', 'b']);
 		const after = skip(skip(before));
 		expect(after.filed).toEqual(before.filed);
@@ -82,7 +73,6 @@ describe('a shelf proposing a type', () => {
 
 		expect(session.sticky.type).toBe('id_document');
 		expect(session.suggested).toEqual(['type']);
-		// A proposal is not something the person chose, so it never claims to be.
 		expect(session.kept).not.toContain('type');
 	});
 
@@ -92,8 +82,6 @@ describe('a shelf proposing a type', () => {
 	});
 
 	it('never overwrites an answer somebody gave', () => {
-		// Picking Identity for the second of twenty certificates must not retype
-		// the answer given for the first.
 		const chosen = setField(startSession(['a']), 'type', 'certificate');
 		const after = proposeType(chosen, 'id_document');
 
@@ -102,8 +90,6 @@ describe('a shelf proposing a type', () => {
 	});
 
 	it('re-proposes over a value it proposed itself', () => {
-		// Picking Identity and then Statements must not leave a bank statement
-		// typed as an identity document: nobody chose that, this function did.
 		const first = proposeType(startSession(['a']), 'id_document');
 		const second = proposeType(first, 'bank_statement');
 

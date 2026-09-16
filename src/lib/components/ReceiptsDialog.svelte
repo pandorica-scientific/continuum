@@ -1,14 +1,7 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
-	//
-	// The receipts dialog for one transaction — split out of the register's own
-	// `+page.svelte` so its states (an attach-candidates fetch that can fail, a
-	// load in progress) render from plain props and are testable the way
-	// `DocumentsCard` is, rather than living as `$state` a route component can
-	// only ever show one value of at a time.
-	//
-	// The fetch itself stays in the page: it is tied to which row is open
-	// there, not to anything this dialog draws.
+	// The candidates fetch stays in the page (tied to which row is open there);
+	// this dialog only renders the resulting props.
 	import { enhance } from '$app/forms';
 	import DocumentsCard from '$lib/components/DocumentsCard.svelte';
 	import Modal from '$lib/components/Modal.svelte';
@@ -26,9 +19,7 @@
 		transaction: { id: string; merchant: string; amount: string; documents: AboutDocument[] };
 		/** From `?/candidates`, for this transaction only — see the page for why. */
 		candidates: CandidateDocument[];
-		/** Set when the `?/candidates` fetch failed or came back anything but a
-		 *  success — a network error and a CSRF refusal page both land here,
-		 *  since a person cannot tell those apart and does not need to. */
+		/** Set when the `?/candidates` fetch failed for any reason. */
 		candidatesError: string | null;
 		/** True while that fetch is in flight, so the picker says it is checking
 		 *  rather than the list quietly popping in a moment later. */

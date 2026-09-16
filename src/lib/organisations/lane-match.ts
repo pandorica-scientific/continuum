@@ -4,10 +4,7 @@
  *
  * The vocabulary is deliberately `rule.conditions`' — `[{ field, op, value }]`
  * ANDed — so a household that has learnt what a transaction rule is does not
- * have to learn a second thing for paper. In this release these decide which
- * lane an already-linked document falls into; in the next they propose the
- * organisation link itself, with the same accepted-and-corrected evidence the
- * transaction rules already keep.
+ * have to learn a second thing for paper.
  */
 
 /** One test against a document. Deliberately `rule.conditions`' shape. */

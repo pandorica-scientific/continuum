@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * The type chips above the bottle grid.
- *
- * Derived from the rows that exist, never from the enum: a cellar holding only
- * wine and whisky shows two chips, not ten with eight reading nought. A chip
- * for a type nothing is filed under is a filter that leads to an empty screen.
+ * The type chips above the bottle grid. Derived from the rows that exist,
+ * never from the enum — a chip for an empty type would filter to nothing.
  */
 import type { EnumValue } from '$lib/enums';
 
@@ -32,12 +29,7 @@ const WORD: Record<EnumValue<'bottle.type'>, string> = {
 
 export const typeWord = (type: EnumValue<'bottle.type'>): string => WORD[type] ?? type;
 
-/**
- * One chip per type actually on the shelf, commonest first.
- *
- * Ties break on the word so the row does not reshuffle itself between two
- * loads of the same cellar.
- */
+/** One chip per type actually on the shelf, commonest first; ties break on the word. */
 export function typeChips(bottles: { type: EnumValue<'bottle.type'> }[]): TypeChip[] {
 	// A plain record rather than a Map: this is derived and read, never mutated.
 	const counts: Partial<Record<EnumValue<'bottle.type'>, number>> = {};

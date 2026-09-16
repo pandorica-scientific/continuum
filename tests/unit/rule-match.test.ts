@@ -36,11 +36,8 @@ describe('ruleMatches', () => {
 	});
 
 	it('matches a hand-typed value carrying accents or punctuation', () => {
-		// The editor used to store the value with only .toLowerCase(), while the
-		// haystack is diacritic-stripped and punctuation-collapsed. Every rule a
-		// Czech household would actually write saved, listed, reported a
-		// confidence — and never fired. Both sides are folded now, which also
-		// repairs the rules already sitting in the database.
+		// Regression: the editor stored the value with only .toLowerCase(), while
+		// the haystack is diacritic-stripped and punctuation-collapsed, so it never fired.
 		const cases: Array<[string, string]> = [
 			['Rohlík', 'ROHLIK.CZ 12345'],
 			['Košík', 'KOSIK.CZ'],
@@ -56,9 +53,7 @@ describe('ruleMatches', () => {
 	});
 
 	it('stays whole-word, so short values cannot run wild', () => {
-		// A counterparty can be as short as "pre", "o2" or "cez", so a rule learned
-		// from one is too. A substring test would file every PREMIER and EXPRESS
-		// under energy.
+		// A substring test would file every PREMIER and EXPRESS under a rule learned from "pre".
 		const pre = rule({ conditions: [{ field: 'counterparty', op: 'contains', value: 'pre' }] });
 		expect(ruleMatches(pre, { counterparty: 'PREMIER SPORT', amountMinor: -1000n })).toBe(false);
 		expect(ruleMatches(pre, { counterparty: 'PRE distribuce', amountMinor: -1000n })).toBe(true);

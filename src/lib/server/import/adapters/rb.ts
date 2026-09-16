@@ -2,13 +2,8 @@
 import { parseAmountToMinor } from '$lib/money';
 import type { ParsedRow, ParsedStatement, PdfLine } from '../types';
 
-// RB prints its dates two ways and has shipped both within three months: the
-// January 2025 template writes "3.1.2025", March 2025 onwards "1. 3. 2025".
-// Requiring the spaces read ZERO movements out of the January statement while
-// still reporting success — the balances parsed, so the file imported empty,
-// recorded its content hash, and the corrected re-import would then have been
-// refused as a duplicate. The separator's whitespace is not evidence of
-// anything; treat it as optional everywhere a date is read.
+// RB writes dates both with and without spaces around the dots ("3.1.2025"
+// vs "1. 3. 2025"); requiring the space silently dropped a whole statement.
 const DATE = /^(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})$/;
 
 function rbDate(raw: string): string | null {
@@ -36,8 +31,7 @@ function isPageFurniture(line: PdfLine): boolean {
  *   valuta date | counter-account | [message]
  *   transaction code | [counterparty name] | [note]
  *   [merchant; city; country]
- * The detail lines come in no fixed number and no fixed order — a card payment
- * can push its "PK:" marker onto a line of its own — so each is found by shape
+ * Detail lines come in no fixed number or order, so each is found by shape
  * within the movement's own span, never at a counted offset.
  */
 export function parseRbLines(lines: PdfLine[]): ParsedStatement {
@@ -58,8 +52,7 @@ export function parseRbLines(lines: PdfLine[]): ParsedStatement {
 			accountNumber = acct[1];
 			if (acct[2]) currency = acct[2];
 		}
-		// Same two templates, same tolerance: January heads the page "poř. č. 1 za
-		// období 1.1.2025 - 31.1.2025" — no colon and no spaces in the dates.
+		// Same date-space tolerance as DATE above applies to the period header.
 		const period = line.text.match(
 			/za období:?\s*(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})\s*-\s*(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})/
 		);
@@ -71,31 +64,24 @@ export function parseRbLines(lines: PdfLine[]): ParsedStatement {
 		if (opening) openingBalanceMinor = parseAmountToMinor(opening[1], currency);
 		const closing = line.text.match(/Konečný zůstatek:\s*([-\d\s  ]+\.\d{2})/);
 		if (closing) closingBalanceMinor = parseAmountToMinor(closing[1], currency);
-		// Independent corroboration: two omitted movements that offset each other
-		// leave opening/closing intact but cannot leave both of these intact.
+		// Independent corroboration: omitted movements that offset each other
+		// leave opening/closing balances intact but not these totals.
 		const credits = line.text.match(/Příjmy celkem:\s*([-\d\s  ]+\.\d{2})/);
 		if (credits) statedCreditTotalMinor = parseAmountToMinor(credits[1], currency);
 		const debits = line.text.match(/Výdaje celkem:\s*([-\d\s  ]+\.\d{2})/);
 		if (debits) statedDebitTotalMinor = parseAmountToMinor(debits[1], currency);
 	}
 
-	// Collect movement start indices first, the way the ČS adapter does, so a
-	// movement can own every line up to the next one. RB prints no fixed number
-	// of continuation lines: the transaction code lands on the second, third or
-	// fourth, and the merchant line after it. Reading them at a fixed stride
-	// (code at i+2, merchant within i+3) lost the bank reference on a quarter
-	// of a real statement's movements and the counterparty on nearly half —
-	// rows that then match no counterparty rule and sit in review forever.
+	// Collect movement start indices first so a movement can own every line up
+	// to the next one. RB's continuation lines have no fixed count or stride.
 	const rows: ParsedRow[] = [];
 	const starts: number[] = [];
 	for (let i = 0; i < lines.length; i++) {
 		const cells = lines[i].cells;
 		if (cells.length < 3) continue;
 		if (!rbDate(cells[0])) continue;
-		// The amount is the last cell, "−1 000.00 CZK".
 		if (!AMOUNT.test(cells[cells.length - 1])) continue;
-		// Continuation lines (valuta date + KS/PK markers or the foreign
-		// "original amount") also start with a date — a real movement's second
+		// Continuation lines also start with a date; a real movement's second
 		// cell is a category name, never a symbol marker, number or account.
 		if (/^(KS:|VS:|SS:|PK:)/.test(cells[1]) || /^[\d-]+(\/\d{4})?$/.test(cells[1])) continue;
 		starts.push(i);
@@ -106,14 +92,9 @@ export function parseRbLines(lines: PdfLine[]): ParsedStatement {
 		const cells = lines[i].cells;
 		const bookedAt = rbDate(cells[0])!;
 		const amountMatch = cells[cells.length - 1].match(AMOUNT)!;
-		// A movement owns the lines up to the next one — but the gap to the next
-		// movement is not always its own detail. At a page break it spans the
-		// footer and the following page's header, and after the last movement it
-		// runs to the end of the file. The finders below are first-match-by-shape,
-		// so an unstopped window let a footer's print date become a movement's
-		// valuta date and a statement or contract number become its bankRef —
-		// and bankRef decides the dedup fingerprint, so a statement whose page
-		// breaks fell differently would import the same movement twice.
+		// The window must stop at page furniture (and is capped), or a footer's
+		// print date/contract number can be misread as this movement's valuta
+		// date or bankRef — which decides the dedup fingerprint.
 		const end = Math.min(s + 1 < starts.length ? starts[s + 1] : lines.length, i + 8);
 		const detail: PdfLine[] = [];
 		for (let j = i + 1; j < end; j++) {
@@ -179,9 +160,8 @@ export function parseRbLines(lines: PdfLine[]): ParsedStatement {
 
 	return {
 		bank: 'rb',
-		// An adapter ran because the file identified this bank, so the issuer
-		// is evidence here rather than a guess. Readers that cannot tell leave
-		// it undefined; only this field may decide an account.
+		// The adapter ran because the file identified this bank, so issuer is
+		// evidence here, not a guess; only this field may decide an account.
 		issuer: 'rb',
 		format: 'pdf',
 		accountNumber,

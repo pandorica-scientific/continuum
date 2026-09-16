@@ -9,23 +9,14 @@ import { installFacts } from '$lib/server/system/status';
 /**
  * Every column this build expects, read from the schema itself.
  *
- * This was one hand-picked column for a while — the last object the release
- * added — and a developer had to remember to re-point it every release. Nothing
- * verified the pointer, and the test that looked like it did was tautological:
- * it built a database from the baseline and then asked whether the baseline's
- * own column was there. Forget the bump and an out-of-date instance boots clean
- * and fails later on real data, which is precisely what the check exists to
- * prevent.
+ * Derived rather than hand-picked, so adding a column to the Drizzle schema
+ * adds it to what boot demands, in the same edit — nothing to forget.
  *
- * Derived, there is nothing to forget. Adding a column to the Drizzle schema
- * adds it to what boot demands, in the same edit.
- *
- * WHAT THIS DOES NOT COVER: the appendix — triggers, CHECKs, the net-worth view
- * — is invisible to Drizzle and so invisible here. That is an acceptable floor
- * rather than a complete audit: those objects are created by the same migration
- * as the tables, so a database carrying every column of this release almost
- * certainly ran the whole file. The failure this guards is the one that has
- * actually happened, which is a release's new TABLES never arriving.
+ * WHAT THIS DOES NOT COVER: the appendix (triggers, CHECKs, the net-worth
+ * view) is invisible to Drizzle and so invisible here. Acceptable floor, not
+ * a complete audit — those objects are created by the same migration as the
+ * tables, so a database carrying every column almost certainly ran the whole
+ * file. This guards against a release's new TABLES never arriving.
  */
 function expectedColumns(): { table: string; column: string }[] {
 	const columns: { table: string; column: string }[] = [];
@@ -42,20 +33,13 @@ function expectedColumns(): { table: string; column: string }[] {
 /**
  * Does this database actually carry the schema this build was written against?
  *
- * It has to be asked out loud because the migrator cannot answer it. `drizzle/`
- * holds a single baseline that is rewritten in place rather than added to, and
- * a database that already recorded the old baseline as applied is left
- * untouched by `migrate()` — no error, nothing to see in the log. The app then
- * runs against a schema missing whatever the release added, so opening the
- * screen that reads it fails; the first sign of it is a 500 on somebody's
- * passport, long after the restart that caused it.
- *
- * `information_schema` is the cheapest true probe there is: one round trip, no
- * data read, and it asks about the schema itself rather than about a symptom.
- * It does not migrate anything and must not: there is nothing to migrate TO.
- * Continuum ships one baseline rather than a chain, so a release's answer to an
- * older database is an empty one, and this check is what makes that answer
- * arrive at boot rather than as a 500 on somebody's passport weeks later.
+ * The migrator cannot answer this itself: `drizzle/` holds a single baseline
+ * rewritten in place rather than added to, so a database that already
+ * recorded the old baseline as applied is left untouched by `migrate()` — no
+ * error, nothing in the log — and the app then fails later on a schema
+ * missing whatever the release added. `information_schema` is the cheapest
+ * true probe: one round trip, no data read, checked at boot rather than
+ * surfacing as a 500 weeks later.
  */
 export async function assertSchemaIsCurrent(handle: Queryable = db): Promise<void> {
 	const found = await handle.execute(sql`

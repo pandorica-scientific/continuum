@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// What the reader remembers across two employers.
-//
-// Until v0.5.2 it kept one learned wording per person. A person with two jobs
-// in a year therefore had each correction wipe the other employer's wording,
-// and neither was ever present when its own slip came round again.
+// A person with two jobs must keep both employers' learned wordings — one
+// correction must not wipe the other's.
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { extractCandidates } from '$lib/salary';
 import { learnBonusLabel, learnGrossLabel, learnNetLabel } from '$lib/server/salary';
@@ -79,8 +76,8 @@ describe('learning a wording from each employer', () => {
 		expect(stored.kseniya).toEqual(['(1) empl. rel. 01.10.2025 gross salary']);
 	});
 
-	// One bare string per person is what the setting held before v0.5.2. It has
-	// to keep working, and be widened by the next correction rather than lost.
+	// The old one-string-per-person shape has to keep working, and be widened
+	// by the next correction rather than lost.
 	it('adopts what was learned under the old one-wording-per-person shape', async () => {
 		await setSetting('payslipGrossLabels', { robert: 'gross salary' }, testDb);
 		await learnGrossLabel('Robert', 9944400n, candidatesB(), testDb);
@@ -108,10 +105,8 @@ describe('learning which lines were a bonus', () => {
 	});
 
 	/**
-	 * The opposite case, and the reason this is not a plain merge: a wording that
-	 * IS on this slip has just been restated by the correction. Keeping it would
-	 * re-add next month the very line the person has said is not part of the
-	 * award.
+	 * A wording that IS on this slip has just been restated by the correction.
+	 * Keeping it would re-add the very line the person said is not the award.
 	 */
 	it('replaces a wording the correction just spoke about', async () => {
 		await setSetting('payslipBonusLabels', { robert: ['gross salary'] }, testDb);

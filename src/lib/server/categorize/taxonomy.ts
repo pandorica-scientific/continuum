@@ -1,10 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Creating, renaming and deleting the category tree a household owns.
- *
- * The tree used to be a constant: seven groups and seventeen leaves chosen by
- * whoever wrote the file. A household with a pharmacy bill, or one that does
- * not drive, had no way to say so.
  */
 
 import { count, eq } from 'drizzle-orm';
@@ -244,10 +240,6 @@ export interface CategoryDependants {
 
 /**
  * Count before asking.
- *
- * The delete control used to open a "move what is filed under this to…" form
- * unconditionally, so removing a category nothing had ever used cost the same
- * three decisions as removing a heavily used one.
  *
  * Rules are counted apart from money on purpose: they fail differently. A rule
  * left pointing at a deleted category still matches and files nothing, so the

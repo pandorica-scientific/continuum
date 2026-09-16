@@ -12,7 +12,7 @@ the product — the sight coins on a country page carry their own credit line.
 
 ## Travel places
 
-**`datasets/travel-places.json`** — 3,437 curated places across 247 countries
+**`assets/datasets/travel-places.json`** — 3,437 curated places across 247 countries
 and territories, version 1.0.0, built 12 September 2026.
 
 Licensed **CC BY-SA 4.0**. Sources:
@@ -32,7 +32,7 @@ rather than using the dataset's own region field, and writes the result to
 
 ## Place engravings
 
-**`place-icons/*.webp`** — one black-and-white engraving per place, revealed
+**`assets/place-icons/*.webp`** — one black-and-white engraving per place, revealed
 when its coin is rubbed off.
 
 **Copyright © 2026 Robert Kiewisz. All rights reserved**, except as granted

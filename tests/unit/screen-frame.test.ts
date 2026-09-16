@@ -3,15 +3,8 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-/**
- * The frame every screen draws, guarded at the only place it can be: the source.
- *
- * Before v0.8.0 a screen that wanted three figures either hand-rolled a `.tiles`
- * grid or grew a summary band of its own, and the app had three of those with
- * different padding, different type sizes and different alignment. Reuse cannot
- * be enforced by a rendered assertion — nothing about a screenshot says which
- * component drew it — so this reads the files.
- */
+// Reuse of the shared figure frame can't be enforced by a rendered assertion
+// (a screenshot doesn't say which component drew it), so this reads the source.
 function pages(dir: string): string[] {
 	return readdirSync(dir).flatMap((entry) => {
 		const path = join(dir, entry);

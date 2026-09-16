@@ -24,9 +24,7 @@
 	let { data, form } = $props();
 
 	let addingProperty = $state(false);
-	/** Close on success, stay open on a refusal so what was typed is still there
-	 *  to correct. Leaving it open on success is what made the wizard for the
-	 *  next one appear the moment one was added. */
+	/** Close on success, stay open on a refusal so what was typed can be corrected. */
 	const closeOnSuccess =
 		(close: () => void) =>
 		() =>
@@ -47,10 +45,7 @@
 	let openEnded = $state(false);
 	let addingBill = $state(false);
 
-	/**
-	 * The value line. Only drawn from two points up — one valuation is a dot, and
-	 * a dot pretending to be a trend is worse than no chart.
-	 */
+	/** Only drawn from two points up — one valuation is a dot, not a trend. */
 	const valueChart = $derived.by(() => {
 		const series = data.detail?.valueSeries ?? [];
 		if (series.length < 2) return null;
@@ -175,9 +170,6 @@
 {#if data.detail}
 	<section class="section">
 		<div class="eyebrow-row">
-			<!-- The flat's own name, not a label saying "this flat": the switcher
-			     above has already said which, and the name is what the figures
-			     below are about. -->
 			<span class="flat-head">
 				<span class="flat-name">{data.detail.name}</span>
 				{#if data.detail.sizeLabel}<span class="mono flat-size">{data.detail.sizeLabel}</span>{/if}
@@ -199,8 +191,6 @@
 						placeholder="Add a tag…"
 					/>
 				</form>
-				<!-- A bare box reading "tag…" beside no label explained nothing about
-				     what a tag is or why this flat would want one. -->
 				<InfoHint label="What a tag is for">
 					A tag groups spending that belongs to one project, across whatever categories it happens
 					to touch — a bathroom renovation is materials, a tradesman and a permit fee, filed under
@@ -240,8 +230,6 @@
 						onroom={(i) => (gallery = i)}
 					/>
 				</div>
-				<!-- Photos live in rooms now; the strip under the plan is gone.
-				     What is not in a room yet is one press away, and says how much. -->
 				<div class="plan-foot">
 					<span class="quiet">Press a room to see or add its photos.</span>
 					{#if unassigned.length > 0}
@@ -348,18 +336,12 @@
 						<div class="grid">
 							<label>
 								<span>Tenant</span>
-								<!-- Suggests who is already in the address book, so the same person
-								     is not entered twice under two spellings. Adding a tenant files
-								     them in Contacts, reusing their record when the name matches. -->
+								<!-- Suggests names already in the address book to avoid duplicate entries. -->
 								<input name="tenantName" placeholder="Martin Dvořák" list="tenant-contacts" />
 								<datalist id="tenant-contacts">
 									{#each data.contactNames as name, i (i)}<option value={name}></option>{/each}
 								</datalist>
 							</label>
-							<!-- How to reach the tenant is a contact record now, not a string on
-						     the tenancy: it is attached from the Contacts screen once the
-						     tenancy exists, so a tenant with two numbers and an agent is
-						     representable. -->
 							<label
 								><span>Rent / month</span><input
 									name="rent"
@@ -386,9 +368,6 @@
 							</label>
 							<label class="t-check">
 								<input type="checkbox" bind:checked={openEnded} />
-								<!-- A lease can run until somebody ends it. Requiring a date meant
-								     inventing one, and an invented end date drives the renewal
-								     reminder and the occupancy figures. -->
 								<span>No end date — runs until ended</span>
 							</label>
 							<label
@@ -591,8 +570,6 @@
 			</label>
 			<button type="submit" class="btn btn-primary">Add</button>
 		</form>
-		<!-- A past date leaves today's figure alone, which is what makes entering
-		     the history of a flat owned for years safe. -->
 		<span class="quiet">
 			Dating one in the past adds to the history without changing what the flat is worth today.
 		</span>
@@ -600,10 +577,8 @@
 
 	<section class="card stack">
 		<Eyebrow hue="--purple" icon="receipt" label="What it cost to buy" />
-		<!-- Money in is the household's OWN cash: the deposit plus the costs of
-		     buying. The price itself is mostly the bank's, and the part that becomes
-		     theirs arrives as the mortgage is repaid — which the loan already
-		     records. Counting the price here would double it. -->
+		<!-- Money in is the household's own cash (deposit + costs); the price itself
+		     is the bank's, and counting it here would double what the loan already records. -->
 		<form method="POST" action="?/setOpening" use:enhance class="vform">
 			<input type="hidden" name="propertyId" value={data.detail.id} />
 			<input type="hidden" name="currency" value={data.detail.currency} />
@@ -755,8 +730,7 @@
 		border-color: var(--bd2);
 		background: var(--surface-2);
 	}
-	/* The area's hue, not a grey fill: this row is the screen's subject, and on
-	   a page of purple tiles a grey selection read as disabled. */
+	/* Purple hue rather than grey — a grey selection read as disabled here. */
 	.tab.active {
 		background: color-mix(in srgb, var(--purple) 12%, transparent);
 		color: var(--fg1);

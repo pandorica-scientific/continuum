@@ -2,11 +2,10 @@
 /**
  * Lanes on any card, and a document's membership of one.
  *
- * v0.7.7 built lanes for organisations, because Income & Tax was the only shelf
- * drawing them. A car's road tax and a flat's boiler inspection are the same
- * shape, so the column names the entity supertype instead — and membership
- * became a column on the document rather than a match, because two lanes on one
- * card can both match a payslip and only one of them holds it.
+ * The lane column names the entity supertype, not an organisation: a car's
+ * road tax and a flat's boiler inspection are the same shape. Membership is a
+ * column on the document rather than a match, because two lanes on one card
+ * can both match a payslip and only one of them holds it.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';

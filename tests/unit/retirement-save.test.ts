@@ -5,8 +5,7 @@ import { actions } from '../../src/routes/(app)/retirement/+page.server';
 function saveRequest(overrides: Record<string, string> = {}): Request {
 	const form = new FormData();
 	for (const [key, value] of Object.entries({
-		// The generator the page itself uses. A hand-written literal here is
-		// what let a pattern that rejects every real id pass the suite.
+		// The generator the page itself uses, so the writer-id pattern is exercised for real.
 		writerId: uuidv7(),
 		baseVersion: '0',
 		revision: '1',
@@ -44,9 +43,8 @@ describe('retirement save validation', () => {
 		expect(fractionalAge).toMatchObject({ status: 400 });
 	});
 
-	// The page autosaves, so a refusal has no submit moment to explain itself.
-	// One generic line meant an out-of-range age left in the form silently
-	// refused every later edit to spending or growth as well.
+	// The page autosaves, so a refusal has no submit moment to explain itself;
+	// one generic line would silently refuse every later edit too.
 	it('names the assumption that was refused', async () => {
 		const youngAge = await actions.save({ request: saveRequest({ ageOne: '45' }) } as never);
 		const growth = await actions.save({

@@ -1,20 +1,12 @@
 <script module lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	/**
-	 * The grid every row in this table is built on.
+	 * The grid every row in this table is built on. Header, summary, year rows,
+	 * and the Salary screen's payslip rows all read `--row-cols`/`--row-min`
+	 * off the table so none can drift out of line.
 	 *
-	 * Year, then the three that make up gross, then what it averaged and what
-	 * survived tax. The header, the summary, every year row and the payslips an
-	 * expanded year renders underneath all read it off the `--row-cols` and
-	 * `--row-min` custom properties set on the table, so none can drift out of
-	 * line — the payslip rows included, and those live on the Salary screen
-	 * rather than here, so they used to import the column string to keep step.
-	 *
-	 * Base and Bonus are the two flexible columns, and they carry a MINIMUM
-	 * rather than `minmax(0, 1fr)`. With a floor of zero the scroll width below
-	 * was all that held them open, and at that width it left them about 35px
-	 * each — narrower than the word "Bonus" — so on a phone the two headings
-	 * printed over one another.
+	 * Base and Bonus carry a MINIMUM rather than `minmax(0, 1fr)` — at a floor
+	 * of zero they shrank to ~35px on a phone, narrower than "Bonus" itself.
 	 */
 	const YEAR = 96;
 	const FLEX_MIN = 112;
@@ -24,32 +16,16 @@
 
 	const COLUMNS = `${YEAR}px minmax(${FLEX_MIN}px, 1fr) minmax(${FLEX_MIN}px, 1fr) ${GROSS}px ${AVG}px ${NET}px`;
 
-	/**
-	 * The narrowest the grid may be drawn before it scrolls: every column at its
-	 * minimum, plus the five gaps between them and the row's own padding.
-	 *
-	 * Derived from the same numbers as the columns rather than written out beside
-	 * them — a hand-kept figure is exactly what let the two disagree. The 720px
-	 * floor is the width the table had before any column carried a minimum.
-	 */
+	/** Narrowest the grid may be before it scrolls: every column at its
+	 *  minimum plus gaps and row padding, derived rather than hand-kept so it
+	 *  can't drift from `COLUMNS`. 720px is the pre-minimum table width. */
 	const MIN_WIDTH = `max(720px, calc(${YEAR + 2 * FLEX_MIN + GROSS + AVG + NET}px + 5 * var(--space-5) + 2 * var(--space-6)))`;
 </script>
 
 <script lang="ts">
-	// Year down, what a year was made of across.
-	//
-	// The Salary screen used to be one repeated block per person — a chart, then
-	// a flat list of payslips — with nothing that answered "what did 2025 come
-	// to". This is the Tax matrix's shape applied to the same question, so the
-	// two Money screens are read the same way.
-	//
-	// Base and bonus are the breakdown and gross is their sum, exactly as a tax
-	// year's jurisdictions add up to its year total. Net and the monthly average
-	// are context beside them, never summed into the total: net is what arrived
-	// after tax and adding it to gross would be counting the same pay twice.
-	//
-	// Numerics are right-aligned throughout. The whole point is scanning a
-	// column, and left-aligned numbers of differing lengths cannot be scanned.
+	// Base and bonus are the breakdown, gross is their sum. Net and the monthly
+	// average are context beside them, never summed in — net already came
+	// after tax, so adding it to gross would double-count pay.
 	import { compactMinor, displayCurrency, formatMinor } from '$lib/money';
 	import type { Snippet } from 'svelte';
 	import ListPager from '$lib/components/ListPager.svelte';
@@ -69,6 +45,8 @@
 		baseTotalMinor: string;
 		bonusTotalMinor: string;
 		netTotalMinor: string;
+		equityTotalMinor: string;
+		equityOnPayslipMinor: string;
 		grossMonths: number;
 		netMonths: number;
 		netComplete: boolean;
@@ -174,8 +152,6 @@
 
 <div class="matrix" style:--row-cols={COLUMNS} style:--row-min={MIN_WIDTH}>
 	{#if ordered.length > LIST_PAGE_SIZES[0]}
-		<!-- Above the rows it sizes: how much to show is a decision made before
-		     reading, while which page to read is one made after. -->
 		<div class="tools">
 			<PageSize bind:size onchange={() => (page = 0)} label="years" />
 		</div>
@@ -241,6 +217,8 @@
 			{@const row = byYear.get(group.key)!}
 			{@const gross = BigInt(row.grossTotalMinor)}
 			{@const bonus = BigInt(row.bonusTotalMinor)}
+			{@const equity = BigInt(row.equityTotalMinor)}
+			{@const equityOnPayslip = BigInt(row.equityOnPayslipMinor)}
 			<span class="year mono">
 				<span class="chevron" class:open={group.open}>{group.open ? '▼' : '▶'}</span>
 				{row.year}
@@ -272,12 +250,20 @@
 						<span class="absent">·</span>
 						<span class="c-sub quiet">not itemised</span>
 					{/if}
+					{#if equity > 0n}
+						<!-- Beside bonus, outside gross: shares that vested this year at the
+						     close on the day. Listed with the award because that is what
+						     it is, and kept out of the bar's gross for the same reason. -->
+						<span class="c-sub equity"
+							>+ {compactMinor(equity, currency)} equity{equityOnPayslip > 0n
+								? ` · ${compactMinor(equityOnPayslip, currency)} on slips`
+								: ''}</span
+						>
+					{/if}
 				</span>
 			{/if}
 
-			<!-- Gross carries the weight: it is what base and bonus add up to, and
-			     the one column where every row shares a currency — so the only one
-			     where comparing bar lengths is honest. -->
+			<!-- The one column where every row shares a currency, so bar-length comparison is honest. -->
 			<span class="cell right gross">
 				<span class="display t-value">{formatMinor(gross, currency)}</span>
 				<span class="track">
@@ -330,9 +316,8 @@
 		{/snippet}
 
 		{#snippet foot()}
-			<!-- Shown whenever the record is longer than the smallest page size, even
-			     when the current size fits it all: the size switcher lives here, and
-			     hiding it would leave no way back to a smaller page. -->
+			<!-- Shown even when the current size fits everything, since hiding it
+			     would leave no way back to a smaller page. -->
 			{#if ordered.length > LIST_PAGE_SIZES[0]}
 				<ListPager bind:page {pages} range={pageRange} />
 			{/if}
@@ -396,6 +381,9 @@
 	.c-sub {
 		font-size: var(--text-xs);
 		color: var(--fg3);
+	}
+	.c-sub.equity {
+		color: var(--purple);
 	}
 	.c-sub.up {
 		color: var(--green);

@@ -95,8 +95,7 @@ function detach(cv: CV): CV {
  * throwing inside its own callback, so `onRuntimeInitialized` simply never
  * fires. With nothing else watching, every request waits for the life of the
  * process — which on a phone is the reading screen staying up for ever, with
- * no error and no way out. That was the v0.8.5 bug, and moving the work to a
- * server does not fix it, it only moves where the silence is.
+ * no error and no way out.
  */
 const READY_TIMEOUT_MS = 30_000;
 

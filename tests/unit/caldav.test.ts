@@ -74,10 +74,9 @@ describe('authentication', () => {
 });
 
 describe('discovery', () => {
-	// Shaped like iCloud's actual answers. My first fixture returned only the
-	// property and no resource href, which hid the bug below entirely: a
-	// PROPFIND response ALWAYS opens with an href naming the resource that was
-	// asked about, and only then carries the answer.
+	// Shaped like iCloud's actual answers: a PROPFIND response always opens
+	// with an href naming the resource asked about, and only then carries the
+	// answer.
 	const principalResponse = `<?xml version="1.0"?>
 <multistatus xmlns="DAV:">
 	<response>
@@ -136,10 +135,9 @@ describe('discovery', () => {
 		return seen;
 	}
 
-	// THE BUG THAT LEFT THE PICKER EMPTY. Reading the first href in the document
-	// gets the resource we asked about — the principal — rather than the calendar
-	// home. The next PROPFIND then walks the principal collection, finds no
-	// calendars, and the dropdown has nothing in it.
+	// Regression: reading the first href in the document gets the principal
+	// rather than the calendar home, so the next PROPFIND walks the wrong
+	// collection and the dropdown ends up empty.
 	it('walks to the calendar home rather than back to the principal', async () => {
 		const seen = stubDiscovery();
 		await makeCalDavProvider(config).listCalendars();
@@ -246,11 +244,9 @@ describe('pulling', () => {
 		expect(result.reset).toBe(false);
 		expect(result.changes).toHaveLength(1);
 		expect(result.changes[0].series).toBeNull();
-		// The RESOURCE NAME, and an empty uid — a deleted resource has no body left
-		// to read a UID out of, so the only honest thing to report is the path. It
-		// used to be reported as though it were the uid, which matched no local key
-		// and no link: the deletion merged to a no-op and the cursor advanced past
-		// it, so an event deleted on a phone stayed in Continuum for good.
+		// Regression: a deleted resource has no body to read a UID out of, so
+		// reporting the path as the uid matched no local key and the deletion
+		// silently merged to a no-op.
 		expect(result.changes[0].uid).toBe('');
 		expect(result.changes[0].remoteId).toBe('evt-9');
 		expect(result.cursor).toBe('tok-2');

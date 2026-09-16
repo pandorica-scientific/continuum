@@ -3,43 +3,27 @@
  * Record assembly by RHYTHM, for statements that print one movement across
  * several physical lines.
  *
- * The assembler in `frompdf.ts` reads a table by asking of each line "does this
- * one start a movement?" — and every available answer is a property of the line
- * itself: it carries a date, it carries a figure, its figure ends where the
- * amount column ends. Komerční banka's continuation lines have all three, so
- * the question has no good answer, and four banks in the sample set were
- * recorded as a permanent limitation on that basis.
+ * `frompdf.ts` classifies each line ("does this start a movement?"), which
+ * fails when continuation lines look just like a new movement's start. This
+ * module instead finds the page's record BEAT without classifying any line:
  *
- * They are not. This module asks a different question — "what is the page's
- * record BEAT?" — and never classifies a line at all:
+ * 1. Cells cluster into columns: left edge for text, right edge for figures
+ *    (statements right-align money, so an amount column shares an ending).
+ * 2. Within one column, cells of one type recurring at regular spacing are a
+ *    run — a hypothesis that the table beats there.
+ * 3. A run's cells are anchors; content hangs below its anchor into bands.
+ *    Nothing is classified beyond that.
+ * 4. A hypothesis is valid when it implies a money column with exactly one
+ *    figure per record and a date column with a date in nearly every record.
+ * 5. Among valid hypotheses, the one accounting for the most cells wins and
+ *    is fixed for the whole document.
  *
- * 1. Cells cluster into columns: left edge for text, right edge for figures,
- *    because a statement right-aligns its money so an amount column shares an
- *    ending rather than a beginning.
- * 2. Within one column, cells OF ONE TYPE recurring at REGULAR spacing are a
- *    run — a hypothesis that the table beats there. Type purity separates a
- *    date column from an address block starting at the same x; regularity cuts
- *    the run at the table's edge without knowing a word of any language.
- * 3. A run's cells are anchors, and content hangs BELOW its anchor. Every other
- *    cell falls into the band it lies in: descriptions, value dates, exchange
- *    rates, references, original amounts. Nothing is classified.
- * 4. A hypothesis is VALID when the table it implies has a money column with
- *    exactly one figure per record and a date column with a date in nearly
- *    every record. That is what tells a real rhythm from a coincidence.
- * 5. Among valid hypotheses the one accounting for the most cells wins, and the
- *    winning column is then fixed for the whole document.
+ * This stands beside `frompdf.ts`, not in place of it — both produce
+ * candidate readings and the proof engine chooses between them.
  *
- * This does not replace `frompdf.ts`; it stands beside it. Both produce
- * candidate readings and the proof engine chooses, exactly as it chooses
- * between decodings and delimiters — because neither assembler dominates. On
- * one Raiffeisenbank statement this one yields 44 movements where the adapter
- * yields 43, and the 43 are the ones that reconcile.
- *
- * Two shapes it does not handle, both measured and both understood: a bank that
- * right-aligns a foreign-currency original to the SAME edge as the ledger
- * amount beats twice per movement; and a page printing several tables with
- * identical columns keeps only the largest, because one rhythm is assumed per
- * document.
+ * Not handled: a bank that right-aligns a foreign-currency original to the
+ * same edge as the ledger amount beats twice per movement, and a page with
+ * several same-shaped tables keeps only the largest (one rhythm per document).
  */
 import { isDateLike } from './determinacy';
 import { looksLikeSummary } from './vocabulary';
@@ -64,9 +48,8 @@ const MONEY = /\d[\d\s.,'\u00A0]*[.,]\d{2}(?!\d)|^-?\(?\d[\d\s'\u00A0]{0,12}\)?-
 const INT = /^-?\d+$/;
 /**
  * A figure has a decimal tail or a group separator. A bare run of digits does
- * not: Raiffeisenbank prints a ten-digit transaction reference in its own
- * column, and read as money it becomes the most regular "amount column" on the
- * page — every record has exactly one, so it passes every structural test.
+ * not — otherwise a reference-number column (one value per record) can pass
+ * as the most regular "amount column" on the page.
  */
 const DECIMAL_TAIL = /[.,]\d{2}(?!\d)/;
 const GROUPED = /\d[\s'\u00A0]\d{3}(?!\d)/;
@@ -77,11 +60,10 @@ const BARE_MONEY =
 /**
  * A date, with its components in range.
  *
- * The shared `isDateLike` has no range check, and on a dot-decimal statement
- * that is not cosmetic: `88.40` and `1.83` both parse as dates, so a UK
- * statement's "Paid out" column reads as a column of dates and the amount
- * column cannot be found at all. Both orders are allowed because the order is
- * not known yet — that is settled later, from the column as a whole.
+ * The shared `isDateLike` has no range check, so on a dot-decimal statement a
+ * plain amount like `88.40` can parse as a date. Both day/month orders are
+ * allowed here since the order itself is settled later, from the column as a
+ * whole.
  */
 
 const kindOf = (text: string): Kind => {
@@ -96,9 +78,9 @@ const kindOf = (text: string): Kind => {
 /**
  * One-dimensional clustering by chaining, with a width cap.
  *
- * Right edges of one amount column agree to a point or two; a bucket boundary
- * that happens to fall between them splits the column, so chaining is used
- * instead. The cap stops a dense page from chaining a whole margin together.
+ * Fixed bucket boundaries can split a column whose edges only agree to within
+ * a point or two, so chaining is used instead; the cap stops a dense page
+ * from chaining a whole margin together.
  */
 function cluster(values: number[], tol: number): number[] {
 	const sorted = [...values].sort((a, b) => a - b);
@@ -221,19 +203,15 @@ const anchorsFor = (label: string, cells: Cell[]): number[] =>
 type Band = { top: number; bottom: number; cells: Cell[] };
 
 /**
- * Bands from anchors: content hangs BELOW the line that opens it.
+ * Bands from anchors: content hangs BELOW the line that opens it, down to the
+ * next anchor. Splitting at the midpoint between anchors is wrong whenever
+ * records differ in height — a tall record's lower lines would fall past the
+ * midpoint into the record below.
  *
- * Splitting at the midpoint between anchors was the first rule tried, and it is
- * wrong wherever records differ in height: an mBank movement with four detail
- * lines has half of them fall past the midpoint into the movement below. A
- * record owns everything from its anchor down to the next one.
- *
- * A layout that centres its rows vertically — Nickel prints the row number
- * beside the MIDDLE of a wrapped description — is not handled by moving the
- * boundary but by choosing a different anchor column: its amount column sits at
- * the top of each row, and the same downward rule then reads it correctly. The
- * hypothesis whose anchors sit at the top of the row is the one that survives
- * validation, so no per-layout switch is needed.
+ * A layout that centres its rows vertically is handled not by moving the
+ * boundary but by picking a different anchor column: the hypothesis whose
+ * anchors sit at the top of each row is the one that survives validation, so
+ * no per-layout switch is needed.
  */
 function bandsOf(anchors: number[], cells: Cell[]): Band[] {
 	const bands: Band[] = [];
@@ -318,12 +296,9 @@ function evaluate(run: Run, cells: Cell[]): Reading {
 }
 
 /**
- * The reading that accounts for the most of the page.
- *
- * Fewest records was tried as the rule and is wrong: a UK statement's "Paid
- * out" column beats regularly on seven of ten rows and implies a seven-record
- * table that passes validation by a hair. It explains less of the page than the
- * date column does, and coverage is what separates them.
+ * The reading that accounts for the most of the page, not the one implying
+ * fewest records — a sparse column can pass validation by a hair while
+ * explaining less of the page than the real date/amount rhythm does.
  */
 function readPage(cells: Cell[]): Reading | undefined {
 	const readings = hypotheses(cells)
@@ -344,12 +319,10 @@ type AssembledRecord = {
 /**
  * One rhythm for the whole statement, chosen by the pages that show it best.
  *
- * A page is not always able to recognise its own table. Komerční banka's last
- * page carries two movements and then a recapitulation block and a
- * balance-by-date table, and the balance table is the most regular thing on it:
- * read alone, that page reports five movements that do not exist and loses the
- * two that do. The other three pages have no such doubt, and a statement is
- * assembled the same way on every page or not at all.
+ * A page is not always able to recognise its own table: a page whose real
+ * movements are outnumbered by a trailing recap/balance block can pick the
+ * wrong rhythm read alone. A statement is assembled the same way on every
+ * page or not at all.
  */
 function documentAnchor(cells: Cell[], pages: number[]): string | undefined {
 	const score = new Map<string, number>();
@@ -367,12 +340,10 @@ function documentAnchor(cells: Cell[], pages: number[]): string | undefined {
 /**
  * Records that do not look like the others are not records.
  *
- * The last page of a Komerční banka statement prints balances by date: rows
- * with a date and a figure right-aligned to the amount column, indistinguishable
- * from a movement by any local test. They are distinguishable by company — a
- * movement fills the same columns as the twenty-seven movements above it, and
- * these fill six columns none of those use. No vocabulary, no page geometry:
- * only the statement's own repetition.
+ * Some rows (e.g. a trailing balance-by-date table) have a date and an
+ * amount-aligned figure, indistinguishable from a movement by any local
+ * test — but distinguishable by company: real movements fill the same
+ * columns as each other, these fill columns none of those use.
  */
 function keepTypicalShapes(records: AssembledRecord[]): AssembledRecord[] {
 	if (records.length < 4) return records;
@@ -413,14 +384,11 @@ function assemble(cells: Cell[]): { records: AssembledRecord[]; readings: Readin
 			records.push({ page, y: band.top, cells: ordered, amount, dates: dates.map((d) => d.text) });
 		}
 	}
-	// A page too short to have a rhythm of its own still belongs to the document.
-	//
-	// Three anchors are needed to establish a beat, so a final page carrying one
-	// or two movements produces no run and contributed nothing — a nine-movement
-	// statement whose last page held the ninth read as eight, and reconciled
-	// against nothing. The rhythm is a property of the STATEMENT, though, and by
-	// this point it is known: the same anchor column, applied to a thin page,
-	// bands it correctly without needing to be rediscovered there.
+	// A page too short to have a rhythm of its own still belongs to the
+	// document: MIN_RUN anchors are needed to establish a beat, so a final page
+	// with only one or two movements produces no run on its own. The document's
+	// anchor column is already known by this point, though, and bands the thin
+	// page correctly without rediscovering it there.
 	const template = readings[0];
 	if (anchor && template) {
 		for (const page of pages) {
@@ -456,18 +424,14 @@ function assemble(cells: Cell[]): { records: AssembledRecord[]; readings: Readin
  * The assembled records as a table, for the same reader every other format
  * goes through.
  *
- * One row per movement, one column per clustered edge. Cells that share a
- * column within a record are joined in reading order, which is how a
- * description wrapped over three lines becomes one description rather than
- * three rows carrying no amount between them.
+ * One row per movement, one column per clustered edge. Cells sharing a column
+ * within a record are joined in reading order, so a description wrapped over
+ * several lines becomes one description rather than several empty rows.
+ * Money keeps its right edge and everything else its left, so an overlapping
+ * amount and reference column are not merged into one.
  *
- * Money keeps its right edge and everything else its left, so a right-aligned
- * amount column and a left-aligned reference column that happen to overlap are
- * not merged into one.
- *
- * Returns nothing when the page has no rhythm to find — fewer than three
- * records is not a table, it is a coincidence — and the caller simply has one
- * candidate reading fewer.
+ * Returns nothing when the page has fewer than MIN_RUN records — not enough
+ * to call it a rhythm rather than a coincidence.
  */
 export function gridsFromRhythm(lines: PdfLine[]): Grid[] {
 	const cells = cellsOf(lines);
@@ -481,14 +445,10 @@ export function gridsFromRhythm(lines: PdfLine[]): Grid[] {
 	/**
 	 * Where a cell goes when its record already has one in that column.
 	 *
-	 * Prose wraps and values do not. A description continued over three lines is
-	 * one description, so those join; but a booking date and a value date in the
-	 * same column are two facts, and joining them produces `09.12.2024
-	 * 08.12.2024`, which is not a date at all — every row then failed the "has a
-	 * date" test and a 28-record table read as three.
-	 *
-	 * So a repeated value takes the next slot in that column instead, and the
-	 * reader sees a second date column it can name `valueDate`.
+	 * Prose wraps and values do not: a wrapped description should join into one
+	 * cell, but two distinct dates joined together stop being a valid date at
+	 * all. So a repeated value takes the next slot in that column instead, and
+	 * the reader sees a second date column it can name `valueDate`.
 	 */
 	const slotOf = (cell: Cell, seen: Map<string, number>) => {
 		const key = columnOf(cell);
@@ -528,18 +488,11 @@ export function gridsFromRhythm(lines: PdfLine[]): Grid[] {
 		return texts.map((text) => ({ text: text.trim() }));
 	};
 
-	// The page furniture is kept, not discarded.
-	//
-	// A statement prints its opening and closing balance outside the table, and
-	// the assembler above deliberately drops every line that is not a movement.
-	// Emitting only the movements therefore produced a table with no arithmetic
-	// attached to it: four banks assembled perfectly and were then refused with
-	// "nothing in the statement could be checked", because the figures that could
-	// have checked them had been thrown away one step earlier.
-	//
-	// These lines populate different columns from the movements, so region
-	// detection separates them into their own blocks and reads them for what
-	// they are — metadata and summary — exactly as it does for a spreadsheet.
+	// The page furniture is kept, not discarded: a statement's opening/closing
+	// balance sits outside the table, and dropping it here would leave nothing
+	// for the proof engine to check the movements against. These lines populate
+	// different columns from the movements, so region detection separates them
+	// into their own metadata/summary blocks, as it does for a spreadsheet.
 	const inARecord = new Set(records.flatMap((record) => record.cells));
 	const leftovers = new Map<number, Cell[]>();
 	for (const cell of cells) {
@@ -550,31 +503,24 @@ export function gridsFromRhythm(lines: PdfLine[]): Grid[] {
 	}
 
 	// The movements come first, in document order and unbroken; the furniture
-	// follows after a blank line.
-	//
-	// A multi-page statement prints its furniture BETWEEN its pages, so leaving
-	// the two interleaved cut one 28-movement table into four regions of 7, 12,
-	// 7 and 2 — each then had to reconcile on its own against balances belonging
-	// to the whole. Order matters to the reader only inasmuch as it separates
-	// blocks, and the movements' own order is preserved.
+	// follows after a blank line. A multi-page statement prints its furniture
+	// BETWEEN pages, so leaving the two interleaved would split one table into
+	// several regions, each then reconciling alone against balances belonging
+	// to the whole.
 	const ordered = [...records].sort((a, b) => a.page - b.page || b.y - a.y);
 	const rows: RawCell[][] = ordered.map(movement);
 
 	/**
 	 * The column header is not furniture.
 	 *
-	 * The assembler keeps only lines that carry a movement, so the row of labels
-	 * above the table is dropped with the page's letterhead — and without it the
-	 * reader has no names to work from and must guess roles from shape. On a
-	 * `Debit | Credit | Balance` layout it guesses one of the pair and reports
-	 * that half the rows have no amount, which is true of the column it picked
-	 * and false of the table.
+	 * The assembler keeps only lines that carry a movement, so the header row
+	 * above the table would otherwise be dropped with the letterhead — and
+	 * without it, roles must be guessed from shape alone.
 	 *
-	 * The header is found by geometry, not vocabulary: it is the line directly
-	 * above the first movement whose cells sit over the movement columns. Labels
-	 * are not aligned the way their values are — `Debit` is left-aligned over a
-	 * right-aligned figure — so they are matched on the midpoint of each cell,
-	 * which is the one position both alignments share.
+	 * The header is found by geometry, not vocabulary: the line directly above
+	 * the first movement, matched to columns by cell MIDPOINT rather than edge,
+	 * since a label (e.g. left-aligned "Debit") is not aligned the same way as
+	 * the right-aligned figure it names.
 	 */
 	const midpoints = new Map<string, { total: number; count: number }>();
 	for (const record of records) {
@@ -594,23 +540,14 @@ export function gridsFromRhythm(lines: PdfLine[]): Grid[] {
 	/**
 	 * A header is often written over several lines, not one.
 	 *
-	 * Taking only the nearest line above the movements is right for a statement
-	 * that prints `Date | Description | Amount` on one row, and wrong for the two
-	 * that stack their labels. Česká spořitelna writes four lines — `Popis`, then
-	 * `Částka obratu cizí měny…`, then `Provedeno | Název protiúčtu…`, then
-	 * `Zaúčtováno | Položka | … | Částka` — and the nearest one carries a single
-	 * label. Raiffeisenbank writes three, and the nearest names the amount column
-	 * `Kurz`, which is the exchange rate.
+	 * Taking only the nearest line above the movements is wrong for a statement
+	 * that stacks its labels over several lines — the amount column's own label
+	 * can sit several lines further up than the nearest one, leaving it unnamed
+	 * and the table unreadable.
 	 *
-	 * In both cases the column that says `Částka` is two lines further up, so the
-	 * amount column arrived unnamed, the roles fell back to shape, and the table
-	 * could not be read at all — from an assembly that was perfectly correct.
-	 *
-	 * So the whole contiguous run is taken. It stops at a jump in the line pitch,
-	 * which is where the header block ends and the page furniture above it
-	 * begins, and at a line carrying a figure — ČS prints
-	 * `Počáteční zůstatek: 114 820.44` directly above its header, and that is a
-	 * balance, not a label.
+	 * So the whole contiguous run is taken. It stops at a jump in the line
+	 * pitch (header block ends, page furniture begins) and at a line carrying a
+	 * figure, which is a balance, not a label.
 	 */
 	const carriesMoney = (line: Cell[]) => line.some((cell) => cell.kind === 'money');
 	const isMovementLine = (line: Cell[]) =>
@@ -626,10 +563,8 @@ export function gridsFromRhythm(lines: PdfLine[]): Grid[] {
 	for (const candidate of candidates) {
 		const y = candidate.line[0].y;
 		// A movement, a figure, or a stated balance: not a label, and the run ends
-		// here. The third case needs its own test — mBank prints
-		// `Saldo początkowe: 67,93` as ONE cell, so it reads as text rather than
-		// as money, and swallowing it into the header both lost the opening
-		// balance as evidence and put a figure among the column names.
+		// here. The summary check catches a balance written as one text cell
+		// (e.g. "Opening balance: 67.93"), which the money/date checks miss.
 		const text = candidate.line.map((cell) => cell.text).join(' ');
 		if (isMovementLine(candidate.line) || carriesMoney(candidate.line) || looksLikeSummary(text)) {
 			break;
@@ -654,8 +589,8 @@ export function gridsFromRhythm(lines: PdfLine[]): Grid[] {
 				const gap = Math.abs(at - mid);
 				if (gap < distance) [best, distance] = [key, gap];
 			}
-			// A label further from every column than a column is wide is not a
-			// label for any of them.
+			// A label further from every column than a column is wide belongs to
+			// none of them.
 			return distance <= 60 ? best : undefined;
 		};
 
@@ -696,19 +631,14 @@ export function gridsFromRhythm(lines: PdfLine[]): Grid[] {
 /**
  * Two date columns that never appear together are one date column.
  *
- * Clustering places a cell by its left edge, and a proportional font moves that
- * edge by a point or two between rows — enough, occasionally, for one
- * statement's booking dates to land in two adjacent slots. On a Komerční banka
- * statement 25 of 28 movements put their date in one column and three put it in
- * the next, so the date column had three holes in it and the reading was refused
- * for rows "carrying no year" that in fact carried a perfectly good date one
- * column to the left.
+ * Clustering places a cell by its left edge, and a proportional font can move
+ * that edge enough for one statement's dates to land split across two
+ * adjacent slots. The test is co-occurrence, not similarity: a record has one
+ * booking date, so two slots never both filled within a record are one
+ * column that drifted, not two different dates.
  *
- * The test is co-occurrence, not similarity. A record has one booking date, so
- * two slots that are never both filled within a record cannot be two different
- * dates — they are one column that drifted. Money columns are deliberately NOT
- * merged on this rule: a debit and a credit column are also never both filled,
- * and there the emptiness is the meaning.
+ * Money columns are deliberately NOT merged on this rule — a debit/credit
+ * pair is also never both filled, and there the emptiness is the meaning.
  */
 function mergeSplitDateColumns(rows: RawCell[][], movements: number): void {
 	if (rows.length === 0 || movements < 3) return;

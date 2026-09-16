@@ -1,15 +1,6 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// Three answers and a way to the editor.
-	//
-	// This screen used to argue that corner handles should not exist — dragging
-	// four of them on a phone being worse than taking the photo again, with
-	// `original` as the recovery. That held until the detector met a card too
-	// small in frame, an object with a dark band across it, and a page the same
-	// brightness as the table: failures no retake fixes, where `original` hands
-	// back the desk along with the page. So the crop is still visible before it
-	// is kept, Replace still costs one tap, and the edges are now correctable
-	// rather than merely refusable.
 
 	import Icon from '$lib/components/Icon.svelte';
 	import Segmented from '$lib/components/Segmented.svelte';

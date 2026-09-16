@@ -11,25 +11,19 @@ import { hashBytes, removeUpload } from '$lib/server/system/files';
 import { cancelQueuedExtraction, enqueueExtraction } from './extract/queue';
 
 /**
- * Postgres codes seen for a delete blocked by a foreign key. A plain
- * `NO ACTION` foreign key reports `23503` (foreign_key_violation), but
- * `ON DELETE RESTRICT` — what `import_file.document_id` actually declares —
- * reports the more specific `23001` (restrict_violation). Both are matched,
- * together with the constraint name below, so an unrelated FK failure is
- * never mislabeled as "this is an import's statement".
+ * Postgres codes for a delete blocked by a foreign key: `23503` for a plain
+ * `NO ACTION` FK, `23001` for `ON DELETE RESTRICT` (what `import_file.document_id`
+ * declares). Matched together with the constraint name so an unrelated FK
+ * failure is never mislabeled.
  */
 const FOREIGN_KEY_VIOLATION_CODES = new Set(['23503', '23001']);
 
 /**
- * True only for the RESTRICT on `import_file.document_id` — never for any
- * other foreign key a `document` delete might trip (there is currently only
- * this one, but matching the constraint name by name, not just the error
- * code, keeps that true if another is ever added).
+ * True only for the RESTRICT on `import_file.document_id`, matched by
+ * constraint name (not just the error code) so a future FK stays distinguishable.
  *
- * Drizzle wraps the driver's own `PostgresError` in a `DrizzleQueryError`
- * before it reaches a caller, with the original as `.cause` — so that is
- * where the code and constraint name are read from, not off the error drizzle
- * actually throws.
+ * Drizzle wraps the driver's `PostgresError` in a `DrizzleQueryError`, with
+ * the original as `.cause` — code and constraint name are read from there.
  */
 function isImportFileRestrict(error: unknown): boolean {
 	const cause = error instanceof Error ? error.cause : undefined;
@@ -58,12 +52,9 @@ interface CreateDocumentInput {
 	expiresOn: string | null;
 	expiryVerb: EnumValue<'document.expiry_verb'>;
 	/**
-	 * Everything this document is filed against, by id, whatever kind each one
-	 * turns out to be — the far end of a document link is an `entity`, so a
-	 * person, a property, an account, a transaction and a subject all end up in
-	 * the same insert regardless. Five per-kind lists used to sit here instead,
-	 * one per caller's own vocabulary; every caller ever populated at most one
-	 * of them at a time; one list is that same call written once.
+	 * Everything this document is filed against, by id. The far end of a
+	 * document link is an `entity`, so a person, a property, an account, a
+	 * transaction and a subject all end up in the same insert regardless.
 	 */
 	targetIds: string[];
 	newSubjectName?: string;
@@ -99,14 +90,10 @@ export async function insertDocumentAggregate(
 	handle: Queryable
 ): Promise<void> {
 	const wantedTargetIds = [...input.targetIds];
-	// One reading of the case-insensitive uniqueness rule, in `subjects.ts`
-	// beside the rail's stricter `addSubject`. Typing "car" into capture when the
-	// household already has a "Car" has to find that one, not fail and not mint a
-	// second — and the lowercase comparison that decides it is now written once.
+	// Case-insensitive: typing "car" when the household already has a "Car" must
+	// find that one, not mint a second.
 	if (input.newSubjectName) {
-		// A subject made on the way in lands on the shelf the document is being
-		// filed to — which is where its card belongs and where it will be offered
-		// next time.
+		// Lands on the shelf the document is filed to, so its card is offered there next time.
 		wantedTargetIds.push(await upsertSubjectByName(input.newSubjectName, input.shelfId, handle));
 	}
 
@@ -126,9 +113,8 @@ export async function insertDocumentAggregate(
 		contentHash: input.contentHash ?? null
 	});
 
-	// Four inserts became one. The far end of a document link is an `entity`, so
-	// what a target IS no longer decides which table the link goes in — which is
-	// what stops a new module needing a document_<thing> table of its own.
+	// The far end of a document link is an `entity`, so what a target IS never
+	// decides which table the link goes in.
 	const targetIds = [...new Set(wantedTargetIds)];
 	if (targetIds.length > 0) {
 		await handle
@@ -159,26 +145,17 @@ export const IMPORT_STATEMENT_REFUSAL =
  * The DATABASE half of removing a document: the row and everything hanging off
  * it, and the name of the file that is now nobody's.
  *
- * Only the `document` row is deleted here. The AFTER DELETE trigger on the
- * table retires its `entity` row, and every link — document_link at both ends,
- * tag_link — carries ON DELETE CASCADE from there, so the connectors go with
- * it. Enumerating them in application code would be a second, quietly
- * divergent copy of a rule the database already enforces.
+ * Only the `document` row is deleted here — the AFTER DELETE trigger retires
+ * its `entity` row, and every link cascades from there, so connectors aren't
+ * enumerated in application code.
  *
- * The file is NOT unlinked here, and that is the point of the split: a caller
- * holding a transaction has to be able to do this step inside it and unlink
- * the bytes only once the transaction has committed. Unlinking mid-transaction
- * would leave a record pointing at a file that is no longer there the moment
- * anything after it rolled back.
+ * The file is NOT unlinked here: a caller holding a transaction must be able
+ * to do this step inside it and unlink the bytes only once committed.
  *
- * One document CANNOT be removed at all: the statement an accepted import
- * filed for itself. `import_file.document_id` carries ON DELETE RESTRICT, so
- * the DELETE below fails atomically — nothing is removed — and `refused: true`
- * comes back instead. There is no "detach it first" path to offer: imports are
- * permanent by design (acknowledging one only hides it, it never deletes), so
- * refusing is the whole rule. The failed statement leaves the surrounding
- * transaction unusable, which is correct: a caller that got this answer has
- * nothing left to do but roll back.
+ * One document CANNOT be removed: the statement an accepted import filed for
+ * itself. `import_file.document_id` carries ON DELETE RESTRICT, so the DELETE
+ * fails atomically and `refused: true` comes back instead — imports are
+ * permanent by design. The surrounding transaction is unusable afterward.
  */
 export async function deleteDocumentRow(
 	documentId: string,
@@ -202,11 +179,9 @@ export async function deleteDocumentRow(
  * Remove a document from the household entirely: the record, everything it was
  * linked to, and the uploaded file behind it.
  *
- * The file is unlinked after the row is gone, not before: a delete that fails
- * must not leave a record pointing at a file that is no longer there. Pass a
- * plain handle, not a transaction — inside one the row is not committed yet,
- * and `removeDocument` in `lifecycle.ts` is what a caller with a transaction
- * wants.
+ * The file is unlinked after the row is gone, not before. Pass a plain
+ * handle, not a transaction — `removeDocument` in `lifecycle.ts` is for a
+ * caller with a transaction.
  */
 export async function deleteDocument(
 	documentId: string,
@@ -223,13 +198,11 @@ export async function deleteDocument(
 /**
  * Put a different file behind the same document.
  *
- * The record, its links and its tags stay; only the bytes change. Everything
- * read out of the old file goes with it — leaving the chunks would make the
- * document searchable by text it no longer contains, which is worse than not
- * being searchable at all — and a fresh extraction is queued.
+ * The record, its links and its tags stay; only the bytes change. Old text
+ * chunks are dropped — leaving them would make the document searchable by
+ * text it no longer contains — and a fresh extraction is queued.
  *
- * The queued job for the OLD file is cancelled here (`enqueueExtraction` does
- * it). A job already RUNNING cannot be cancelled and is not: it discovers at
+ * A job already RUNNING for the old file is not cancelled: it discovers at
  * commit time that the bytes it read are no longer the document's, and writes
  * nothing.
  */
@@ -268,13 +241,11 @@ export async function replaceDocumentFile(
 /**
  * Put a document in a lane on a card it is linked to, or back into history.
  *
- * The link is checked rather than assumed. A lane belongs to one card, and a
- * document that is not on that card cannot be in its lane — otherwise a payslip
- * could close a cell on an employer it was never filed against, and the count
- * that says "5 of 6" would be counting the wrong six.
+ * The link is checked rather than assumed: a document not on the lane's card
+ * cannot be in its lane, otherwise a payslip could close a cell on an
+ * employer it was never filed against.
  *
- * `null` is history, which is a real answer and not an absence: paper with no
- * rhythm is most of what a card holds.
+ * `null` is history, a real answer, not an absence.
  */
 export async function assignLane(
 	documentId: string,

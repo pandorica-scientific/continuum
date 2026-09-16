@@ -31,11 +31,8 @@ import { currency } from './money';
 /**
  * The banks an account can belong to.
  *
- * A table rather than the hardcoded `<option>` list and emoji map it replaces:
- * the five Czech banks in the code were the five the author happened to use,
- * and a household with a sixth had to pick "Other" and lose the name of their
- * own bank. Seeded with those five plus Other; anything else is added from the
- * accounts screen.
+ * A table rather than a hardcoded list, so a household can add a bank the
+ * seed set doesn't cover instead of losing its name under "Other".
  */
 export const bank = pgTable('bank', {
 	key: text('key').primaryKey(),
@@ -49,13 +46,10 @@ export const account = pgTable(
 		id: uuid('id').primaryKey(),
 		name: text('name').notNull(),
 		emoji: text('emoji').notNull().default('🏦'),
-		// Deliberately NOT a foreign key into `bank`. That table is the list the
-		// picker offers and where a label and emoji are looked up — it is not the
-		// set of values this column may hold. Accounts created before routing
-		// became format-first carry a FORMAT name here (`tabular`, `camt053`), and
-		// import-integrity pins that; constraining the column would turn those
-		// rows, and any future adapter naming a new issuer, into a raw constraint
-		// error at import time. Unknown keys fall back to a default emoji.
+		// Deliberately NOT a foreign key into `bank` — that table is the picker's
+		// list, not the set of values this column may hold. Some accounts carry a
+		// FORMAT name here (`tabular`, `camt053`) that import-integrity pins;
+		// constraining the column would turn those into a raw constraint error.
 		bank: text('bank').notNull(),
 		kind: text('kind').$type<EnumValue<'account.kind'>>().notNull().default('current'),
 		currency: text('currency')
@@ -113,10 +107,8 @@ export const importFile = pgTable(
 		 * to the reading that produced it, and that "everything that came from OCR"
 		 * is a query rather than a guess.
 		 */
-		// NOT NULL since 0052: a statement filed with no record of what read it, or
-		// of how strongly it was proven, is the one thing these columns exist to
-		// prevent. The declaration said nullable while the database said otherwise
-		// until the baseline made the two agree.
+		// NOT NULL: a statement filed with no record of what read it, or how
+		// strongly it was proven, is the one thing these columns exist to prevent.
 		sourceMethod: text('source_method').notNull(),
 		proofClass: text('proof_class').$type<EnumValue<'proof_class'>>().notNull(),
 		ledgerModel: text('ledger_model'),
@@ -133,14 +125,10 @@ export const importFile = pgTable(
 		/**
 		 * The statement filed on a shelf, as one document among all the others.
 		 *
-		 * An import used to keep its own copy of the file and the documents screen
-		 * kept another, so the same statement existed twice with nothing tying the
-		 * two together. RESTRICT rather than SET NULL: the document IS the evidence
-		 * for every row this import wrote, so deleting it has to be refused rather
-		 * than quietly leaving an import that can no longer show what it read.
-		 *
-		 * Nullable, because an import filed before the two were joined has no
-		 * document to point at.
+		 * RESTRICT rather than SET NULL: the document IS the evidence for every row
+		 * this import wrote, so deleting it must be refused rather than quietly
+		 * leaving an import that can no longer show what it read. Nullable because
+		 * some imports predate this link.
 		 */
 		documentId: uuid('document_id').references(() => document.id, { onDelete: 'restrict' }),
 		uploadedAt: timestamp('uploaded_at', { withTimezone: true }).notNull().defaultNow()
@@ -194,10 +182,6 @@ export const importProfile = pgTable('import_profile', {
 /**
  * The top level of the category tree: what drives a series colour and where the
  * group sits in the waterfall.
- *
- * A table rather than the constant it replaces, because a household's spending
- * does not match the seven groups somebody else chose — the reported gaps were
- * health and subscriptions, and the next household will have different ones.
  *
  * `role` is the column that cannot be left out. The waterfall is not a flat
  * ordering: income opens it, expense groups are its stages, savings closes it.
@@ -373,19 +357,14 @@ export const transferPair = pgTable(
 );
 
 // A transaction can be claimed by only one active pair, regardless of whether
-// it is the outgoing or incoming leg. `transferPairSql` below maintains this
-// normalised relation from transfer_pair with a trigger so one primary key
-// covers the cross-column uniqueness that two ordinary indexes cannot express.
+// it is the outgoing or incoming leg — one primary key covers the
+// cross-column uniqueness two ordinary indexes cannot express.
 //
-// The rows are written by the maintain_transfer_pair_legs() trigger, never by
-// application code. Drizzle models tables, not triggers: this declaration
-// cannot recreate it, `db:generate` cannot notice it going missing, and a
-// database materialised with `drizzle-kit push` would have the table without
-// the constraint it exists to enforce. Apply migrations to build the schema.
-// `npm run scan:unused` reports this as unreferenced and it must stay exported
-// anyway: drizzle-kit builds the schema from what this module exports, so
-// un-exporting the table would take it out of the model — and the next
-// `db:generate` would emit a DROP for a table the trigger still writes to.
+// Rows are written by the maintain_transfer_pair_legs() trigger, never by
+// application code; Drizzle models tables, not triggers, so this declaration
+// cannot recreate it. `scan:unused` reports this table as unreferenced but it
+// must stay exported: un-exporting it would make the next `db:generate` emit
+// a DROP for a table the trigger still writes to.
 export const transferPairLeg = pgTable(
 	'transfer_pair_leg',
 	{
@@ -434,8 +413,7 @@ export const rule = pgTable(
 		id: uuid('id').primaryKey(),
 		name: text('name').notNull(),
 		enabled: boolean('enabled').notNull().default(true),
-		// learned | manual. 'seeded' existed while a fresh install shipped 42 starter
-		// rules; it was retired before the v0.3.10 squash and nothing writes it now.
+		// learned | manual.
 		provenance: text('provenance')
 			.$type<EnumValue<'rule.provenance'>>()
 			.notNull()

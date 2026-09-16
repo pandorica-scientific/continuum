@@ -53,10 +53,8 @@ function stubFetch(
 
 afterEach(() => vi.unstubAllGlobals());
 
-// THE ASYMMETRY THIS ADAPTER EXISTS TO ABSORB. CalDAV keeps a recurring event
-// and every override in one resource; Google gives each override its own event,
-// tied to the parent by recurringEventId and originalStartTime. Keeping the
-// transfer unit a whole series is what confines that difference to right here.
+// CalDAV keeps a recurring event and its overrides in one resource; Google gives each
+// override its own event, tied to the parent by recurringEventId and originalStartTime.
 describe('fanning a series out to Google resources', () => {
 	it('writes the master and one resource per exception', () => {
 		const events = toGoogleEvents(series, 'remote-1');
@@ -107,10 +105,8 @@ describe('fanning a series out to Google resources', () => {
 describe('all-day events', () => {
 	const allDay: EventSeries = { ...series, allDay: true, rrule: null, exceptions: [] };
 
-	// THE 400. Google and RFC 5545 both treat an all-day end date as EXCLUSIVE:
-	// a one-day event on the 1st ends on the 2nd. Sending the same date for both
-	// is a zero-length range, which Google refuses outright — and every event the
-	// ledger generates is all-day, so it refused all of them.
+	// Google treats an all-day end date as EXCLUSIVE (RFC 5545); the same date for both
+	// start and end is a zero-length range Google refuses outright.
 	it('ends an all-day event on the following day', () => {
 		const master = toGoogleEvents(allDay, 'r')[0];
 		expect(master.start?.date).toBe('2026-09-01');
@@ -140,9 +136,7 @@ describe('all-day events', () => {
 		expect(current.endsAt.slice(0, 10)).toBe('2026-09-01');
 	});
 
-	// iCalUID is writable on events.import but read-only on events.insert, and
-	// sending it there is a 400. Our uid travels in extendedProperties instead,
-	// which insert does accept.
+	// iCalUID is read-only on events.insert; our uid travels in extendedProperties instead.
 	it('does not send iCalUID, which insert rejects', () => {
 		const master = toGoogleEvents(allDay, 'r')[0];
 		expect(master.iCalUID).toBeUndefined();
@@ -188,11 +182,8 @@ describe('reassembling Google resources into a series', () => {
 	});
 });
 
-// A "this event only" edit can change more than the title and the time. Each of
-// these three changes the shape of the resource Google is sent — all-day picks
-// `date` over `dateTime`, the zone says what the dateTime means — so writing the
-// series' values into an override published the occurrence wrongly and left
-// nothing for the next pull to read the override back from.
+// A "this event only" edit can change more than the title and time: all-day, category,
+// and timezone each change the shape of the resource Google is sent.
 describe('an occurrence that overrides more than its time', () => {
 	const tagged: EventSeries = { ...series, category: 'household', exceptions: [] };
 	const base = {
@@ -238,10 +229,8 @@ describe('an occurrence that overrides more than its time', () => {
 		}
 	});
 
-	// THE PHANTOM OVERRIDE. Google gives every override its own resource, so each
-	// carries a zone and a category of its own — including the ones it merely
-	// inherited from the series we sent. Reading those back as overrides turns
-	// our own push into a difference on the very next pull.
+	// Every Google override resource carries its own zone and category, including ones it
+	// merely inherited from the series — reading those back as overrides would create drift.
 	it('does not invent overrides for what the occurrence only inherited', () => {
 		const [exception] = fromGoogleEvents(toGoogleEvents(withOverride({}), 'r'))!.exceptions;
 		expect({
@@ -275,10 +264,7 @@ describe('listing calendars', () => {
 		});
 	}
 
-	// The symptom that started this: only the primary calendar showed up. A
-	// calendar hidden in Google's own sidebar is omitted unless asked for — and
-	// hiding one there is exactly what someone does with a calendar kept for an
-	// app.
+	// A calendar hidden in Google's own sidebar is omitted from the list unless asked for.
 	it('asks for hidden calendars', async () => {
 		let seen = '';
 		stubFetch((url) => {
@@ -342,9 +328,7 @@ describe('listing calendars', () => {
 		expect((await makeGoogleProvider(config).listCalendars())[0].name).toBe('Renamed');
 	});
 
-	// 403 is the EXPECTED answer under calendar.app.created: reading the account's
-	// calendar list is not something that scope grants. Treating it as a failure
-	// made a healthy account look broken.
+	// 403 is expected under calendar.app.created: that scope does not grant reading the list.
 	it('reports no calendars rather than failing when the list is not readable', async () => {
 		stubFetch((url) => {
 			if (url.includes('oauth2')) return { body: { access_token: 'at' } };
@@ -363,9 +347,8 @@ describe('listing calendars', () => {
 });
 
 describe('making a calendar to write to', () => {
-	// Under calendar.app.created the account's own calendars are invisible, so
-	// there is nothing to choose from until Continuum has made one. Creating it
-	// is the setup step, not a fallback.
+	// Under calendar.app.created the account's own calendars are invisible until Continuum
+	// makes one — creation is the setup step, not a fallback.
 	it('creates one when the account has none yet', async () => {
 		let created: Record<string, unknown> | null = null;
 		stubFetch((url, init) => {
@@ -382,10 +365,8 @@ describe('making a calendar to write to', () => {
 		expect(created).toMatchObject({ summary: 'Continuum' });
 	});
 
-	// It does NOT list first. Under calendar.app.created the calendarList endpoint
-	// answers 403, so listing before creating fails at step one — which is exactly
-	// what left the button looking dead. Not creating twice is the caller's job,
-	// guarded on the calendar id already stored against the account.
+	// Does not list first: under calendar.app.created the calendarList endpoint answers 403,
+	// so listing before creating would fail at step one.
 	it('creates without trying to enumerate first', async () => {
 		const calls: string[] = [];
 		stubFetch((url, init) => {
@@ -482,9 +463,8 @@ describe('authentication', () => {
 		expect(body).toContain('refresh_token=refresh');
 	});
 
-	// invalid_grant means the token is revoked or expired. Retrying cannot fix
-	// it, and a loop of retries against Google's token endpoint is how an account
-	// gets rate-limited on top of being broken.
+	// invalid_grant means the token is revoked/expired; retrying cannot fix it and risks
+	// rate-limiting the account further.
 	it('gives up on invalid_grant instead of retrying', async () => {
 		let attempts = 0;
 		stubFetch((url) => {

@@ -3,9 +3,7 @@
 	import { enhance } from '$app/forms';
 	import { DEFAULT_ENROLLMENT_LINK_DAYS, daysPhrase } from '$lib/password-policy';
 
-	// Everything past the name is administrative detail, and the server sends it
-	// as null to anyone who is not an administrator — so a member's copy of this
-	// page cannot carry who runs the household or who has yet to enrol.
+	// Everything past the name is null for a non-admin — the server withholds it.
 	interface PersonRow {
 		id: string;
 		name: string;
@@ -53,8 +51,7 @@
 
 			{#if isAdmin && p.id !== me?.id}
 				<span class="row-actions">
-					<!-- Not for a closed account: deactivation revoked the link they
-					     had, and the server refuses to mint a replacement. -->
+					<!-- Not for a deactivated account: the server refuses to mint a new link. -->
 					{#if p.pending && !p.deactivatedAt}
 						<form method="POST" action="?/reissueEnrollment" use:enhance>
 							<input type="hidden" name="personId" value={p.id} />
@@ -172,10 +169,6 @@
 		gap: var(--space-3);
 		padding-top: 11px;
 	}
-	/* Came along with the rule above when this list moved out of the settings
-	   page. Left behind there, four columns stayed four columns on a phone and
-	   the name field, the birth year, the role and the button each got about
-	   ninety pixels. */
 	@media (max-width: 640px) {
 		.add-form {
 			grid-template-columns: minmax(0, 1fr);

@@ -2,10 +2,8 @@
 /**
  * What a dossier shelf draws.
  *
- * The counterparties loader this replaces answered for organisations alone and
- * decided lane membership by MATCHING. Both are gone: the cards come from
- * whatever the shelf's unit says, and a document is in a lane because somebody
- * put it there.
+ * Cards come from whatever the shelf's unit says, and a document is in a lane
+ * because somebody put it there — never because of a name match.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';

@@ -2,23 +2,13 @@
 /**
  * Finding the transaction table inside a file that is not only a table.
  *
- * A statement is several things stacked: an address block, account metadata, a
- * turnover summary, the movements, a closing balance, a legal footer. Treating
- * the file as one rectangle finds the wrong rectangle — mBank's most common row
- * width is 2, its metadata key/value pairs, while its movements are width 8
- * two-thirds of the way down.
+ * A statement stacks several things — address, metadata, a turnover summary,
+ * the movements, a footer — so regions must be found first and the
+ * transaction one chosen on its own evidence, not by dominant row width: a
+ * footer row (e.g. a closing balance) can share the movement width.
  *
- * Two findings from real exports shape this module:
- *
- *  1. **Dominant width is the wrong selector.** Regions must be found first and
- *     the transaction one chosen on its own evidence.
- *  2. **A footer row can have the transaction width.** mBank's closing balance
- *     is `;;;;;;#Saldo końcowe;106,59 PLN` — width 8, sitting under the
- *     movements. Any parser that files "rows matching the header width" imports
- *     a movement that does not exist.
- *
- * Metadata and summary regions are kept, not discarded: they hold the opening
- * balance and the stated totals, which is the evidence the proof engine needs.
+ * Metadata and summary regions are kept, not discarded: they hold the
+ * evidence the proof engine needs.
  */
 import { isDateLike } from './determinacy';
 import type { Grid, RawCell } from './grid';
@@ -38,26 +28,16 @@ export interface Region {
 	headerIndex?: number;
 }
 
-// Date recognition lives in determinacy.ts: a second copy here drifted, and
-// this one still demanded a year — so a US column of bare MM/DD dates found
-// no transaction table at all.
+// Date recognition lives in determinacy.ts: a second copy here drifted out of
+// sync (no year required), so keep one definition.
 /**
  * A money-shaped token: digits, optionally grouped, with an optional decimal
  * tail, and a sign that may lead, trail, or be parentheses.
  *
- * The leading `\d+` matters. Requiring a group separator rejects UNGROUPED
- * integers, and Fio writes whole crowns plainly — `-20000`, `29760`. Three of
- * six real movements were dropped before this was widened, while a reduced
- * fixture using `240,00` passed happily.
- *
- * A currency mark is part of the amount, not a disqualification. CaixaBank
- * prints `-3,37 €` and the PDF reader deliberately keeps the symbol with the
- * figure — so a pattern that rejected any cell containing one meant no cell in
- * that statement was money, the region was not a table, and a page whose
- * columns had been recovered perfectly could not be read at all.
+ * Ungrouped integers must match too — some banks write whole units plainly
+ * (`-20000`). A currency mark beside the figure is part of the amount, not a
+ * disqualification, and a leading `+` must be accepted as a valid credit sign.
  */
-// A leading `+` is how plenty of statements write a credit; rejecting it made
-// those rows fail "does this row carry an amount" and vanish from the table.
 const AMOUNT_LIKE =
 	/^[€$£¥]?\s*[-+]?\(?\s*\d+(?:[.,\s'\u00A0\u202F]\d{3})*(?:[.,]\d{1,2})?\s*\)?[-+]?\s*(?:[€$£¥]|[A-Z]{3}|z\u0142|K\u010d|Ft)?$/;
 
@@ -117,16 +97,9 @@ function split(grid: Grid): Omit<Region, 'role' | 'headerIndex'>[] {
 			continue;
 		}
 		const shape = populatedColumns(row);
-		// Two movements are one block, whatever columns each of them happens to
-		// fill.
-		//
-		// Shape is the right test for telling a metadata block from a table, and
-		// the wrong one for telling two movements apart. A statement recovered
-		// from page geometry populates only the columns each movement uses — a
-		// card payment fills nine, a transfer four — so on one real statement 58
-		// of 103 adjacent pairs shared under half their columns, and a 104-movement
-		// table became 23 regions of two to six rows, each then asked to prove
-		// itself alone against balances printed once for all of them.
+		// Two movements are one block regardless of shape overlap: a
+		// geometry-recovered statement populates only the columns each movement
+		// uses, so adjacent movements can shape-differ despite being one table.
 		const bothMovements = previousRow !== undefined && isMovement(previousRow) && isMovement(row);
 		if (previous && !bothMovements && shapeOverlap(previous, shape) < SAME_SHAPE) {
 			flush(index - 1);
@@ -143,22 +116,13 @@ function split(grid: Grid): Omit<Region, 'role' | 'headerIndex'>[] {
 /**
  * A row of labels belongs to the table it names.
  *
- * Splitting on shape is right for blocks and wrong for headers: a header
- * populates every column the table HAS, while the rows below it populate only
- * the columns they use, so the very first data row often overlaps it least. A
- * UK statement whose first movement carries no "Paid out" value shares two
- * columns out of five with its own header — which reads as a change of block,
- * and the header ends up in a region of its own.
+ * Splitting on shape is wrong for headers: a header populates every column
+ * the table has, while the first data row often populates only the columns it
+ * uses and so can shape-overlap its own header least — leaving the header in
+ * a region of its own, with no names for the table to fall back on.
  *
- * The table then has no names to work from, roles fall back to shape, and a
- * `Paid out | Paid in` pair reads as one amount column with half its rows
- * empty. That is the same failure the OCR path had for the same reason, and it
- * is worth stating twice: losing the header is not a small loss, because
- * everything downstream depends on it.
- *
- * So a lone row that looks like a header is folded into the block beneath it.
- * `findHeader` decides what looks like one — the same judgement used to locate
- * a header inside a region — so there is one definition and not two.
+ * So a lone row that looks like a header is folded into the block beneath it,
+ * using the same `findHeader` judgement used elsewhere.
  */
 function rejoinHeaders(
 	regions: Omit<Region, 'role' | 'headerIndex'>[]
@@ -172,11 +136,8 @@ function rejoinHeaders(
 			next !== undefined &&
 			// Adjacent: a header does not skip a blank line to reach its table.
 			next.start === region.end + 1 &&
-			// A header is ALL labels. `findHeader` alone is too generous for a row
-			// standing on its own: "Balance carried forward  £3,521.59" names a
-			// role and carries no date, so it reads as a header — and folding that
-			// into the table below buries the real header inside a summary block,
-			// which is worse than leaving it where it was.
+			// A header is ALL labels — `findHeader` alone would also accept a
+			// summary line like "Balance carried forward £3,521.59".
 			!region.rows[0].some((cell) => cell.text && AMOUNT_LIKE.test(cell.text)) &&
 			findHeader(region.rows) === 0;
 		if (isLoneHeader) {
@@ -198,11 +159,9 @@ function rejoinHeaders(
  * A header is a row of labels: it names roles we recognise, and it carries no
  * date, because a date means it is already data.
  *
- * The BEST-matching row wins, not the first plausible one. CaixaBank's page
- * opens with `Account holder | IBAN ES73…`, and "IBAN" is a role we recognise,
- * so a first-match rule crowned that metadata line as the header — and the real
- * `Item | Date | Amount | Balance` row below it became data. The statement then
- * had no amount column and could not be read, from a grid that was perfect.
+ * The BEST-matching row wins, not the first plausible one — a metadata line
+ * naming one recognised role (e.g. "IBAN") can otherwise outrank the real
+ * header below it.
  */
 function findHeader(rows: RawCell[][]): number | undefined {
 	let best: { index: number; named: number } | undefined;
@@ -210,10 +169,8 @@ function findHeader(rows: RawCell[][]): number | undefined {
 	for (let i = 0; i < Math.min(rows.length, 3); i++) {
 		const row = rows[i];
 		// A row carrying a date is data, not a header — but only THIS row, so the
-		// search continues. Breaking here cost CaixaBank its header: its first
-		// line ends with the page number "1/8", which is indistinguishable from
-		// a two-component date, so the scan stopped before reaching
-		// `Item | Date | Amount | Balance` one line below.
+		// search continues rather than stopping (a page number can look
+		// date-like and must not end the scan early).
 		if (hasDate(row)) continue;
 		const named = row.filter((c) => c.text && roleOfHeader(c.text)).length;
 		if (named === 0) continue;
@@ -250,10 +207,9 @@ export function detectRegions(grid: Grid): Region[] {
  * The movement rows of a transaction region, with its header and any summary
  * line removed.
  *
- * The exclusion is semantic, never positional: mBank's closing balance has the
- * same width as a movement and sits below them, so "everything after the
- * header" imports a transaction that does not exist. A row is a movement when
- * it carries a date AND an amount and does not name a balance.
+ * The exclusion is semantic, never positional: a closing-balance row can have
+ * the same width as a movement and sit right below them. A row is a movement
+ * only when it carries a date AND an amount and does not name a balance.
  */
 export function transactionRows(region: Region): RawCell[][] {
 	const body =
@@ -268,14 +224,10 @@ export function transactionRows(region: Region): RawCell[][] {
  * Rows that look exactly like movements and were dropped anyway.
  *
  * The summary test is a word match, so a real transaction whose description
- * happens to contain one of those words — a transfer labelled "total", a fee
- * named for a balance — is deleted with everything else. Reproduced on a
- * three-row statement: two rows stored, no questions asked, chain proof intact,
- * auto-imported. The chain closes because the surviving rows still step
- * correctly; nothing downstream can see the hole.
- *
- * A row carrying BOTH a booking date and an amount is movement-shaped, so
- * dropping it is a judgement the reader must not make in silence.
+ * happens to contain a summary word is deleted along with actual summary
+ * rows — silently, since the chain still closes on what remains. A row
+ * carrying both a date and an amount is movement-shaped, so dropping it is a
+ * judgement the reader must not make without surfacing it.
  */
 export function droppedMovements(region: Region): RawCell[][] {
 	const body =
@@ -290,11 +242,9 @@ export interface GridChoice {
 }
 
 /**
- * Pick the reading that yields the most movement rows.
- *
- * Delimiter and encoding are not decided by inspecting punctuation but by
- * which combination produces an actual transaction table — the only outcome
- * that matters, and the one a wrong delimiter cannot fake.
+ * Pick the reading that yields the most movement rows: delimiter and
+ * encoding are decided by which combination produces an actual transaction
+ * table, not by inspecting punctuation.
  */
 export function chooseGrid(grids: Grid[]): GridChoice | null {
 	let best: GridChoice | null = null;

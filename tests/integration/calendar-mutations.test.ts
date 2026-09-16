@@ -138,9 +138,8 @@ describe('editing one occurrence', () => {
 	const editOccurrence = (id: string, over: Partial<typeof base>) =>
 		updateEvent(id, { ...base, ...over }, 'this', '2026-09-15T09:00:00.000Z', testDb);
 
-	// The form has always submitted these three; the exception table had nowhere
-	// to put them, so a "this event only" edit that retagged, un-all-dayed or
-	// re-zoned one occurrence was accepted and silently discarded.
+	// Regression: an edit retagging, un-all-daying or re-zoning one occurrence
+	// was silently discarded — the exception table had nowhere to put them.
 	it.each([
 		['category', { category: 'health' }, 'category'],
 		['all-day', { allDay: true }, 'allDay'],
@@ -152,9 +151,8 @@ describe('editing one occurrence', () => {
 		expect({ [column]: row?.[column] }).toEqual({ [column]: Object.values(over)[0] });
 	});
 
-	// Null means inherit, so an edit that did not touch these must leave them
-	// null — otherwise the occurrence freezes at today's category and zone, and
-	// retagging the series later stops reaching it.
+	// Null means inherit; an edit must leave untouched fields null, or the
+	// occurrence freezes and stops following later series-wide retags.
 	it('leaves what the edit did not change inheriting from the series', async () => {
 		const id = await seed();
 		expect((await editOccurrence(id, { title: 'Recycling only' })).ok).toBe(true);

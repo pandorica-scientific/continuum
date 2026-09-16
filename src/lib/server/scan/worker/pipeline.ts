@@ -1,13 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * The seam onto the unchanged scan core.
- *
- * Everything here is the work `ScanFlow.svelte` used to do between the shutter
- * and the preview, with a filesystem where the canvases were. The core itself
- * is untouched and unaware that it moved: it was written canvas-free so it
- * could be tested under node, and that is exactly what lets it run in a server
- * child now. The migration is cheap because of a decision made months before
- * anyone planned it.
+ * The seam onto a scan core written canvas-free, with a filesystem where the
+ * browser's canvases would be. It was built to be tested under node, and that
+ * is exactly what lets it run unaware inside a server child.
  */
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import {
@@ -37,11 +32,10 @@ import { decodeToFrame, downscaleFrame, encodeFrame } from './codec';
  * tag, and `applyOrientation` returns the frame untouched for 1. One fewer
  * thing that can be wrong on the server than in the browser.
  *
- * THE CAP IS LOAD-BEARING and it is here rather than at each call site. The
- * browser used to hold one — deleted in this release along with the decode it
- * protected — and nothing replaced it, so a 108 MP Android photograph went
- * through the warp and the flat-field blur at its own resolution and the child
- * died reporting only that it had stopped. Every path opens its source through
+ * THE CAP IS LOAD-BEARING and it is here rather than at each call site: without
+ * it, a 108 MP Android photograph goes through the warp and the flat-field
+ * blur at its own resolution and the child dies reporting only that it had
+ * stopped. Every path opens its source through
  * this function, so "the source's pixels" means the capped frame's pixels
  * everywhere: the outline the client stores, the corners it sends back and the
  * width and height it lays its handles out in are all in the same space.
@@ -107,9 +101,9 @@ function turn(
  * Detection runs at REFINE_WIDTH and NOT at the source's own resolution. Every
  * kernel in the detector is an absolute number of pixels sized for a frame
  * about 640 across; at 2400 the 9-pixel close cannot seal the holes text
- * punches in the page mask, the contour breaks up, and nothing is found. That
- * was the v0.8.5 upload bug, and a full-resolution frame handed to `detectBest`
- * does not come back slowly — it comes back UNCROPPED.
+ * punches in the page mask, the contour breaks up, and nothing is found. A
+ * full-resolution frame handed to `detectBest` does not come back slowly —
+ * it comes back UNCROPPED.
  */
 export async function runDetect(
 	cv: CV,
@@ -148,13 +142,9 @@ export async function runDetect(
 /**
  * The uncropped photograph, downscaled, as a file the route can stream.
  *
- * Takes no `cv` and touches no Mat, and still runs HERE rather than in the web
- * server — which is where it started, and where it was quietly the one thing
- * undoing the child. `codec.ts` explains that libheif is created and discarded
- * per file because its Emscripten heap grows and never shrinks; the child makes
- * that floor temporary by exiting, and a process that never exits makes it
- * permanent again. Decoding an iPhone photograph in the web server left ~90 MB
- * resident there for the life of the container.
+ * Takes no `cv` and touches no Mat, but still runs HERE rather than in the web
+ * server: `codec.ts`'s libheif heap only shrinks because the scan child exits,
+ * and decoding in a process that never exits makes that growth permanent.
  *
  * Written through a temporary name and renamed into place. A request killed by
  * the supervisor's deadline mid-write would otherwise leave a truncated JPEG
@@ -200,8 +190,7 @@ export async function runRender(
 
 	if (request.outPath) {
 		// The artefact the PDF will embed: encoded ONCE, at high quality, and
-		// handed to pdf-lib as bytes. v0.8.5 had to raise the quality of two
-		// compounding encodes; there is now only one to raise.
+		// handed to pdf-lib as bytes.
 		await write(request.outPath, page, request.mode, 95);
 	}
 	if (request.previewPath) {

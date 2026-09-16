@@ -46,10 +46,8 @@ export function aggregateByYear(rows: MonthRow[]): YearAgg[] {
  * aggregate inherit the error. Past the payment day, the projection starts next
  * month instead.
  *
- * This lives in one place because two callers need the same answer — the
- * what-if preview in `applyRepayment`, and the loans screen deriving an anchor
- * from the stored `owedAsOf`. When only the preview applied it, saving a
- * repayment produced a different chart from the one the decision was made on.
+ * Shared by the what-if preview in `applyRepayment` and the loans screen's
+ * own anchor derivation, so the saved chart matches the one previewed.
  */
 export function anchorMonthFor(observedOn: string, paymentDay: number | null | undefined): string {
 	const month = observedOn.slice(0, 7);

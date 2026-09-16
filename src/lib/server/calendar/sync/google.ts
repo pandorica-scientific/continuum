@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Google Calendar.
 //
-// The API is free — 1,000,000 requests a day, no billing account — and this
-// design polls every 15 minutes, so the cost is entirely in setup: each
-// household creates its own Cloud project and OAuth client, because Google will
-// not verify a self-hosted app on behalf of everyone who installs it. See
+// Each household creates its own Cloud project and OAuth client, because Google
+// will not verify a self-hosted app on behalf of everyone who installs it. See
 // docs/google-calendar-setup.md, and note the publishing-status trap called out
 // in the field hint below.
 //
@@ -35,10 +33,8 @@ const TIMEOUT_MS = 20_000;
  * How far back a full listing reaches when the syncToken is no good.
  *
  * Named and reported rather than inlined twice, because the engine has to know
- * it. Under a reset an absent event means a deleted one; an event older than
- * this window is merely unlisted, and the two were indistinguishable, so one
- * expired syncToken — an ordinary, documented event — hard-deleted every
- * authored event older than ninety days.
+ * it: under a reset an absent event means a deleted one, and an event older
+ * than this window is merely unlisted, not deleted.
  */
 const RESET_WINDOW_DAYS = 90;
 
@@ -134,18 +130,12 @@ export function toGoogleEvents(series: EventSeries, remoteId: string): GoogleEve
 	const master: GoogleEvent = {
 		id: remoteId,
 		// Our uid rides in extendedProperties, NOT iCalUID: that field is writable
-		// on events.import but read-only on events.insert, and sending it there is
-		// another way to earn a 400. Google's `id` is the resource address; our uid
-		// is what the engine keys on, and the two are deliberately different.
+		// on events.import but read-only on events.insert. Google's `id` is the
+		// resource address; our uid is what the engine keys on.
 		//
-		// The category and the zone travel the same way, and they have to. Both are
-		// part of the content hash, and Google has nowhere else to put either: it
-		// has no category field at all, and an all-day start carries no timeZone.
-		// So the echo of our own push came back with category null and tz 'UTC',
-		// which the merge could only read as a remote edit — and `apply` then wiped
-		// the category (and its marker) and rewrote the zone, on an event nobody
-		// had touched. The CalDAV adapter carries both, so the same event survived
-		// on iCloud and was quietly stripped on Google.
+		// The category and the zone travel the same way, and must: both are part of
+		// the content hash, and Google has nowhere else to put either — no category
+		// field at all, and an all-day start carries no timeZone.
 		extendedProperties: { private: privateProps(series.uid, series.category, series.tz) },
 		summary: series.title,
 		description: series.notes ?? undefined,
@@ -160,23 +150,16 @@ export function toGoogleEvents(series: EventSeries, remoteId: string): GoogleEve
 		const endsAt = exception.endsAt ?? startsAt;
 		// An override may depart from its series here too, and each one changes the
 		// SHAPE of what Google is sent: all-day picks `date` over `dateTime`, and
-		// the zone says what the dateTime means. Sending the series' values instead
-		// published the occurrence wrongly and left nothing for the next pull to
-		// read the override back from.
+		// the zone says what the dateTime means.
 		const allDay = exception.allDay ?? series.allDay;
 		const tz = exception.tz ?? series.tz;
 		const category = exception.category ?? series.category;
 		return {
 			// Google assigns override ids itself on the server, but a deterministic
-			// one keeps a re-push idempotent rather than piling up duplicates.
-			//
-			// Built by overrideRemoteId, which stays inside base32hex and keys on the
-			// RECURRENCE-ID. The old `${remoteId}_${index}` failed both ways: `_` is
-			// outside the alphabet Google requires, so every override was refused
-			// with a bare 400 and no recurring event with an exception ever reached
-			// Google at all; and indexing by position meant deleting the first of
-			// three overrides renamed the other two, leaving duplicates behind at the
-			// times they used to name.
+			// one keeps a re-push idempotent rather than piling up duplicates. Built by
+			// overrideRemoteId, which stays inside base32hex and keys on the
+			// RECURRENCE-ID rather than position, so deleting one override cannot
+			// rename another.
 			id: overrideRemoteId(remoteId, exception.recurrenceId),
 			extendedProperties: { private: privateProps(series.uid, category, tz) },
 			recurringEventId: remoteId,
@@ -215,15 +198,9 @@ export function fromGoogleEvents(events: GoogleEvent[]): EventSeries | null {
 			// Stored ONLY where the override genuinely departs from the master.
 			//
 			// Google gives every override its own resource, so each one carries a
-			// summary, a zone and a category of its own — including the ones it
-			// merely inherited from the series we sent. Reading those back as
-			// overrides turns our own push into a difference on the very next pull:
-			// the hash we stored says "inherits", the hash of what came back says
-			// "overrides", and the merge can only read that as a remote edit. It
-			// then writes the inherited values in as real overrides, so a later
-			// rename of the series stops reaching that occurrence — a cancelled
-			// occurrence, which never carries a title of its own, acquired one on
-			// the first pass after it was created.
+			// summary, zone and category even when merely inherited from the series
+			// we sent — reading those back unconditionally would turn our own push
+			// into a spurious remote edit on the very next pull.
 			const overrideAllDay = Boolean(event.start?.date);
 			const overrideCategory = event.extendedProperties?.private?.continuumCategory ?? null;
 			const overrideTz =
@@ -283,12 +260,9 @@ export function makeGoogleProvider(raw: Record<string, string>): CalendarProvide
 	/**
 	 * The chosen calendar, or a refusal.
 	 *
-	 * Defaulting to `primary` was a silent way to touch the wrong calendar: the
-	 * OAuth callback leaves remoteCalId null until someone presses "Create a
-	 * calendar", and "Sync now" has no guard of its own — so a press in between
-	 * would have pulled the account's entire personal calendar in and pushed
-	 * every ledger event out to it. CalDAV refuses in the same situation; this
-	 * now does too.
+	 * Must not default to `primary`: the OAuth callback leaves remoteCalId null
+	 * until someone presses "Create a calendar", and a sync in between would
+	 * otherwise pull the account's entire personal calendar in.
 	 */
 	function requireCalendar(): string {
 		if (!calendarId) throw new Error('Google: no calendar has been created yet.');
@@ -366,10 +340,8 @@ export function makeGoogleProvider(raw: Record<string, string>): CalendarProvide
 		const text = await response.text();
 		return {
 			status: response.status,
-			// A 502 from a proxy, or Google's own front end, answers with HTML. An
-			// unguarded parse turned that into a SyntaxError thrown out of the pull —
-			// so the account's error line read "Unexpected token <" instead of the
-			// status, and the pass died rather than failing with something actionable.
+			// A 502 from a proxy, or Google's own front end, answers with HTML —
+			// safeJson avoids throwing a raw SyntaxError out of the pull for that.
 			body: text ? safeJson(text) : {}
 		};
 	}
@@ -378,17 +350,9 @@ export function makeGoogleProvider(raw: Record<string, string>): CalendarProvide
 	 * Group a flat list of resources by the series each belongs to.
 	 *
 	 * `complete` says whether the list is the WHOLE truth — a full listing — or
-	 * an incremental page carrying only what changed. That distinction is the
-	 * one this function used to get wrong, and it cost data both ways.
-	 *
-	 * An incremental page holds only changed resources, so retitling the master
-	 * of a recurring event yields a group of exactly one: the series is rebuilt
-	 * with `exceptions: []`, and applyRemote replaces the exception set with
-	 * that, destroying every cancelled and moved occurrence the series had.
-	 * Change only an override and the group has no master at all, so
-	 * fromGoogleEvents returns null, the change is silently dropped — and the
-	 * syncToken still advances past it, so the move is never learned. Neither
-	 * was recoverable without a 410.
+	 * an incremental page carrying only what changed. An incremental page holds
+	 * only changed resources, so a group missing its master or its full exception
+	 * set must be re-read whole (below) rather than treated as the complete series.
 	 */
 	async function groupChanges(items: GoogleEvent[], complete: boolean): Promise<RemoteChange[]> {
 		const bySeries = new Map<string, GoogleEvent[]>();
@@ -525,11 +489,9 @@ export function makeGoogleProvider(raw: Record<string, string>): CalendarProvide
 		/**
 		 * Create the calendar Continuum writes to.
 		 *
-		 * Deliberately does NOT list first. Under `calendar.app.created` the
-		 * calendarList endpoint answers 403 — the scope grants creating a calendar
-		 * and managing events on it, and nothing that would let an app enumerate
-		 * what else the account has. Listing first is what made this fail at step
-		 * one and left the button looking dead.
+		 * Deliberately does NOT list first: under `calendar.app.created` the
+		 * calendarList endpoint answers 403, since the scope grants creating and
+		 * managing a calendar but not enumerating the account's others.
 		 *
 		 * Not creating a duplicate is therefore the CALLER's job: the account row
 		 * already records which calendar was made, so this is only ever called
@@ -623,9 +585,8 @@ export function makeGoogleProvider(raw: Record<string, string>): CalendarProvide
 							// for rather than a failure.
 							return { ok: true, remoteId: op.remoteId, etag: null };
 						}
-						// Anything else — 401, 403, 429, 500 — is a real failure. Calling
-						// it success orphaned the event in Google, cleared the account's
-						// error line, and made sure nothing ever tried again.
+						// Anything else — 401, 403, 429, 500 — is a real failure and must not
+						// be reported as success, or the event is orphaned in Google.
 						return {
 							ok: false,
 							remoteId: op.remoteId,
@@ -645,12 +606,10 @@ export function makeGoogleProvider(raw: Record<string, string>): CalendarProvide
 						// PUT is an upsert when we supply the id, so a create and an update
 						// are the same call and a re-push is idempotent.
 						//
-						// The etag goes with it as If-Match. Without it the write was
-						// unconditional, so the 412 branch below could never fire and an
-						// edit made on someone's phone between our pull and our push was
-						// overwritten silently — no conflict row, nothing in the briefing.
-						// Only on the MASTER: an override carries its own etag on the
-						// remote and we hold none for it.
+						// The etag goes with it as If-Match, only on the MASTER — an
+						// override carries its own etag on the remote and we hold none for
+						// it — so a remote edit in between is caught as a 412, not silently
+						// overwritten.
 						const result = await api(path, {
 							method: 'PUT',
 							body: event,
@@ -704,10 +663,10 @@ export function makeGoogleProvider(raw: Record<string, string>): CalendarProvide
 	/**
 	 * Everything in the window, for when the syncToken is no good.
 	 *
-	 * THROWS on a bad page rather than returning what it had collected. Its result
-	 * is handed to the engine with `reset` set, and under reset an absent event is
-	 * a deleted one — so answering a 500 on page two with "here are the first 250,
-	 * and by the way the rest are gone" deletes everything after page one.
+	 * THROWS on a bad page rather than returning what it had collected: its
+	 * result is handed to the engine with `reset` set, and under reset an absent
+	 * event is a deleted one, so a partial result would delete everything past
+	 * the failed page.
 	 */
 	async function fullList(): Promise<GoogleEvent[]> {
 		if (fullListCache) return fullListCache;

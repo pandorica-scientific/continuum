@@ -31,9 +31,7 @@ describe('choosing a screen for a status', () => {
 });
 
 describe('which message gets shown', () => {
-	// SvelteKit fills in a stand-in when the thrown error carried no message.
-	// "Not Found" under "This page is not in this timeline" says less than the
-	// catalogue's own sentence, so it must lose.
+	// SvelteKit's generic stand-in message must lose to the catalogue's own sentence.
 	it('treats SvelteKit stand-ins as saying nothing', () => {
 		expect(isGenericMessage('Not Found')).toBe(true);
 		expect(isGenericMessage('Internal Error')).toBe(true);
@@ -70,9 +68,7 @@ describe('the catalogue', () => {
 		}
 	});
 
-	// The drawings are files rather than transcribed path data now, so a missing
-	// export is a blank square on a screen nobody visits on purpose. Checking the
-	// file is on disk is the only thing that catches that before someone hits it.
+	// Guards against a missing exported drawing showing as a blank square.
 	it('ships the drawing every state points at', () => {
 		for (const state of ERROR_STATES) {
 			const file = path.resolve('static', artworkFor(state.code).replace(/^\//, ''));

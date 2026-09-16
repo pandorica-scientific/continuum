@@ -1,11 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// The currency a month is recorded in.
-//
-// It was taken from the household's base currency until v0.5.1, which is right
-// only when the two happen to agree. On the household this was found in they did
-// not: base was EUR, the payslips were Czech, and six months were stored as
-// 135 887 EUR — a figure every conversion downstream then multiplied by the euro
-// rate.
+// The currency a month is recorded in must be the payslip's own currency, not
+// silently taken from the household's base currency — those can disagree.
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { rowId } from '../row-id';
@@ -157,9 +152,8 @@ describe('which currency a slip row is read in', () => {
 	}
 
 	/**
-	 * The row is the EVIDENCE, and the evidence says 135 887 Kč. Restating it in
-	 * the household's currency shows a number that appears nowhere on the piece
-	 * of paper the row links to — which is what the screen did until v0.5.1.
+	 * The row is the EVIDENCE: restating it in the household's currency would
+	 * show a number that appears nowhere on the piece of paper it links to.
 	 */
 	it('reports a slip as it was recorded, not converted to the base', async () => {
 		await czechSlip('2026-01', rowId('doc-jan'));

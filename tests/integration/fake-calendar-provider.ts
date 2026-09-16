@@ -8,26 +8,19 @@ import type {
 } from '$lib/server/calendar/sync/provider';
 
 /**
- * An in-memory calendar server, standing in for Google and iCloud.
- *
- * A test double rather than shipped code. It exists so the engine's real risks —
- * duplication, resurrection, the push loop, a half-finished pass — can be
- * exercised deterministically and in milliseconds, instead of against a live
- * account with rate limits and a network.
- *
- * It models the parts of a real server that the engine actually has to survive:
- * a monotonic change log, opaque cursors, etags with optimistic concurrency, and
- * the ability to invalidate a cursor or fail a write on demand.
+ * An in-memory calendar server, standing in for Google and iCloud, so the
+ * engine's real risks — duplication, resurrection, the push loop, a
+ * half-finished pass — can be exercised deterministically. Models a monotonic
+ * change log, opaque cursors, and etags with optimistic concurrency.
  */
 export class FakeCalendarProvider implements CalendarProvider {
 	readonly id = 'fake';
 	readonly label = 'Fake calendar';
 
-	// Keyed by RESOURCE ID — the address we write to — while the series carries
-	// our own uid inside it. Real servers keep these apart: CalDAV has a UID:
-	// property distinct from the resource path, Google an iCalUID distinct from
-	// its id. Collapsing them here would hide the mapping the engine has to get
-	// right.
+	// Keyed by RESOURCE ID, while the series carries our own uid inside it —
+	// real servers keep these apart (CalDAV's UID: property vs. resource path,
+	// Google's iCalUID vs. its id). Collapsing them would hide the mapping the
+	// engine has to get right.
 	private store = new Map<string, { series: EventSeries; etag: string }>();
 	/** Append-only log of {resourceId, uid} that changed. Cursors index into it. */
 	private log: Array<{ resourceId: string; uid: string }> = [];
@@ -60,9 +53,8 @@ export class FakeCalendarProvider implements CalendarProvider {
 
 	/** Someone deleted an event on the remote. */
 	deleteRemote(resourceId: string): void {
-		// The uid is captured BEFORE the row goes: after deletion there is nothing
-		// left to read it from, and a deletion the caller cannot name is a deletion
-		// the engine cannot act on.
+		// Captured before the row goes: after deletion there is nothing left to
+		// read the uid from.
 		const uid = this.store.get(resourceId)?.series.uid ?? resourceId;
 		this.store.delete(resourceId);
 		this.log.push({ resourceId, uid });
@@ -83,9 +75,9 @@ export class FakeCalendarProvider implements CalendarProvider {
 	/**
 	 * Invalidate the cursor, as Google does with 410 Gone on a stale syncToken.
 	 *
-	 * `from` models a WINDOWED reset: Google's reset listing reaches back only
-	 * ninety days, so it says nothing at all about anything older. The engine has
-	 * to be told where the listing starts, or it reads that silence as deletion.
+	 * `from` models a WINDOWED reset (Google's reset listing reaches back only
+	 * ninety days): the engine must be told where the listing starts, or it
+	 * reads that silence as deletion.
 	 */
 	forceReset(from: string | null = null): void {
 		this.forceResetNext = true;
@@ -94,9 +86,8 @@ export class FakeCalendarProvider implements CalendarProvider {
 
 	/**
 	 * Delete an event and report it the way CalDAV must: by resource path only.
-	 *
-	 * There is no body left to read a UID out of, so the provider genuinely
-	 * cannot name it. The engine has to map the path back to a local key itself.
+	 * The provider has no body left to read a UID from, so the engine must map
+	 * the path back to a local key itself.
 	 */
 	deleteRemoteUnnamed(resourceId: string): void {
 		this.unnamedDeletions.add(resourceId);
@@ -125,9 +116,8 @@ export class FakeCalendarProvider implements CalendarProvider {
 			this.forceResetNext = false;
 			const from = this.resetFromNext;
 			this.resetFromNext = null;
-			// A reset hands back EVERYTHING the server holds and no deletions —
-			// exactly what a real full resync gives you, and the reason the engine
-			// cannot infer "deleted remotely" from absence during one.
+			// A reset hands back EVERYTHING the server holds and no deletions, so the
+			// engine cannot infer "deleted remotely" from absence during one.
 			return {
 				changes: [...this.store.entries()]
 					.filter(

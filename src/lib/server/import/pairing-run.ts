@@ -2,12 +2,10 @@
 /**
  * Pairing transfers and categorising, as one pass over a bounded window.
  *
- * Lifted out of `ingest.ts`, which had grown to twelve hundred lines behind five
- * exports while every other file in this domain stayed small. This half is a
- * genuinely separate job: `ingestFile` turns a file into rows, and this turns
- * rows that already exist into pairs and categories. The proof of that is that
- * four callers outside importing — a rule being saved, a transaction being
- * edited, a transfer decision, the rules screen — want this and not the reading.
+ * Separate from `ingest.ts`: `ingestFile` turns a file into rows, this turns
+ * rows that already exist into pairs and categories, and several callers
+ * outside importing (rules, transaction edits, transfer decisions) want only
+ * this half.
  *
  * It runs after each file so cross-file pairs appear as soon as the second leg
  * arrives. Only auto pairs — the ones on hard evidence — are excluded from the
@@ -52,11 +50,10 @@ function shiftDay(day: string, delta: number): string {
  * The span a pass has to read to pair anything that just changed.
  *
  * Without one, every filing, import and transfer decision row-locked and
- * compared the entire unpaired ledger: auto-categorised rows stay candidates
- * forever, so the set only grows, and proposePairs is a nested loop over it.
- * The horizon this replaces was anchored to today, which is why it had to go —
- * it silently stopped historical statements pairing at all. Anchoring to the
- * changed rows instead bounds the work without caring how old they are.
+ * compared the entire unpaired ledger — proposePairs is a nested loop over it,
+ * and the set only grows. Anchoring to the changed rows instead of "today"
+ * bounds the work without caring how old they are, and lets historical
+ * statements pair at all.
  */
 export function pairingWindowAround(days: string[]): PairingWindow | null {
 	const known = days.filter(Boolean).sort();
@@ -192,29 +189,21 @@ async function pairAndCategoriseInTransaction(
 	// Categorise whatever is new and not a transfer (held proposals included —
 	// a categorisation would resolve them as "not a transfer").
 	const [rules, threshold] = await Promise.all([loadRules(handle), autoThreshold(handle)]);
-	// Re-read the proposals rather than reuse the snapshot taken above: the loop
-	// that just ran inserts proposals of its own, and a leg waiting on a
-	// transfer decision must not be categorised out from under it. Against the
-	// stale snapshot, a leg proposed in this very pass could match a rule, flip
-	// to reviewState 'auto', and vanish from /import — which lists only
-	// 'needs_review'. Its transferPairId would then stay null forever, so both
-	// legs kept counting as real income and real spending, and legsInPairs
-	// stopped any later run from re-proposing them.
+	// Re-read the proposals rather than reuse the snapshot taken above: a leg
+	// proposed in this very pass, categorised against a stale snapshot, could
+	// flip to reviewState 'auto' and vanish from /import while its
+	// transferPairId stays null, double-counting it as both income and spending.
 	const undecided = await handle
 		.select()
 		.from(transaction)
 		// `notOwnTransfer()` rather than a bare transferPairId check: a one-sided
-		// transfer has no category (a transfer is not spending) and no pair (there
-		// is no second leg), so it matches "undecided" exactly. It survived only
-		// because the loop below skips reviewState 'confirmed', which is a state
-		// this query has no business depending on. A transfer is never a candidate
-		// for categorisation, and now the query says so.
+		// transfer has no category and no pair, so it matches "undecided" exactly
+		// without depending on reviewState.
 		.where(and(isNull(transaction.categoryId), notOwnTransfer()))
 		.for('update');
-	// Read proposals after claiming the undecided rows. The global lock excludes
-	// another pairing pass, and waiting for ordinary row editors means their
-	// committed state is visible before categorisation. Reading in the reverse
-	// order would leave a commit window where a proposal can be missed.
+	// Read proposals after claiming the undecided rows, so their committed
+	// state is visible before categorisation; the reverse order would leave a
+	// commit window where a proposal can be missed.
 	const proposedRows = await handle
 		.select({ outId: transferPair.outTransactionId, inId: transferPair.inTransactionId })
 		.from(transferPair)

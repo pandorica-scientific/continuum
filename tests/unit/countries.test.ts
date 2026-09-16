@@ -79,9 +79,7 @@ describe('the European Union', () => {
 	});
 
 	it('agrees with the card artwork about who is a member', () => {
-		// The artwork's manifest marks members too, and drew each one's card with
-		// the Union's ring on it. Two lists of the same fact drift the year one
-		// changes, so this is the check that says so out loud.
+		// The artwork's manifest marks members separately; the two lists must agree.
 		const manifest = JSON.parse(
 			readFileSync('src/lib/assets/doc-placeholders/manifest.json', 'utf8')
 		) as { countries: { code: string; eu?: boolean }[] };

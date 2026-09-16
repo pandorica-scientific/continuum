@@ -2,11 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 
-/**
- * Verified against a real 48 MP iPhone HEIC, not against the library's
- * documentation. Three of four assumptions held; the fourth did not, and it
- * would have thrown on every file a user ever dropped.
- */
+/** Verified against a real iPhone HEIC, not against the library's documentation. */
 const source = readFileSync('src/lib/server/scan/worker/codec.ts', 'utf8');
 
 describe('the HEIC path in the scan codec', () => {
@@ -18,30 +14,22 @@ describe('the HEIC path in the scan codec', () => {
 	});
 
 	it('does not hold the decoder between files', () => {
-		// libheif is Emscripten too, with its own heap and the same discipline as
-		// opencv: instantiate, decode, discard. A module-level instance is a
-		// second permanent heap nobody is watching.
+		// libheif is Emscripten too: instantiate, decode, discard, like opencv.
+		// A module-level instance would be an unwatched second permanent heap.
 		expect(source).not.toMatch(/^let\s+\w*[Dd]ecoder/m);
 	});
 
 	it('calls is_primary defensively, because it throws', () => {
-		// libheif-js DEFINES is_primary, so a `typeof` check passes — but its
-		// body calls a bare global the bundle never declares:
-		//
-		//   is_primary = function () { return !!heif_image_handle_is_primary_image(this.handle) }
-		//
-		// Invoking it raises ReferenceError, on every file, for every image.
-		// Optional chaining does not save you: the function exists, it simply
-		// does not work. Confirmed against a real iPhone HEIC, where it threw
-		// every time and took the whole decode with it.
+		// libheif-js defines is_primary, so a `typeof` check passes, but its body
+		// calls a bare global the bundle never declares — it throws every time,
+		// on every image. Optional chaining alone does not save you from that.
 		expect(source).toContain('image.is_primary?.() === true');
 		expect(source).toMatch(/catch \{\s*return false;/);
 	});
 
 	it('still prefers the primary item when it can be identified', () => {
-		// A burst or a Live Photo carries several images and the first is not
-		// reliably the one the user saw in their gallery. Falling back to
-		// images[0] is correct, not a shrug: nearly every HEIC holds exactly one.
+		// A burst or Live Photo carries several images; the first is not reliably
+		// the one the user saw in their gallery.
 		expect(source).toMatch(/images\.find\(\(image\) => isPrimary\(image\)\) \?\? images\[0\]/);
 	});
 

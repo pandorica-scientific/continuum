@@ -1,13 +1,7 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
-	//
-	// One shelf in Settings → Shelves: handle, emoji, label, System badge, menu.
-	//
-	// A new component rather than an extension of a transaction row, which is a
-	// data row with no reorder affordance. This is the only sortable row in the
-	// app, and the drag state is the whole reason it exists: the dragged row
-	// takes `--card3` — the fill the active rail item already uses — and keeps
-	// its 1px border. No lift, no shadow, no transition; the system has none.
+	// The only sortable row in the app: dragging takes `--card3` and keeps its
+	// 1px border. No lift, no shadow, no transition.
 	import Icon from '$lib/components/Icon.svelte';
 
 	let {
@@ -58,11 +52,8 @@
 	<span class="emoji">{shelf.emoji}</span>
 	<button type="button" class="label" onclick={() => onrename?.()}>{shelf.label}</button>
 	<span class="mono count">{shelf.count}</span>
-	<!-- Relabelable, never deletable, key immutable. The badge says which, in a
-	     column of its own so it never sits on top of the count. -->
 	<span class="tail">
-		<!-- Offered on a system shelf too: what Identity holds cannot be deleted,
-		     and what it offers first is still the household's to decide. -->
+		<!-- Offered on a system shelf too: not deletable, but still reorderable by type. -->
 		<button
 			type="button"
 			class="menu types"
@@ -88,8 +79,7 @@
 <style>
 	.shelf-row {
 		display: grid;
-		/* Sized for the 218px rail it lives in: the only sortable row in the app,
-		   and its home is the rail's edit mode rather than a settings screen. */
+		/* Sized for the 218px rail's edit mode it lives in. */
 		grid-template-columns: 18px 26px minmax(0, 1fr) auto minmax(24px, auto);
 		align-items: center;
 		gap: var(--space-3);

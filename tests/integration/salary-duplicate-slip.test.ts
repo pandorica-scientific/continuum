@@ -1,11 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// The same payslip uploaded twice.
-//
-// A month has held more than one payslip since v0.5.5, which removed the only
-// key that used to catch a re-upload: a second upload mints a second document
-// id, which is a second row by definition, and the month then reports double
-// pay. The bytes are what recognise the file — never the figures, because two
-// jobs paying the same amount in the same month are a real arrangement.
+// A second upload mints a second document id, which is a second row by
+// definition, so the month would report double pay without content matching.
+// The bytes recognise the file — never the figures, because two jobs paying
+// the same amount in the same month are a real arrangement.
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';

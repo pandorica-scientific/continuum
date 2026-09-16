@@ -55,12 +55,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		},
 		people: people.map((p) => ({ ...p, hue: hues.get(p.id) ?? '--fg3' })),
 		bookingKinds: ENUMS['booking.kind'],
-		/**
-		 * Places worth seeing where this trip is going.
-		 *
-		 * Offered, never added: the list stays what somebody chose to put in it,
-		 * and a trip to Paris for a funeral is not told to see the Eiffel Tower.
-		 */
+		/** Places worth seeing at this trip's destination — offered, never added automatically. */
 		suggestions: await suggestedPlaces(tripId(params))
 	};
 };
@@ -70,10 +65,8 @@ const tripId = (params: { id: string }): string => asRowId(params.id);
 
 /**
  * Save a confirmation and hook it to a booking. Returns a message on refusal.
- *
- * `saveUploadBytes` refuses anything that is not a PDF or an image, by
- * throwing. Caught so that picking the wrong file is a sentence saying so
- * rather than a 500 page: the household did nothing wrong, it chose a .docx.
+ * `saveUploadAndHash` throws on a non-PDF/image file; caught here so a wrong
+ * file type is a message, not a 500.
  */
 async function attachFile(file: File, bookingId: string, trip: string): Promise<string | null> {
 	let saved: { storedName: string; contentHash: string };
@@ -156,12 +149,8 @@ export const actions: Actions = {
 			reference: String(form.get('reference') ?? '').trim()
 		});
 
-		// The confirmation, when one came with it. Optional: a booking somebody
-		// was told about on the phone has no paper, and refusing to record it
-		// until one exists would be the app inventing a rule.
-		//
-		// The booking is already saved by this point, so a file the upload guard
-		// refuses costs the household the attachment and not the booking.
+		// Confirmation file is optional — a booking told over the phone has no paper.
+		// Booking is already saved by this point, so a refused upload only costs the attachment.
 		const file = form.get('file');
 		if (file instanceof File && file.size > 0) {
 			const attached = await attachFile(file, bookingId, tripId(params));
@@ -171,11 +160,8 @@ export const actions: Actions = {
 	},
 
 	/**
-	 * Put a confirmation on a booking.
-	 *
-	 * The file lands in the archive as a real document, linked to the trip, and
-	 * the booking points at it — so it is searchable with everything else the
-	 * household keeps rather than hidden in a corner of the Life area.
+	 * Put a confirmation on a booking. The file lands in the archive as a real
+	 * document, linked to the trip, so it's searchable like anything else the household keeps.
 	 */
 	attachBooking: async ({ request, params }) => {
 		const form = await request.formData();

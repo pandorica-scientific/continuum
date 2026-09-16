@@ -15,16 +15,11 @@ import {
 /**
  * Every property, in a stable order.
  *
- * The tiebreak is the point. Properties created together — by the setup wizard,
- * or the demo seed — share a `created_at` to the microsecond, and ordering by
- * that column alone is not a total order: PostgreSQL may return tied rows in
- * any order, and an UPDATE moves a row in the heap, which changes it.
- *
- * The property screen selects `properties[0]` when the URL names no property,
- * so an unstable order meant saving a floor plan switched the page to the other
- * flat — the plan looked as though it had been lost, and the editor reopened
- * empty because it was now editing a different property. Saving again flipped
- * the order back and the plan "returned".
+ * The `id` tiebreak matters: properties created together share `created_at`
+ * to the microsecond, so ordering by that column alone is not a total order —
+ * PostgreSQL can return tied rows differently after an UPDATE moves one in the
+ * heap. The property screen picks `properties[0]` by default, so an unstable
+ * order flipped which flat a saved floor plan appeared to belong to.
  */
 export function listProperties(handle: Db = db) {
 	return handle.select().from(property).orderBy(asc(property.createdAt), asc(property.id));
@@ -33,12 +28,9 @@ export function listProperties(handle: Db = db) {
 /**
  * Everything the Property screen reads, in one round of queries.
  *
- * Here rather than in `+page.server.ts` because it is a domain read. The route
- * built eleven selects of its own beside this module, which is how a screen
- * becomes the second place that knows how a property is stored.
- *
- * What it returns is rows. Turning them into cards, allocations and pills is
- * presentation and stays with the markup.
+ * Lives here, not in `+page.server.ts`, so the route isn't a second place that
+ * knows how a property is stored. Returns rows; turning them into cards,
+ * allocations and pills is presentation and stays with the markup.
  */
 export async function readPropertyScreen(handle: Db = db) {
 	const [properties, tenancies, bills, loans, periods, links, docs, allTags] = await Promise.all([
@@ -48,13 +40,10 @@ export async function readPropertyScreen(handle: Db = db) {
 		handle.select().from(loan),
 		handle.select().from(loanFixationPeriod),
 		handle.select().from(loanProperty),
-		// Only what a BILL's row needs — whether there is a file behind it at
-		// all. The documents card is loaded by `documentsAbout`, which is where
-		// the shelf label comes from.
+		// Only whether a file exists behind a bill; `documentsAbout` loads the shelf label.
 		handle.select({ id: document.id }).from(document),
-		// For the tag field's suggestion list, the same way the Loans screen offers
-		// its own known tags: typing "Renovation" here and "renovation" there
-		// should land on the one tag, not two differently-cased ones.
+		// Tag suggestion list, like the Loans screen: avoids "Renovation" and
+		// "renovation" becoming two different tags.
 		handle.select().from(tag)
 	]);
 	return { properties, tenancies, bills, loans, periods, links, docs, allTags };

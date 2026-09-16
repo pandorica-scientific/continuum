@@ -3,11 +3,11 @@
  * A property's images, and where each one is filed.
  *
  * The record is one JSON column: the plan image, a list of photos, and the
- * drawn floor plan. v0.8.1 lets a photo belong to a ROOM of that plan — the
- * gallery is reached by pressing a room, and a room says how many pictures it
- * holds — so a room may carry `photos` of its own. The list at the top level
- * stays what it was: the photos nobody has put in a room. Existing rows read
- * unchanged, as "every photo unassigned".
+ * drawn floor plan. A photo may belong to a ROOM of that plan — the gallery
+ * is reached by pressing a room, and a room says how many pictures it holds
+ * — so a room may carry `photos` of its own. The list at the top level is
+ * the photos nobody has put in a room; existing rows read unchanged, as
+ * "every photo unassigned".
  *
  * Slots name a place a file goes: `plan`, `photo3` (the fourth unassigned),
  * `room2:photo0` (the first in the third room). Every mutation here is pure

@@ -4,15 +4,8 @@ import { readFileSync } from 'node:fs';
 import { orderCorners } from '$lib/scan/core/geometry';
 
 /**
- * The floor under the detector.
- *
- * ScanPagePreview argued for a long time that this screen should not exist —
- * "dragging four handles on a phone is worse than taking the photo again",
- * made safe by Original as the recovery. Two things overturned that. Original
- * is not a recovery for a page you need CROPPED: it hands back the desk as
- * well. And retaking does not help when detection fails for a reason the
- * photograph cannot fix — a card too small in frame, an object with a dark band
- * across it, a page the same brightness as the table. Those were unrecoverable.
+ * The floor under the detector: manual correction, needed when detection
+ * fails for a reason the photograph itself can't fix (e.g. low contrast).
  */
 const corners = readFileSync('src/lib/scan/client/ScanCorners.svelte', 'utf8');
 const flow = readFileSync('src/lib/scan/client/ScanFlow.svelte', 'utf8');
@@ -20,40 +13,31 @@ const preview = readFileSync('src/lib/scan/client/ScanPagePreview.svelte', 'utf8
 
 describe('the corner editor', () => {
 	it('is reachable from the line that says the edges are wrong', () => {
-		// The moment someone reads "Edges wrong?" is the moment they want this,
-		// so the way in belongs on that line rather than behind an icon.
+		// The entry point belongs on the "Edges wrong?" line itself, not behind an icon.
 		expect(preview).toContain('Adjust the edges');
-		// The wording covers what the screen actually does. It offered only corner
-		// handles when it was called "Adjust the corners"; it now bends edges too,
-		// and a name that undersells a control is a control people do not find.
+		// The wording must cover edges too, not just corners, or it undersells the control.
 		expect(preview).toContain('Crop wrong?');
 		expect(preview).toMatch(/onclick=\{onedges\}/);
 		expect(flow).toMatch(/onedges=\{openCorners\}/);
 	});
 
 	it("draws on the phone's own copy of the photograph, costing no network", () => {
-		// The browser still holds the file it just took, so the handles go over
-		// that rather than over anything fetched back. It used to encode a draft
-		// of a decoded frame for this, which was the slowest thing the component
-		// did; now there is no decoded frame to draft.
+		// The browser still holds the file it just took; the handles go over that,
+		// not a re-fetched or re-encoded copy.
 		expect(flow).toMatch(/cornersUrl = held\.localUrl \|\| originalUrl\(/);
 	});
 
 	it('falls back to the server when the phone has no usable copy', () => {
-		// Two cases, and both are ordinary rather than exotic: a page already
-		// KEPT has released its blob, and a HEIC is a picture most browsers will
-		// not display at all — which is an iPhone photographing anything at
-		// default settings.
+		// A KEPT page has released its blob, and a HEIC (an iPhone's default format)
+		// can't be displayed by most browsers.
 		expect(flow).toMatch(/function cornersFallback\(\)/);
 		expect(flow).toMatch(/onunavailable=\{cornersFallback\}/);
 		expect(corners).toMatch(/onerror=\{\(\) => onunavailable\?\.\(\)\}/);
 	});
 
 	it("hands its corners back in the photograph's own pixels", () => {
-		// `Corners` is only ever allowed to be in the SOURCE's coordinate space.
-		// The editor is given the true width and height and reports in them, so
-		// nothing has to be scaled on the way out and nothing can be scaled
-		// twice — which is what shrank a crop a little on every pass.
+		// `Corners` must stay in the SOURCE's coordinate space, or scaling twice
+		// shrinks the crop a little on every pass.
 		expect(flow).toMatch(/width=\{held\.width\}/);
 		expect(flow).toMatch(/height=\{held\.height\}/);
 		expect(flow).toMatch(/onapply=\{\(next\) => void show\(mode, next\)\}/);
@@ -69,11 +53,8 @@ describe('the corner editor', () => {
 	});
 
 	it('maps the pointer through the overlay, not a measured box', () => {
-		// An aspect-ratio box under `place-items: center` takes its width from
-		// max-content, so a tall photograph grew past the screen and carried the
-		// bottom corners off the side. `object-fit: contain` and the overlay's
-		// `xMidYMid meet` are defined to produce the same rectangle, and
-		// getScreenCTM reports what the browser actually did.
+		// `object-fit: contain` and the overlay's `xMidYMid meet` produce the same
+		// rectangle; getScreenCTM reports what the browser actually rendered.
 		expect(corners).toMatch(/getScreenCTM\(\)/);
 		expect(corners).toMatch(/matrixTransform\(matrix\.inverse\(\)\)/);
 		expect(corners).toMatch(/object-fit: contain/);
@@ -100,10 +81,8 @@ describe('the corner editor', () => {
 	});
 
 	it('takes the bends away with it when the whole photo is asked for', () => {
-		// Pull an edge, change your mind, press Whole photo: with the bends left
-		// behind, the boundary handed over is the full frame with CURVED edges,
-		// `isStraight` is false, and the renderer mesh-warps the photograph the
-		// button exists to return whole.
+		// Whole photo must clear any bends, or the renderer mesh-warps a frame
+		// this button exists to return whole.
 		expect(corners).toMatch(/function wholePhoto\(\)/);
 		expect(corners).toMatch(/bends = \{ top: null, right: null, bottom: null, left: null \}/);
 		expect(corners).toMatch(/onclick=\{wholePhoto\}/);
@@ -137,15 +116,13 @@ describe('the corners it hands back', () => {
 	});
 
 	it('carries each curve to the edge it was actually pulled on', () => {
-		// The ordering above can move a point from one role to another, and a bend
-		// belongs to the PAIR OF POINTS it was pulled between rather than to the
-		// name that pair had at the time. Read back by name after a reorder, the
-		// curve arrives on an edge nobody touched — and pointing the wrong way, so
-		// the dewarp bows the page outward where the person pulled it in.
+		// A bend belongs to the PAIR OF POINTS it was pulled between, not the name
+		// that pair had before reordering — otherwise it lands on the wrong edge,
+		// pointing the wrong way.
 		expect(corners).toMatch(/const edges = edgesFor\(ordered\)/);
 		expect(corners).toMatch(/function edgesFor\(ordered: Corners\)/);
-		// Matched by position, and reversed when the ordered edge runs the other
-		// way round: ENDS is also the direction the mesh reads each edge in.
+		// Reversed when the ordered edge runs the other way: ENDS is also the
+		// direction the mesh reads each edge in.
 		expect(corners).toMatch(/curveOf\(was\)\.reverse\(\)/);
 		expect(corners).not.toMatch(/top: curveOf\('top'\)/);
 	});

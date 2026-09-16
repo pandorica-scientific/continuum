@@ -47,8 +47,7 @@ describe('percentage grammar', () => {
 	});
 
 	it('rejects what numeric(6,3) would store as a different share', () => {
-		// A fourth decimal is rounded by the column, so accepting it here would
-		// let validation approve one ratio and the page read back another.
+		// A fourth decimal is rounded by the column, so validation would approve one ratio and the page read back another.
 		expect(tryRatioFromPercent('12.3456')).toBeNull();
 	});
 
@@ -60,8 +59,7 @@ describe('percentage grammar', () => {
 });
 
 describe('cumulative share allocation', () => {
-	// Rounding each half on its own reports 51 twice for an odd amount, so the
-	// two properties together claim one minor unit more debt than the loan has.
+	// Rounding each half on its own reports 51 twice for an odd amount.
 	it('splits an odd amount in half without inventing a minor unit', () => {
 		expect(allocateAll(101n, HALVES)).toEqual([51n, 50n]);
 	});
@@ -118,9 +116,8 @@ describe('shares for one loan', () => {
 		]);
 	});
 
-	// Legacy rows predate the rule that a loan is either all-explicit or
-	// all-automatic. Dividing the automatic link by every linked value would
-	// give it 50% beside an 80% sibling and allocate 130% of the mortgage.
+	// Dividing the automatic link by every linked value would give it 50% beside
+	// an 80% sibling and allocate 130% of the mortgage.
 	it('gives an automatic link only what the explicit shares leave', () => {
 		const shares = sharesForLoan([
 			{ propertyId: 'a', sharePct: '80', valueMinor: 5_000_000n },
@@ -217,8 +214,7 @@ describe('property financials', () => {
 		});
 	});
 
-	// One mortgage over two flats is the ordinary household case, so the two
-	// property views must together report exactly the loan's own balance.
+	// The two property views must together report exactly the loan's own balance.
 	it('reports a shared mortgage as the whole debt across both properties', () => {
 		const owedForIndex = (shareIndex: number) =>
 			propertyFinancials(

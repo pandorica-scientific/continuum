@@ -1,20 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * The arithmetic behind the scratch, with no canvas in it.
- *
- * Ported from the handoff's prototype, which is the version that has actually
- * been used. These are the numbers it settled on; they are here rather than
- * inside the canvas engine so they can be tested without a DOM, and so the two
- * places that need them — the engine and anything measuring progress — cannot
- * disagree.
+ * The arithmetic behind the scratch, with no canvas in it — kept separate so
+ * it can be tested without a DOM, and the engine and progress-measuring code
+ * can't disagree.
  */
 
 /**
- * How wide the brush is for a region of this size.
- *
- * `sqrt(area) / 3.2`, clamped. Without it, scratching Luxembourg takes as many
- * strokes as scratching the United States: a fixed brush is a fixed number of
- * passes per unit area, and regions differ by four orders of magnitude.
+ * How wide the brush is for a region of this size: `sqrt(area) / 3.2`,
+ * clamped, so a fixed brush isn't a fixed number of passes regardless of
+ * region size (which differ by four orders of magnitude).
  */
 export const BRUSH_MIN = 15;
 export const BRUSH_MAX = 78;
@@ -34,11 +28,9 @@ export const CLEARED = 0.82;
 export const THIN = 0.38;
 
 /**
- * Where to sample a region to ask how much coating is left.
- *
- * A grid over the region's box, stepped so a region gets roughly eighty points
- * however big it is, and capped so a continent-sized one does not cost thousands.
- * Points outside the region itself are dropped by the caller's `inside` test.
+ * Where to sample a region to ask how much coating is left: a grid over the
+ * region's box, stepped for ~80 points regardless of size, capped so a
+ * continent doesn't cost thousands.
  */
 export const MOST_SAMPLES = 220;
 
@@ -59,11 +51,9 @@ export function sampleGrid(
 }
 
 /**
- * How hard and how wide a stroke is, from how fast it moved.
- *
- * A fast drag is a harder scratch and a slightly wider one — which is how a
- * coin on a real card behaves, and it is what stops a slow careful drag from
- * clearing a region in one pass.
+ * How hard and how wide a stroke is, from how fast it moved — a fast drag
+ * scratches harder and wider, stopping a slow careful drag from clearing a
+ * region in one pass.
  */
 export function strokePressure(distance: number, milliseconds: number): number {
 	const speed = distance / Math.max(1, milliseconds);
@@ -76,11 +66,8 @@ export function strokeWidth(base: number, distance: number, milliseconds: number
 }
 
 /**
- * How many stamps to lay along a stroke.
- *
- * The trail is interpolated between pointer samples: a fast drag reports two
- * points a hundred units apart, and stamping only at those two leaves a dotted
- * line rather than a scratch.
+ * How many stamps to lay along a stroke — interpolates between sparse pointer
+ * samples so a fast drag doesn't leave a dotted line.
  */
 export const stepsAlong = (distance: number, width: number): number =>
 	Math.max(1, Math.ceil(distance / Math.max(2, width / 8)));

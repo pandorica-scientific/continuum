@@ -2,23 +2,14 @@
 /**
  * What a document can be filed against, and how to read the paper filed there.
  *
- * `document_link` points at `entity`, so the database has been able to file a
- * document against any of the twelve registered kinds since the supertype
- * landed. The application had not caught up: five screens each carried their
- * own hand-written list of four kinds — person, property, account, subject —
- * so a kind added to the database reached whichever of them somebody
- * remembered, and the Documents screen offered brokerage accounts only because
- * one of those lists said so.
+ * `document_link` points at `entity`, so any registered kind is fileable; this
+ * is the one list describing each kind's group label, whether the document
+ * side may pick it, and the expression that turns a row into a recognisable
+ * name — read by every screen rather than repeated per screen.
  *
- * This is that list, once. A kind is described here — what to call its group,
- * whether the document side may pick it, and the expression that turns a row
- * into something a person recognises — and every screen reads the description
- * rather than repeating it.
- *
- * The archive rule is NOT restated here. `archiveScopePredicate` is applied as
- * an SQL fragment in the one query that answers "what is filed against this
- * record", because a rule that is re-implemented per screen is a rule that
- * will differ per screen.
+ * The archive rule is NOT restated here: `archiveScopePredicate` is applied
+ * as an SQL fragment in the one query that answers "what is filed against
+ * this record", so it can't differ per screen.
  */
 
 import { and, eq, inArray, sql, type SQL } from 'drizzle-orm';
@@ -53,11 +44,9 @@ import { archiveScopePredicate, assertDocumentExists, NO_SUCH_DOCUMENT } from '.
 /**
  * Every kind of record a document can be filed against.
  *
- * These are `ENTITY_KINDS` minus three, and each absence is a decision rather
- * than an omission: a document is not filed against another document, a tag is
- * a link of its own kind, and a split's paper belongs to the transaction it
- * came from. `tests/integration/document-targets` holds that subtraction, so a
- * thirteenth entity kind cannot be added without this list being considered.
+ * `ENTITY_KINDS` minus three deliberate absences: a document is not filed
+ * against another document, a tag is a link of its own kind, and a split's
+ * paper belongs to the transaction it came from.
  *
  * The order is the order a picker shows its groups in.
  */
@@ -97,25 +86,21 @@ interface TargetKindSpec {
 	/**
 	 * May the DOCUMENT side choose this kind?
 	 *
-	 * A transaction or a tax statement is linked from its own screen, where the
-	 * row is already in front of the person; offering a list of every transaction
-	 * in the capture dialog would be a list nobody can search by eye. They are
-	 * still shown on the document as chips — read-only ones.
+	 * A transaction or a tax statement is linked from its own screen instead —
+	 * a picker listing every transaction would be unsearchable by eye. Still
+	 * shown on the document as read-only chips.
 	 */
 	pickable: boolean;
 	/**
 	 * `select id, <label expr> as name from <table>` — the label expression, once.
 	 *
-	 * Search Tier B unions these, and the Documents about-filter joins them, so
-	 * the name a person searches for is by construction the name they saw.
+	 * Search Tier B and the Documents about-filter both join this, so the name
+	 * a person searches for is the name they saw.
 	 */
 	nameSql: SQL;
 	/**
-	 * The same rows in JS, with whatever else a picker or a name map needs.
-	 *
-	 * `ids` narrows it to the rows a caller actually has to name. A picker wants
-	 * the whole list and passes nothing; a screen naming the links on the paper
-	 * in front of it wants three rows and must not read the ledger to get them.
+	 * The same rows in JS. `ids` narrows to the rows a caller actually has to
+	 * name, so naming three links doesn't mean reading the whole ledger.
 	 */
 	load(handle?: Queryable, ids?: readonly string[]): Promise<TargetRow[]>;
 }
@@ -136,9 +121,7 @@ export interface AboutDocument {
 	 * The amber window this KIND of paper earns, or null for the default.
 	 *
 	 * Carried on the row rather than handed to the card as a prop: a card draws
-	 * many documents of many types, so one number could not be right for all of
-	 * them, and nine call sites would each have had to load the type table to
-	 * build a map. The window is a fact about the document, so it travels with it.
+	 * many types at once, and the window is a fact about the document.
 	 */
 	reminderDays: number | null;
 	tags: string[];
@@ -172,11 +155,8 @@ interface KindDefinition {
 }
 
 /**
- * One entry, with `load` built from the same `nameSql` the search union uses.
- *
- * Deliberately a subquery over the name expression rather than a second query
- * written by hand: the two would drift, and a picker labelling a row one way
- * while search matches it another is the bug this module exists to remove.
+ * One entry, with `load` built from the same `nameSql` the search union uses,
+ * so a picker can never label a row differently from how search matches it.
  */
 function defineKind(kind: DocumentTargetKind, definition: KindDefinition): TargetKindSpec {
 	const columns = definition.extras ? sql`, ${definition.extras.columns}` : sql``;
@@ -188,8 +168,7 @@ function defineKind(kind: DocumentTargetKind, definition: KindDefinition): Targe
 		pickable: definition.pickable,
 		nameSql: definition.nameSql,
 		async load(handle: Queryable = db, ids?: readonly string[]): Promise<TargetRow[]> {
-			// Nothing asked for is nothing to ask: no query at all, rather than an
-			// unbounded one whose result is then thrown away.
+			// Nothing asked for is nothing to ask.
 			if (ids !== undefined && ids.length === 0) return [];
 			const where =
 				ids === undefined
@@ -230,8 +209,7 @@ const REGISTRY: Record<DocumentTargetKind, TargetKindSpec> = {
 	tenancy: defineKind('tenancy', {
 		groupLabel: 'Tenancies',
 		pickable: true,
-		// A tenant's name alone does not say which flat, and a flat may have had
-		// several tenancies; the pair is what a person recognises.
+		// A tenant's name alone doesn't say which flat; the pair is what a person recognises.
 		nameSql: sql`
 			select ${tenancy.id} as id,
 			       ${property.name} || ' · ' || ${tenancy.tenantName} as name
@@ -241,9 +219,7 @@ const REGISTRY: Record<DocumentTargetKind, TargetKindSpec> = {
 	account: defineKind('account', {
 		groupLabel: 'Accounts',
 		pickable: true,
-		// Every kind of account. A current account's statements are paper too;
-		// the brokerage-only filter the Documents screen used to apply was a
-		// leftover from the one screen that first needed a list.
+		// Every kind of account — a current account's statements are paper too.
 		nameSql: sql`select ${account.id} as id, ${account.name} as name from ${account}`
 	}),
 	loan: defineKind('loan', {
@@ -258,14 +234,11 @@ const REGISTRY: Record<DocumentTargetKind, TargetKindSpec> = {
 	}),
 	organisation: defineKind('organisation', {
 		groupLabel: 'Organisations',
-		// Pickable, unlike a transaction: an employer is a short list a person
-		// can find by eye, and filing a payslip against one is the whole point of
-		// the record existing.
+		// Pickable, unlike a transaction: an employer is a short list a person can find by eye.
 		pickable: true,
 		nameSql: sql`select ${organisation.id} as id, ${organisation.name} as name from ${organisation}`,
-		// The kind as a second line. "Institute of Physics CAS" and "Tax office"
-		// are not ambiguous, but "ČSSZ" and "VZP" are two initialisms a person
-		// half-remembers, and `employer` or `authority` is what tells them apart.
+		// The kind as a second line: "ČSSZ" and "VZP" are initialisms a person
+		// half-remembers, and `employer`/`authority` tells them apart.
 		extras: {
 			columns: sql`${organisation.kind} as org_kind`,
 			join: sql`join ${organisation} on ${organisation.id} = t.id`,
@@ -276,8 +249,7 @@ const REGISTRY: Record<DocumentTargetKind, TargetKindSpec> = {
 		groupLabel: 'Subjects',
 		pickable: true,
 		nameSql: sql`select ${subject.id} as id, ${subject.name} as name from ${subject}`,
-		// Archived subjects stay pickable and say so. Archiving demotes the paper
-		// filed under a subject, which is not the same as retiring the subject.
+		// Archived subjects stay pickable and say so: archiving demotes the paper, not the subject.
 		extras: {
 			columns: sql`(${subject.archivedAt} is not null) as archived`,
 			join: sql`join ${subject} on ${subject.id} = t.id`,
@@ -287,16 +259,14 @@ const REGISTRY: Record<DocumentTargetKind, TargetKindSpec> = {
 	transaction: defineKind('transaction', {
 		groupLabel: 'Transactions',
 		pickable: false,
-		// `description` behind `counterparty`, because a card payment often has
-		// only one of the two, and an empty string beside a date is not a name.
+		// `description` behind `counterparty`: a card payment often has only one of the two.
 		nameSql: sql`
 			select ${transaction.id} as id,
 			       coalesce(${transaction.counterparty}, ${transaction.description}, '')
 			         || ' ' || ${transaction.bookedOn} as name
 			from ${transaction}`,
 		extras: {
-			// Formatted in JS, not in SQL: how many decimals an amount has is a
-			// fact about its currency, and `formatMinor` is where that is known.
+			// Formatted in JS, not SQL: decimal count is a fact about currency, known by `formatMinor`.
 			columns: sql`${transaction.amountMinor}::text as amount_minor, ${transaction.currency} as currency`,
 			join: sql`join ${transaction} on ${transaction.id} = t.id`,
 			read: (raw) => {
@@ -313,8 +283,7 @@ const REGISTRY: Record<DocumentTargetKind, TargetKindSpec> = {
 			select ${taxStatement.id} as id,
 			       ${taxStatement.year} || ' ' || ${taxStatement.country} as name
 			from ${taxStatement}`,
-		// Two people file for the same year in the same country, so the filer is
-		// what tells one statement from the other.
+		// Two people can file for the same year in the same country; the filer tells them apart.
 		extras: {
 			columns: sql`${person.name} as meta`,
 			join: sql`
@@ -323,16 +292,11 @@ const REGISTRY: Record<DocumentTargetKind, TargetKindSpec> = {
 			read: (raw) => ({ meta: raw.meta == null ? undefined : String(raw.meta) })
 		}
 	}),
-	// The three Life records paper is filed against: the booking confirmations
-	// and tickets for a trip, the receipt for a bottle, the page a recipe came
-	// from. All three are pickable — each is a short list a person recognises by
-	// eye, which is the same reason an organisation is.
 	trip: defineKind('trip', {
 		groupLabel: 'Trips',
 		pickable: true,
 		nameSql: sql`select ${trip.id} as id, ${trip.name} as name from ${trip}`,
-		// Two trips to the same place years apart share a name, so the year is
-		// what tells them apart — and it is the first thing anybody remembers.
+		// Two trips to the same place years apart share a name; the year tells them apart.
 		extras: {
 			columns: sql`to_char(${trip.startsOn}, 'YYYY') as meta`,
 			join: sql`join ${trip} on ${trip.id} = t.id`,
@@ -342,14 +306,12 @@ const REGISTRY: Record<DocumentTargetKind, TargetKindSpec> = {
 	bottle: defineKind('bottle', {
 		groupLabel: 'Bottles',
 		pickable: true,
-		// The producer in front of the name, because that is how a bottle is
-		// spoken about: "the Lagavulin 16", not "the 16".
+		// Producer in front of the name: "the Lagavulin 16", not "the 16".
 		nameSql: sql`
 			select ${bottle.id} as id,
 			       trim(coalesce(${bottle.producer}, '') || ' ' || ${bottle.name}) as name
 			from ${bottle}`,
-		// The vintage, where there is one: two bottlings of the same wine differ
-		// by nothing else a person would say out loud.
+		// The vintage, where there is one.
 		extras: {
 			columns: sql`${bottle.vintage}::text as meta`,
 			join: sql`join ${bottle} on ${bottle.id} = t.id`,
@@ -382,19 +344,16 @@ export function isDocumentTargetKind(value: string): value is DocumentTargetKind
 /**
  * Names for linkable records, by kind and then by id.
  *
- * One query per kind rather than one per link: a screen showing a hundred
- * documents needs names for whatever they point at, and asking per document is
- * the same list fetched a hundred times.
+ * One query per kind rather than one per link, so a screen with a hundred
+ * documents doesn't fetch the same list a hundred times.
  *
- * `ids` is how many rows that is. Without it every kind is read whole, which
- * for `transaction` means the household's entire ledger — every row built into
- * a JS object with its amount formatted — to label the two receipts on screen.
- * Callers that know which ids they need pass them and the database does the
- * narrowing; the ones that genuinely want whole lists (the picker) do not.
+ * `ids` narrows this; without it every kind is read whole (for `transaction`,
+ * the entire ledger). Callers who know their ids pass them; a picker wanting
+ * the whole list doesn't.
  *
  * The same id is offered to every kind rather than sorted by kind first: which
- * table a `document_link` points at is not knowable without asking, and eight
- * indexed lookups that miss cost less than the round trip to find out.
+ * table a `document_link` points at isn't knowable without asking, and eight
+ * indexed misses cost less than the round trip to find out.
  */
 export async function loadTargetNames(
 	handle: Queryable = db,
@@ -421,13 +380,9 @@ export async function loadPickableTargets(handle: Queryable = db): Promise<Targe
  * The chips About offers, narrowed to the shelf.
  *
  * A document belongs to one shelf and never links across shelves, so a car's
- * paper is offered the cars and not the boiler — and an insurer whose letters
- * are filed on Income & Tax is not offered when filing a car's policy. Before
- * v0.8.0 every pickable record on the instance was offered on every shelf,
- * which is how a receipt for a washing machine ended up about a tenancy.
+ * paper is offered the cars and not the boiler.
  *
- * `all` and the Inbox offer everything: neither is a shelf with a unit, and the
- * Inbox is where a document waits precisely because nobody has said yet.
+ * `all` and the Inbox offer everything: neither is a shelf with a unit.
  */
 export async function pickableTargetsForShelf(
 	shelfRow: { id: string; unit: string } | null,
@@ -440,8 +395,7 @@ export async function pickableTargetsForShelf(
 	const rows = await REGISTRY[kind].load(handle);
 
 	// Subjects and organisations carry a home shelf; a person, an account and a
-	// property do not, because each already has a screen of its own and belongs
-	// to the household rather than to one shelf.
+	// property belong to the household rather than to one shelf.
 	if (kind !== 'subject' && kind !== 'organisation') return rows;
 	const homed = await homedOn(kind, shelfRow.id, handle);
 	return rows.filter((row) => homed.has(row.id));
@@ -462,14 +416,12 @@ async function homedOn(
  * The paper filed against one record — THE query behind every documents card.
  *
  * The archive rule is in the `where`, so a card on the loans screen demotes
- * exactly what the Documents screen demotes. Tags come back in a
- * second query keyed by document rather than one query per row: a card with
- * eight documents on it should cost two round trips, not nine.
+ * exactly what the Documents screen demotes. Tags come back in a second query
+ * keyed by document, not one per row.
  *
  * `targetId` is checked against the registry first — the same check
- * `attachDocument` has — so a stray `document_link` row that never went
- * through `attachDocument` (or a caller passing a document's own id) cannot
- * surface paper against something that is not a fileable record.
+ * `attachDocument` has — so a stray `document_link` row cannot surface paper
+ * against something that isn't a fileable record.
  */
 export async function documentsAbout(
 	targetId: string,
@@ -501,8 +453,7 @@ export async function documentsAbout(
 
 	if (rows.length === 0) return [];
 
-	// A document's tags hang on its own entity row, so the target id of a tag
-	// link IS the document id.
+	// A document's tags hang on its own entity row, so a tag link's target id IS the document id.
 	const tagRows = await handle
 		.select({ documentId: tagLink.targetId, name: tag.name })
 		.from(tagLink)
@@ -526,9 +477,8 @@ export async function documentsAbout(
 /**
  * Whether there is such a document at all.
  *
- * Through `assertDocumentExists` rather than its own query: the same question
- * is asked by the Documents screen's write actions and by the inbox review,
- * and one answer means one place to change it.
+ * Through `assertDocumentExists` rather than its own query, so there is one
+ * place to change the answer.
  */
 async function documentExists(documentId: string, handle: Queryable): Promise<boolean> {
 	return (await assertDocumentExists(documentId, handle)).ok;
@@ -537,10 +487,9 @@ async function documentExists(documentId: string, handle: Queryable): Promise<bo
 /**
  * Whether this id names a record of a kind this registry manages.
  *
- * `document_link.target_id` references `entity`, so the foreign key accepts
- * any entity at all — including another document. This is the one check that
- * says which of them are actually places to file paper, shared by every entry
- * point so a document is never treated as a target of itself.
+ * `document_link.target_id` references `entity`, so the FK accepts any
+ * entity including another document; this is the one check that says which
+ * are actually fileable, shared by every entry point.
  */
 async function isFileableTarget(targetId: string, handle: Queryable): Promise<boolean> {
 	const [record] = await handle
@@ -554,11 +503,10 @@ async function isFileableTarget(targetId: string, handle: Queryable): Promise<bo
 /**
  * File an existing document against a record.
  *
- * Existence-checked on both sides, which the transactions-only version it
- * replaces was not: a link may not be written from an id that names nothing.
+ * Existence-checked on both sides: a link may not be written from an id that names nothing.
  *
  * Idempotent, because the link's primary key is the pair — attaching twice is
- * the same state rather than an error someone has to think about.
+ * the same state rather than an error.
  */
 export async function attachDocument(
 	targetId: string,
@@ -579,13 +527,12 @@ export async function attachDocument(
 /**
  * Remove the link only.
  *
- * The document stays: it belongs to the household and is filed on its own
- * shelf, not to the row it happened to hang on. Deleting it here would destroy
- * evidence to undo a mis-click. Existence-checked for the same reason as
- * attaching — an id that names nothing must not answer as though it worked.
+ * The document stays: it belongs to the household and its own shelf, not to
+ * the row it happened to hang on. Deleting it would destroy evidence to undo
+ * a mis-click.
  *
- * Same target-kind check as `attachDocument`, for the same reason: a missing
- * or unfileable target is a 404 here too, not silently a no-op delete.
+ * Same existence and target-kind checks as `attachDocument`: a missing or
+ * unfileable target is a 404 here too, not silently a no-op delete.
  */
 export async function detachDocument(
 	targetId: string,
@@ -608,20 +555,14 @@ export async function detachDocument(
  * What "Attach existing" may offer, for every one of several records at once:
  * current, and not already linked to THAT record.
  *
- * One query for the library and one for `document_link` restricted to the
- * given targets, with the not-yet-linked subtraction done in JS per target —
- * not a NOT EXISTS run once per record. A screen with N records calling the
- * single-record shape once each fetches the whole library N times over; this
- * fetches it once and reuses it, which is the difference between a picker that
- * renders for one record and a query that scales with the size of the
- * household's whole archive.
+ * One query for the library and one for `document_link`, with the
+ * not-yet-linked subtraction done in JS per target rather than a NOT EXISTS
+ * per record — fetching the library once instead of N times.
  *
- * `targetIds` with nothing in it is nothing to ask: no query at all, the same
- * rule `loadTargetNames` follows for an empty id list.
+ * `targetIds` with nothing in it is nothing to ask.
  *
- * Each target's kind is checked against the registry too — the same check
- * `attachDocument` has — in one batched query rather than one per target, so
- * a document offered by mistake as a target of itself gets an empty list
+ * Each target's kind is checked against the registry too, in one batched
+ * query, so a document offered as a target of itself gets an empty list
  * instead of the whole library.
  */
 export async function candidateDocumentsFor(
@@ -663,8 +604,7 @@ export async function candidateDocumentsFor(
 		else linkedByTarget.set(link.targetId, new Set([link.documentId]));
 	}
 
-	// `current` is already sorted by name; filtering it preserves that order
-	// rather than re-sorting per target.
+	// `current` is already sorted by name; filtering preserves that order.
 	return new Map(
 		targetIds.map((targetId) => {
 			if (!fileableTargetIds.has(targetId)) return [targetId, []] as const;
@@ -676,10 +616,8 @@ export async function candidateDocumentsFor(
 }
 
 /**
- * The single-record shape most screens want — property, a tenancy, one loan
- * card at a time. A thin wrapper over `candidateDocumentsFor`, so the two
- * cannot drift into answering the question differently for one record than
- * for several.
+ * The single-record shape most screens want. A thin wrapper over
+ * `candidateDocumentsFor`, so the two can't drift apart.
  */
 export async function candidateDocuments(
 	targetId: string,

@@ -93,17 +93,9 @@ export async function updateEvent(
 
 		if (plan.kind === 'exception') {
 			// Only what this occurrence actually says DIFFERENTLY from the series.
-			//
 			// Null means inherit, so storing the submitted value unconditionally
-			// would freeze the occurrence at today's category and zone: retag the
-			// series later and every overridden occurrence would keep the old tag.
-			// Storing the difference keeps a "this event only" edit narrow — which
-			// is what the person asked for — and lets everything they did not touch
-			// go on following the series.
-			//
-			// These three used to be dropped outright: the form submitted them, the
-			// insert had nowhere to put them, and the occurrence was re-rendered
-			// from the series values, so the screen contradicted the save.
+			// would freeze the occurrence at today's category and zone — retagging
+			// the series later would then leave overridden occurrences stale.
 			const override = {
 				cancelled: false,
 				title: input.title.trim(),
@@ -151,23 +143,17 @@ export async function updateEvent(
 				startsAt: input.startsAt,
 				endsAt: input.endsAt,
 				tz: input.tz,
-				// The tail's own rule, which is the original MINUS what the first half
-				// already used up. Copying row.rrule restarted a COUNT from zero, so a
-				// ten-occurrence series split in the middle produced twelve. An edited
-				// recurrence still wins — that was being discarded outright, so
-				// changing the rule in a "this and following" edit did nothing at all.
+				// The tail's own rule, the original MINUS what the first half already
+				// used up — copying row.rrule would restart a COUNT from zero. An
+				// edited recurrence rule still wins over the computed tail rule.
 				rrule: input.rrule && input.rrule !== row.rrule ? input.rrule : plan.newSeriesRrule,
 				createdBy: row.createdBy
 			});
 
-			// Exceptions at or after the split MOVE to the new series; the ones before
-			// it stay where they are. Deleting them all took the earlier ones with it,
-			// so a cancelled occurrence reappeared and a renamed one reverted to the
-			// series title — silently, in the half of the series nobody was editing.
-			// Compared as instants, not as text. recurrence_id is a text column and
-			// the same moment arrives spelled more than one way ('…:00Z' from a
-			// server, '…:00.000Z' from us), so a SQL string comparison would sort
-			// some of them to the wrong side of the split.
+			// Exceptions at or after the split move to the new series; earlier ones
+			// stay. Compared as instants, not as text — recurrence_id is a text
+			// column and the same moment can be spelled more than one way
+			// ('…:00Z' vs '…:00.000Z'), so a string comparison would misplace some.
 			const splitAt = new Date(plan.newSeriesStart).getTime();
 			const existing = await tx
 				.select({
@@ -256,15 +242,10 @@ export async function deleteEvent(
 				.set({ rrule: plan.truncatedRrule, updatedAt: new Date() })
 				.where(eq(calendarEvent.id, id));
 
-			// And the overrides on the far side of the split go with it. Truncating
-			// the rule alone left them behind, and occurrencesFor sweeps overrides
-			// whose new time lands in the window even when the rule no longer
-			// produces them — so a moved occurrence the household had just deleted
-			// came straight back on the next render, and was pushed to the provider
-			// as a RECURRENCE-ID naming an occurrence that no longer exists.
-			//
-			// Compared as instants for the same reason the update path does: the
-			// column is text and the same moment arrives spelled more than one way.
+			// The overrides on the far side of the split must go too: occurrencesFor
+			// sweeps overrides whose new time lands in the window even when the rule
+			// no longer produces them, so a deleted occurrence would reappear.
+			// Compared as instants for the same reason the update path does.
 			const splitAt = new Date(plan.newSeriesStart).getTime();
 			const existing = await tx
 				.select({
@@ -282,16 +263,10 @@ export async function deleteEvent(
 			return { ok: true, id } as const;
 		}
 
-		// Whole series: a tombstone, never a removed row. Sync has to be able to
-		// tell "deleted here, push the deletion" from "never existed", and a row
-		// that is simply gone says nothing at all — the engine would treat the
-		// remote copy as a new event and pull it straight back.
-		//
-		// Tombstones are kept unconditionally rather than only when a sync link
-		// exists, so the answer does not depend on whether an account happened to
-		// be connected at the moment of deletion. Reaping them once every account
-		// has confirmed the deletion belongs to the sync engine (Task 16), not
-		// here.
+		// Whole series: a tombstone, never a removed row. Sync must be able to tell
+		// "deleted here, push the deletion" from "never existed" — a row that is
+		// simply gone would make the engine treat the remote copy as new and pull
+		// it straight back. Reaping tombstones is the sync engine's job, not here.
 		await tx
 			.update(calendarEvent)
 			.set({ deletedAt: new Date(), updatedAt: new Date() })

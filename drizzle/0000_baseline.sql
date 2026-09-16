@@ -647,6 +647,42 @@ CREATE TABLE "salary_entry" (
 	"amount_overridden" boolean DEFAULT false NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "equity_grant" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"person_id" uuid NOT NULL,
+	"engagement_id" uuid,
+	"ticker" text NOT NULL,
+	"currency" text NOT NULL,
+	"granted_on" date NOT NULL,
+	"total_units" numeric(18, 6) NOT NULL,
+	"label" text,
+	"document_id" uuid,
+	"note" text
+);
+--> statement-breakpoint
+CREATE TABLE "equity_tranche" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"grant_id" uuid NOT NULL,
+	"vests_on" date NOT NULL,
+	"units" numeric(18, 6) NOT NULL,
+	"settled_on" date,
+	"delivered_units" numeric(18, 6),
+	"withheld_units" numeric(18, 6),
+	"sold_units" numeric(18, 6) DEFAULT '0' NOT NULL,
+	"forfeited_on" date,
+	"on_payslip" boolean DEFAULT false NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "security_price" (
+	"ticker" text NOT NULL,
+	"day" date NOT NULL,
+	"close_minor" bigint NOT NULL,
+	"currency" text NOT NULL,
+	"source" text NOT NULL,
+	"fetched_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "security_price_ticker_day_pk" PRIMARY KEY("ticker","day")
+);
+--> statement-breakpoint
 CREATE TABLE "tax_statement" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"person_id" uuid NOT NULL,
@@ -971,6 +1007,12 @@ ALTER TABLE "salary_entry" ADD CONSTRAINT "salary_entry_person_id_person_id_fk" 
 ALTER TABLE "salary_entry" ADD CONSTRAINT "salary_entry_currency_currency_code_fk" FOREIGN KEY ("currency") REFERENCES "public"."currency"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "salary_entry" ADD CONSTRAINT "salary_entry_document_id_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "salary_entry" ADD CONSTRAINT "salary_entry_transaction_id_transaction_id_fk" FOREIGN KEY ("transaction_id") REFERENCES "public"."transaction"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "equity_grant" ADD CONSTRAINT "equity_grant_person_id_person_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."person"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "equity_grant" ADD CONSTRAINT "equity_grant_engagement_id_engagement_id_fk" FOREIGN KEY ("engagement_id") REFERENCES "public"."engagement"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "equity_grant" ADD CONSTRAINT "equity_grant_currency_currency_code_fk" FOREIGN KEY ("currency") REFERENCES "public"."currency"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "equity_grant" ADD CONSTRAINT "equity_grant_document_id_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "equity_tranche" ADD CONSTRAINT "equity_tranche_grant_id_equity_grant_id_fk" FOREIGN KEY ("grant_id") REFERENCES "public"."equity_grant"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "security_price" ADD CONSTRAINT "security_price_currency_currency_code_fk" FOREIGN KEY ("currency") REFERENCES "public"."currency"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tax_statement" ADD CONSTRAINT "tax_statement_person_id_person_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."person"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tax_statement" ADD CONSTRAINT "tax_statement_currency_currency_code_fk" FOREIGN KEY ("currency") REFERENCES "public"."currency"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tax_statement_line" ADD CONSTRAINT "tax_statement_line_statement_id_tax_statement_id_fk" FOREIGN KEY ("statement_id") REFERENCES "public"."tax_statement"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -1080,6 +1122,14 @@ CREATE INDEX "salary_entry_person_month_idx" ON "salary_entry" USING btree ("per
 CREATE INDEX "salary_entry_currency_idx" ON "salary_entry" USING btree ("currency");--> statement-breakpoint
 CREATE INDEX "salary_entry_document_idx" ON "salary_entry" USING btree ("document_id");--> statement-breakpoint
 CREATE INDEX "salary_entry_transaction_idx" ON "salary_entry" USING btree ("transaction_id");--> statement-breakpoint
+CREATE INDEX "equity_grant_person_idx" ON "equity_grant" USING btree ("person_id");--> statement-breakpoint
+CREATE INDEX "equity_grant_engagement_idx" ON "equity_grant" USING btree ("engagement_id");--> statement-breakpoint
+CREATE INDEX "equity_grant_document_idx" ON "equity_grant" USING btree ("document_id");--> statement-breakpoint
+CREATE INDEX "equity_grant_currency_idx" ON "equity_grant" USING btree ("currency");--> statement-breakpoint
+CREATE INDEX "equity_grant_ticker_idx" ON "equity_grant" USING btree ("ticker");--> statement-breakpoint
+CREATE INDEX "equity_tranche_grant_idx" ON "equity_tranche" USING btree ("grant_id");--> statement-breakpoint
+CREATE INDEX "equity_tranche_vests_idx" ON "equity_tranche" USING btree ("grant_id","vests_on");--> statement-breakpoint
+CREATE INDEX "security_price_currency_idx" ON "security_price" USING btree ("currency");--> statement-breakpoint
 CREATE INDEX "tax_statement_currency_idx" ON "tax_statement" USING btree ("currency");--> statement-breakpoint
 CREATE UNIQUE INDEX "tax_statement_unique_idx" ON "tax_statement" USING btree ("person_id","year","country");--> statement-breakpoint
 CREATE INDEX "tax_statement_line_statement_idx" ON "tax_statement_line" USING btree ("statement_id");--> statement-breakpoint
@@ -1248,6 +1298,9 @@ ALTER TABLE transaction ADD CONSTRAINT transaction_proof_class_check
 --> statement-breakpoint
 ALTER TABLE transfer_pair ADD CONSTRAINT transfer_pair_state_check
 	CHECK (state in ('auto', 'proposed', 'confirmed', 'rejected'));
+--> statement-breakpoint
+ALTER TABLE security_price ADD CONSTRAINT security_price_source_check
+	CHECK (source in ('yahoo', 'stooq', 'manual'));
 --> statement-breakpoint
 ALTER TABLE job ADD CONSTRAINT job_kind_check
 	CHECK (kind in ('import', 'calendar_sync', 'extract_text'));
@@ -1487,7 +1540,21 @@ CREATE VIEW net_worth_component AS
 	UNION ALL
 	SELECT id, 'holding', category, NULL,
 	       currency, value_minor, valued_at::date
-	  FROM holding;
+	  FROM holding
+	UNION ALL
+	SELECT t.id, 'equity', 'rsu', g.person_id,
+	       p.currency,
+	       round((coalesce(t.delivered_units, t.units) - t.sold_units) * p.close_minor)::bigint,
+	       p.day
+	  FROM equity_tranche t
+	  JOIN equity_grant g ON g.id = t.grant_id
+	  JOIN LATERAL (
+	    SELECT close_minor, currency, day FROM security_price sp
+	     WHERE sp.ticker = g.ticker ORDER BY sp.day DESC LIMIT 1
+	  ) p ON true
+	 WHERE t.forfeited_on IS NULL
+	   AND (t.settled_on IS NOT NULL OR t.vests_on <= current_date)
+	   AND (coalesce(t.delivered_units, t.units) - t.sold_units) > 0;
 --> statement-breakpoint
 
 -- ---- Seed rows ----

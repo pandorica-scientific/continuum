@@ -142,20 +142,12 @@ export async function createTenancy(
  * Attach the tenant to the address book, reusing their contact if they are
  * already in it.
  *
- * Adding a tenant used to leave Contacts untouched, so the person you had just
- * agreed a lease with was not in the address book and had to be typed in a
- * second time.
+ * Matching is on the normalised name (case-folded, diacritics stripped): an
+ * exact match, not fuzzy — two people who genuinely share a name are still
+ * merged here, but that's preferable to silently creating a duplicate every
+ * time. Splitting afterwards is possible; finding an unseen duplicate is not.
  *
- * Matching is on the normalised name — case-folded, diacritics stripped — so
- * "martin dvorak" typed in a hurry finds the existing "Martin Dvořák" instead
- * of creating a near-duplicate nobody would spot. That is an exact match on a
- * normalised string, not a fuzzy one: two different people who genuinely share
- * a name would still be merged here, and the alternative — silently creating a
- * second record every time — is the bug being fixed. Splitting them afterwards
- * is possible from Contacts; finding a duplicate you never saw is not.
- *
- * Runs inside the caller's transaction, so a tenancy refused for overlapping
- * cannot leave a contact behind.
+ * Runs inside the caller's transaction, so a refused tenancy leaves no contact.
  */
 async function linkTenantContact(tx: Queryable, tenancyId: string, tenantName: string) {
 	const wanted = normalise(tenantName);
@@ -193,11 +185,9 @@ interface SetPropertyFigureInput {
 /**
  * Correct one stored figure on a property.
  *
- * Only two of the numbers on that screen are stored — the estimated value and
- * what has been put in. Mortgage owed, equity, rent yield, cash flow and
- * appreciation are all computed from the loans and the tenancy, and offering a
- * pencil on those would promise an edit the next recompute silently discards.
- * They are explained instead.
+ * Only value and money-in are stored; everything else on that screen (owed,
+ * equity, yield, cash flow, appreciation) is computed from loans and tenancy —
+ * editing those would promise a change the next recompute silently discards.
  */
 export async function setPropertyFigure(
 	input: SetPropertyFigureInput,
@@ -285,10 +275,9 @@ type RemovePropertyImageResult =
 /**
  * Detach an image from a property and report which stored file it was.
  *
- * Takes the same `expectedImage` as setting one does: a slot that changed under
- * the person — a second tab, a replace that landed first — must refuse rather
- * than delete whatever happens to be there now. The caller deletes the file
- * only after this commits, so a failed transaction cannot destroy it.
+ * Takes `expectedImage` like setting one does: a slot changed elsewhere (a
+ * second tab, a race) must refuse rather than delete whatever is there now.
+ * The caller deletes the file only after this commits.
  */
 export async function removePropertyImage(
 	input: { propertyId: string; slot: string; expectedImage: string },
@@ -386,9 +375,11 @@ export async function setPropertyBillSource(
 	});
 }
 
-/** Update whichever bill is still meter-backed after locking the property.
- * This shares the source-switch owner lock, so an hourly sync cannot write
- * through a stale bill selection after the user chose another bill. */
+/**
+ * Update whichever bill is still meter-backed after locking the property.
+ * Shares the source-switch owner lock so an hourly sync can't overwrite a bill
+ * the user has since switched away from meter.
+ */
 export async function updateMeterBillAmount(
 	propertyId: string,
 	amountMinor: bigint,

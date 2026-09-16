@@ -3,10 +3,6 @@
 	//
 	// The Inbox: one document at a time, preview left, decision right.
 	//
-	// v0.7.x had this on a screen of its own that a link took you to, which made
-	// the Inbox two things — a shelf that showed you unfiled paper, and a page
-	// for doing something about it. The shelf could only show the problem.
-	//
 	// The decision is three steps because each narrows the next: the shelf
 	// decides which cards exist, the card decides which lanes exist, and the
 	// lane decides what the paper probably is. A rule proposal pre-answers all
@@ -240,16 +236,13 @@
 				{/if}
 			</label>
 
-			<!-- The same fields the inspector's edit form offers, and the reason
-			     they are here: a passport filed without them reaches the wallet
-			     with generic artwork, no flag and "Identity document" for a
-			     title, and the only way to fix it was to reopen the document and
-			     answer the same questions again.
+			<!-- The same fields the inspector's edit form offers: a passport filed
+			     without them reaches the wallet with generic artwork, no flag and
+			     "Identity document" for a title.
 
 			     Seeded from what the document already holds, because filing
-			     WRITES these — the form is the intended state, so a blank one
-			     would empty the fields of a document somebody had already filled
-			     in and delete its extra numbers with them. -->
+			     WRITES these — a blank form would empty fields somebody had
+			     already filled in. -->
 			{#if type === 'id_document'}
 				<div class="field">
 					<span class="eyebrow">Identity</span>
@@ -356,8 +349,6 @@
 	}
 	/* Letterboxed, never cropped: a tall receipt cropped to a square is a
 	   receipt with its total cut off. */
-	/* Letterboxed, the way a sheet of paper sits on a desk: the gradient gives
-	   the preview an edge without a second border inside the card's own. */
 	.sheet {
 		display: grid;
 		place-items: center;

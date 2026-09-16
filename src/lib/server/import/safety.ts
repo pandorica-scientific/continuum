@@ -4,19 +4,10 @@
  *
  * Uploads are untrusted, and XLSX is a zip: a few hundred kilobytes can expand
  * to gigabytes and exhaust a self-hosted box long before any statement is read.
- *
- * The cheap defence — reading the sizes a zip states in its own central
- * directory — was the whole defence here, and it defends against nothing,
- * because those numbers belong to whoever made the file. Measured: a 299 KB
- * upload declaring 0 bytes of content passed every check and then moved RSS by
- * 812 MB in 586 ms when SheetJS inflated it anyway.
- *
- * So the declared sizes are read first, because they give the clearest message
- * when they are honest, and then the entries are actually inflated under a hard
- * byte budget. Nothing downstream is reached until the file has proved it fits.
- *
- * Everything here runs BEFORE the format's parser, and every failure is a
- * message the person who uploaded the file can act on.
+ * The declared sizes in a zip's central directory are not trustworthy on their
+ * own — they belong to whoever made the file — so they are read first for the
+ * clearest message when honest, and then the entries are actually inflated
+ * under a hard byte budget before anything downstream is reached.
  */
 import { inflateRawSync } from 'node:zlib';
 import { FORMAT_LABEL, type StatementFormat } from './format';
@@ -33,11 +24,9 @@ const MAX_INSPECTION_MS = 5000;
 /**
  * Shape limits for a workbook, applied after it opens.
  *
- * Bounding the compressed bytes bounds the XML, and the XML is not what costs
- * the memory — a sheet declaring a million rows of a hundred columns becomes a
- * hundred million JavaScript values, several times the size of the file it came
- * from. A bank statement is a few hundred rows of a dozen columns; a broker
- * report might reach a few thousand.
+ * Bounding the compressed bytes bounds the XML, but not the memory cost of
+ * parsing it — a sheet declaring a million rows of a hundred columns becomes
+ * a hundred million JavaScript values.
  */
 export const MAX_SHEETS = 64;
 export const MAX_CELLS_PER_SHEET = 2_000_000;

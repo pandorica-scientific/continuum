@@ -15,7 +15,7 @@ import type { EnumValue } from '$lib/enums';
 import { openOne, type Counts } from '$lib/life/collections/ownership';
 import { bottleSvg, labelInitials } from '$lib/life/art';
 
-/** The one shelf v0.9.0 ships. Books and records are the next two. */
+/** The one shelf this ships. Books and records are the next two. */
 export const CELLAR_KEY = 'cellar';
 
 export interface ShelfView {
@@ -402,13 +402,12 @@ export interface NewTasting {
  * Log a tasting.
  *
  * Opening a bottle and logging a tasting are one act: nobody tastes a bottle
- * they did not open, and asking them to press two buttons is how the counts end
- * up wrong. So the open count rises here too — up to what is owned, which is
- * the rule in `openOne`.
+ * they did not open. So the open count rises here too — up to what is owned,
+ * which is the rule in `openOne`.
  *
  * The count is read inside the transaction with the row held, for the reason
- * `moveCounts` gives: a tasting logged while somebody else is pressing `+` used
- * to write back a pair decided before their press and undo it.
+ * `moveCounts` gives: without it, a tasting logged concurrently with an open
+ * could write back a pair decided before the other's change and undo it.
  */
 export async function logTasting(input: NewTasting, handle: Db = db): Promise<string | null> {
 	const id = uuidv7();

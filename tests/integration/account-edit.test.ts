@@ -102,9 +102,8 @@ describe('correcting an account', () => {
 	});
 });
 
-// The rule that protects the ledger: every stored amount is minor units OF THE
-// ACCOUNT'S currency, so changing it later would reinterpret history — turning
-// 1 000 CZK into 1 000 EUR — rather than convert it.
+// Stored amounts are minor units of the account's currency; changing it later
+// would reinterpret history (1 000 CZK becoming 1 000 EUR), not convert it.
 describe('the account currency', () => {
 	it('can be corrected while the account is empty', async () => {
 		expect(await edit({ currency: 'EUR' })).toEqual({ ok: true });

@@ -4,17 +4,13 @@ import { strip } from '$lib/calendar/markers';
 
 // The unit of sync: a series and every one of its exceptions, moved atomically.
 //
-// This is the shape both provider adapters speak, and it exists because the two
-// providers disagree about exactly one thing. CalDAV keeps a recurring event and
-// all its overrides in ONE resource — a single .ics with the master VEVENT plus
-// one VEVENT per RECURRENCE-ID. Google gives each override its own event
-// resource, tied back by recurringEventId. Making the transfer unit "the whole
-// series" maps one-to-one onto CalDAV and turns Google's fan-out into the Google
-// adapter's private problem, instead of a fork in the engine.
+// CalDAV keeps a recurring event and its overrides in one resource; Google gives
+// each override its own event tied back by recurringEventId. Treating "the whole
+// series" as the transfer unit maps onto CalDAV directly and turns Google's
+// fan-out into the Google adapter's own problem, not a fork in the engine.
 //
-// Server-side: hashing uses node:crypto. Nothing in the browser needs either the
-// hash or the canonical form — the merge (which is pure and client-safe) takes
-// hashes as plain strings.
+// Server-side: hashing uses node:crypto. The merge itself is pure and
+// client-safe, and takes hashes as plain strings.
 
 export interface SeriesException {
 	/** The occurrence's ORIGINAL start; its identity, per RFC 5545. */
@@ -78,12 +74,10 @@ export function canonical(series: EventSeries, marker: string | null = null): st
 			s: instant(exception.startsAt),
 			e: instant(exception.endsAt),
 			n: text(exception.notes),
-			// Present ONLY when the occurrence actually overrides them. Adding three
-			// unconditional keys would have changed the canonical form of every
-			// series that has ever been pushed, so on the first pass after the
-			// upgrade no stored hash would match, both sides would read as changed,
-			// and the whole calendar would arrive as conflicts. An override to null
-			// is not expressible here, and does not need to be: null IS inherit.
+			// Present ONLY when the occurrence actually overrides them — adding these
+			// as unconditional keys would change the canonical form (and hash) of
+			// every series. An override to null is not expressible, and does not
+			// need to be: null IS inherit.
 			...(exception.category != null ? { ca: text(exception.category) } : {}),
 			...(exception.allDay != null ? { ad: exception.allDay } : {}),
 			...(exception.tz != null ? { z: text(exception.tz) } : {})

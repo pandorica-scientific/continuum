@@ -2,23 +2,13 @@
 /**
  * Re-render a page at a new mode, new corners, or a new rotation.
  *
- * WHERE THE PER-MODE RESOLUTION POLICY LIVES. It looks like an inconsistency
- * and is not, so it is spelled out rather than tidied into one branch by
- * whoever reads it next.
- *
- * Measured on a 12 MP frame rectified to A4 at 300 dpi: the warp is 222 ms, the
- * threshold 214 ms, and the flat-field blur that colour and grayscale need is
- * 1543 ms. So:
- *
- * - Black-and-white renders FULL SIZE. It skips the blur, so it is cheap, and
- *   it is the one mode whose RESULT changes with resolution — a page
- *   thresholded at 1400 px is not the page thresholded at 2480 px, and a draft
- *   preview would have someone approving a different picture from the one they
- *   get.
- * - Colour and grayscale render from the 1400 px draft, as the browser always
- *   did. They are the expensive modes and the ones where downscaling costs no
- *   fidelity: a smaller picture of a flat-fielded page is an honest picture of
- *   the big one.
+ * Per-mode resolution is intentionally asymmetric, not an inconsistency:
+ * - Black-and-white renders full size — thresholding is cheap (no blur) and its
+ *   result changes with resolution, so a draft preview would approve a different
+ *   picture than the one produced.
+ * - Colour/grayscale render from the 1400px draft — they need the expensive
+ *   flat-field blur (~1.5s at full res), and downscaling a flat-fielded page
+ *   costs no fidelity.
  */
 import { error, json } from '@sveltejs/kit';
 import { DRAFT_WIDTH } from '$lib/server/scan/protocol';

@@ -35,10 +35,8 @@ beforeEach(async () => {
 	});
 });
 
-// Acknowledging is "I have looked at this", not "undo it". The distinction
-// matters: the content hash is what makes a re-upload a duplicate, and losing
-// the row would quietly turn every acknowledged statement into one that could
-// be imported a second time.
+// Acknowledging is "seen", not "undo": the row and its content hash must
+// stay, or the file could be imported again.
 describe('acknowledging a recent import', () => {
 	it('hides it from the list', async () => {
 		const listed = () => testDb.select().from(importFile).where(isNull(importFile.acknowledgedAt));

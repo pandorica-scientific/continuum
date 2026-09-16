@@ -65,13 +65,7 @@ export const actions: Actions = {
 		return { edited: true };
 	},
 
-	/**
-	 * The photograph of the finished dish, taken by whoever cooked it.
-	 *
-	 * Stored on the data volume beside the property photos rather than filed as
-	 * a document: it is a picture of dinner, not paper, and putting it in the
-	 * archive would be one more thing in a search for a receipt.
-	 */
+	/** The finished dish's photo — stored on the data volume, not filed as a document. */
 	photo: async ({ request, params }) => {
 		const id = asRowId(params.id);
 		const form = await request.formData();

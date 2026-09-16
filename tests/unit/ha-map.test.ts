@@ -137,9 +137,7 @@ describe('meterCandidates', () => {
 	it('offers sensors by device class for the settings pickers', () => {
 		const candidates = meterCandidates(STATES);
 		expect(candidates.power).toEqual([{ id: 'sensor.house_power', name: 'House power' }]);
-		// Energy candidates carry their unit: device_class 'energy' covers Wh,
-		// kWh and MWh entities alike, and picking the wrong one is a
-		// thousandfold error in the household's bill.
+		// Energy candidates carry their unit: mixing up Wh/kWh/MWh is a thousandfold billing error.
 		expect(candidates.energy).toEqual([{ id: 'sensor.house_energy', name: 'House energy (kWh)' }]);
 	});
 });
@@ -155,10 +153,7 @@ describe('energyToKwh', () => {
 	});
 
 	it('refuses to guess for an unknown or missing unit', () => {
-		// A Shelly or Tasmota entity reporting Wh, read as kWh, turned a 186 kWh
-		// month into 186 000 — and that figure is multiplied by the price and
-		// written onto the household's bill as money. No reading beats one that
-		// is a thousand times wrong.
+		// No reading beats one that is a thousand times wrong (e.g. Wh misread as kWh).
 		expect(energyToKwh(undefined)).toBeNull();
 		expect(energyToKwh(null)).toBeNull();
 		expect(energyToKwh('')).toBeNull();
@@ -169,8 +164,7 @@ describe('energyToKwh', () => {
 
 describe('risingTotal', () => {
 	it('sums consumption across a counter reset instead of reporting zero', () => {
-		// last − first would be 40 − 500 = −460, which Math.max(0, …) flattened
-		// to 0 — indistinguishable from a month of no consumption at all.
+		// Guards against last − first (40 − 500) flattening to 0 via Math.max.
 		expect(risingTotal([400, 500, 0, 40])).toBe(140);
 	});
 
@@ -200,9 +194,7 @@ describe('dailyDeltas', () => {
 	});
 
 	it('keeps a reset day in the series instead of dropping it', () => {
-		// The counter restarted, so the 3 it has climbed to since is what can be
-		// accounted for. Dropping the day made it look like nobody was home,
-		// while the month tile beside it counted the consumption.
+		// Guards against dropping a reset day, which would show as nobody home.
 		const samples = [
 			{ at: '2026-08-11T21:00:00Z', value: 500 },
 			{ at: '2026-08-12T21:00:00Z', value: 3 }
@@ -213,8 +205,7 @@ describe('dailyDeltas', () => {
 	});
 
 	it('agrees with risingTotal over the same samples', () => {
-		// The month tile and the daily bars are two views of one series; they
-		// used to disagree about what a reset means.
+		// The month tile and the daily bars must agree on what a reset means.
 		const samples = [
 			{ at: '2026-08-10T21:00:00Z', value: 100 },
 			{ at: '2026-08-11T21:00:00Z', value: 130 },

@@ -1,13 +1,9 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
-	//
-	// A very good filing cabinet with excellent search — not a document
-	// management system. One rail, one list, one document per row, and an
-	// inspector that opens beside the list rather than over it.
-	//
-	// Every decision worth testing lives in `$lib/documents-view`, because there
-	// is no browser suite in this repository and anything automation must hold
-	// has to be reachable without a page.
+	// A filing cabinet with search, not a document management system: one rail,
+	// one list, one document per row, inspector beside the list, not over it.
+	// Testable decisions live in `$lib/documents-view`, since there's no
+	// browser test suite here.
 	import { untrack } from 'svelte';
 	import { SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
 	import { enhance } from '$app/forms';
@@ -69,19 +65,14 @@
 	let capturing = $state(untrack(() => data.prefill.open));
 	let editing = $state(false);
 	let selection = $state<string[]>([]);
-	// Checkboxes appear on hover, or stay pinned once Select is on. A permanent
-	// checkbox on every row makes the list look like a bulk-edit tool, which is
-	// not what filing paper is.
+	// Checkboxes appear on hover, or stay pinned once Select is on — permanent
+	// checkboxes make the list look like a bulk-edit tool.
 	let selecting = $state(false);
 	let overflowOpen = $state(false);
 
-	// The rail's edit mode: reorder by dragging, rename by clicking a name,
-	// remove through ⋯ — in place, with the list still beside it. No settings
-	// screen: managing shelves is a thing done to the rail, not somewhere else.
-	// Groups follow the Tax table: closed on arrival, a chevron on every header,
-	// and the count on the header is the summary the open group was answering.
-	// Three exceptions open a group for you — there is only one, a search is on
-	// (results must be visible), or the document open in the inspector is in it.
+	// Groups follow the Tax table: closed on arrival, chevron on every header.
+	// Opens for you when there's only one, a search is on, or the open
+	// document is in it.
 	let openGroups = new SvelteSet<string>();
 	let touchedGroups = $state(false);
 	$effect(() => {
@@ -102,8 +93,7 @@
 	}
 	function toggleGroup(key: string) {
 		if (groupOpen(key)) {
-			// Closing an implicitly-open group has to be remembered as a closing,
-			// not as "no opinion", or it would spring open again on the next read.
+			// Remembered as a closing, not "no opinion" — else it springs open again.
 			const stillOpen = groups.filter((g) => g.key !== key && groupOpen(g.key)).map((g) => g.key);
 			touchedGroups = true;
 			for (const k of stillOpen) openGroups.add(k);
@@ -115,10 +105,8 @@
 
 	let confirmingDelete = $state(false);
 	let replacing = $state(false);
-	/**
-	 * The type the FORM currently holds, which is what decides whether the
-	 * Identity fields are on screen — `data.selected.type` is what was saved.
-	 */
+	/** The type the FORM holds, which decides whether Identity fields show —
+	 *  `data.selected.type` is what was saved. */
 	let editType = $state('other');
 	/** The shelf the FORM holds, which decides what the type picker offers. */
 	let editShelf = $state('');
@@ -129,13 +117,8 @@
 	/** What this household calls each type: the built-ins, plus its own. */
 	const labels = $derived(typeLabels(data.documentTypes));
 
-	/**
-	 * The amber window each kind of paper earns, looked up once for the page.
-	 *
-	 * A map rather than a lookup per row: two hundred documents would otherwise
-	 * walk the type list two hundred times to answer the same question, and the
-	 * answer only changes when the household edits a type.
-	 */
+	/** The amber window each kind of paper earns, as a map rather than a
+	 *  per-row lookup — the answer only changes when a type is edited. */
 	const reminderDays = $derived(
 		new Map(data.documentTypes.map((t) => [t.key, t.reminderDays ?? SOON_DAYS]))
 	);
@@ -150,29 +133,22 @@
 	let numberShown = $state(false);
 	/** The identity fields of the open document, whatever its type says now. */
 	const identity = $derived(data.selected?.identityDetail ?? null);
-	/**
-	 * The layout this shelf offers, or null when there is nothing to switch to.
-	 *
-	 * `data.shelfLayout` says what the shelf CAN draw and `data.view` says what
-	 * it IS drawing. Null while searching, because a search forces the list —
-	 * offering the switch there would be a control that undoes itself.
-	 */
+	/** What the shelf CAN draw, or null while searching (search forces the
+	 *  list, so offering the switch there would undo itself). */
 	const layoutSwitch = $derived(!data.query && data.shelfLayout ? data.shelfLayout : null);
 
 	$effect(() => {
-		// A navigation is what carries new data in; nothing stays armed across it.
 		void data.rows;
 		confirmingDelete = false;
 		selection = [];
 		selecting = false;
 	});
 	$effect(() => {
-		// The inspector opens read-only, whichever document it opens on.
+		// The inspector opens read-only.
 		const selected = data.selected;
 		editing = false;
 		replacing = false;
 		overflowOpen = false;
-		// A number revealed on one document must not be revealed on the next.
 		numberShown = false;
 		editType = selected?.type ?? 'other';
 		editShelf = selected?.shelfKey ?? '';
@@ -181,8 +157,7 @@
 	});
 
 	const today = new Date().toISOString().slice(0, 10);
-	// What the preview can show inline. Anything else is handed to an iframe,
-	// which is what a PDF needs and what everything else degrades to.
+	// What the preview can show inline; anything else degrades to an iframe.
 	const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'];
 
 	function navigate(next: Record<string, string | string[] | null>) {
@@ -192,17 +167,11 @@
 			if (Array.isArray(value)) for (const v of value) params.append(key, v);
 			else if (value !== null && value !== '') params.set(key, value);
 		}
-		// Opening a different document must not keep the last one's scroll
-		// position halfway down the list.
 		goto(`?${params.toString()}`, { keepFocus: true, noScroll: true });
 	}
 
-	/**
-	 * The parameters that decide WHICH documents the centre column holds.
-	 *
-	 * Everything else — the year or decade a band is showing, which document the
-	 * inspector has open — rearranges what is already there.
-	 */
+	/** The params that decide WHICH documents the centre column holds; everything
+	 *  else just rearranges what's already there. */
 	const ROW_SET_PARAMS = [
 		'shelf',
 		'q',
@@ -215,15 +184,8 @@
 		'archived'
 	];
 
-	/**
-	 * Whether the navigation in flight is worth blanking the column for.
-	 *
-	 * It is, when the answer is about to be a different set of documents: there
-	 * is nothing honest to leave on screen while that loads. It is NOT when only
-	 * the year on the coverage ribbon changed — the table keeps its shape and
-	 * every row, and replacing it with three grey blocks for the length of a
-	 * query made stepping through years flicker hard enough to be unusable.
-	 */
+	/** Whether the pending navigation is about to change the document set —
+	 *  not, say, just the coverage ribbon's year, which shouldn't blank the column. */
 	const reloading = $derived.by(() => {
 		const to = navigating.to;
 		if (!to) return false;
@@ -255,24 +217,18 @@
 		data.shelves.find((s) => s.key === captureShelf)?.label ?? 'Inbox'
 	);
 
-	// A contextual add arrives pre-addressed. The pickable half of that is a
-	// chip already ticked in the capture picker; the rest — a transaction, a tax
-	// statement — has no list to be ticked in and travels as a hidden input, so
-	// the two halves are kept apart here rather than posting the same id twice.
+	// A contextual add's pickable half is a chip already ticked in the capture
+	// picker; the rest has no list to tick and travels as a hidden input.
 	const prefilled = $derived(new Set(data.prefill.targets.map((t) => t.id)));
 	const prefillReadOnly = $derived(data.prefill.targets.filter((t) => !t.pickable));
 
 	const toggleSelected = (id: string) =>
 		(selection = selection.includes(id) ? selection.filter((s) => s !== id) : [...selection, id]);
 
-	// Read-only chips a person has taken off, until Save. They are not checkboxes
-	// — there is no list of every transaction to tick one out of — so removing
-	// one means the chip and its hidden input leave the form, and the diff on the
-	// server sees a link the form no longer names.
+	// Read-only chips a person has taken off, until Save — removing one drops
+	// the chip and its hidden input, so the server-side diff sees the link gone.
 	let unlinked = $state<string[]>([]);
 	$effect(() => {
-		// A fresh editor each time it opens, and on a different document: a chip
-		// somebody removed and then cancelled must not come back removed.
 		void editing;
 		void data.selected?.id;
 		unlinked = [];
@@ -285,15 +241,9 @@
 		meta?: string;
 	}
 
-	/**
-	 * Every link the open document has, under the heading its kind belongs to.
-	 *
-	 * Pickable kinds come from the registry's list, so a chip appears for a
-	 * record whether or not the document is filed against it yet. The kinds the
-	 * document side may NOT pick come from the document's own links, because
-	 * there is no list to offer — and they are here at all because a save posts
-	 * what the form holds, and a link with no chip is a link a save forgets.
-	 */
+	/** Every link the open document has, grouped by heading. Pickable kinds
+	 *  come from the registry; non-pickable ones from the document's own
+	 *  links, since a link with no chip is a link a save would forget. */
 	const aboutGroups = $derived.by(() => {
 		const groups: { label: string; pickable: boolean; items: AboutChip[] }[] = [];
 		const groupFor = (label: string, pickable: boolean) => {
@@ -1883,17 +1833,14 @@
 		border: 1px solid var(--bd);
 		border-radius: var(--radius-card);
 		background: var(--surface);
-		/* Bounded by the viewport, not by the list beside it: the sections scroll
-		   inside the panel, and the page never has to scroll to reach the note.
-		   dvh, so a phone's retreating browser chrome does not push the last
-		   section below the fold. */
+		/* Bounded by the viewport, not the list beside it, so the page never has
+		   to scroll; dvh so retreating mobile chrome doesn't push the last section
+		   below the fold. */
 		max-height: calc(100dvh - 28px);
 		min-height: 0;
 		overflow-y: auto;
-		/* Two scrollable things on one screen, and without this they take turns:
-		   reaching the end of the panel handed the wheel to the list behind it,
-		   so scrolling the inspector scrolled the archive, and scrolling back up
-		   moved the wrong one first. `contain` stops at this panel's own end. */
+		/* Without this, reaching the end of the panel handed the wheel to the
+		   list behind it. `contain` stops scroll chaining at this panel's edge. */
 		overscroll-behavior: contain;
 	}
 	.state-line {
@@ -1984,13 +1931,9 @@
 	}
 	.ins-preview {
 		margin: 0 var(--space-8);
-		/* Never shrunk to make room for what is below it. The panel is a flex
-		   column with a viewport-bounded height, so every item in it is
-		   shrinkable by default: on a short screen — or once a document carries
-		   enough sections — the preview gave up its height first and became an
-		   87px sliver of a photograph, which reads as a failed load rather than
-		   as a full panel. The sections scroll instead, which is what
-		   `overflow-y: auto` on the panel is for. */
+		/* Never shrunk to make room below it — a flex item is shrinkable by
+		   default, so on a short screen the preview would collapse to a sliver
+		   instead of the sections scrolling. */
 		flex: none;
 		max-height: 260px;
 		display: flex;
@@ -2028,9 +1971,8 @@
 		gap: var(--space-5);
 		margin: 0 var(--space-8);
 	}
-	/* Named for what it is, not `.open`: that class is the open-group modifier
-	   on the list beside this panel, and a bare `.open { flex: 1 }` was
-	   stretching the group header's first column. */
+	/* Named for what it is, not `.open` — that class is the list's open-group
+	   modifier, and a bare `.open { flex: 1 }` stretched the group header too. */
 	.ins-edit {
 		flex: 1;
 	}
@@ -2115,11 +2057,9 @@
 		gap: var(--space-5);
 		padding-top: var(--space-5);
 	}
-	/* The edit form's own row sits at the TOP, in the Edit button's place — so it
-	   occupies that button's footprint: full width, split in two. The form's own
-	   padding already matches `.ins-primary`'s margin, so no margin here.
-	   Left-aligned and shrink-wrapped, the pair read as a different control that
-	   happened to appear rather than as the one just pressed. */
+	/* Sits at the TOP, in the Edit button's place, occupying its footprint:
+	   full width, split in two. No margin — the form's padding already
+	   matches `.ins-primary`'s. */
 	.ins-actions-top {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
@@ -2146,9 +2086,8 @@
 		letter-spacing: 0.06em;
 		text-transform: uppercase;
 	}
-	/* A link that is already there. It reads as a CHECKED `.pick-chip` — the
-	   shared mark in app.css — because that is what it is; what differs is that
-	   the way off it is the ✕, not a tick, so it is not a control. */
+	/* A link that is already there — reads as a CHECKED `.pick-chip` (the
+	   shared mark in app.css), but the way off it is ✕, not a tick. */
 	.link-chip {
 		display: inline-flex;
 		align-items: center;

@@ -1,17 +1,13 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	/**
-	 * How much of each continent has been opened up.
+	 * How much of each continent has been opened up: a dark disc, the
+	 * continent's silhouette under gold foil punched through where the
+	 * household has been, and a ring in the continent's own colour for the share.
 	 *
-	 * The handoff's card, ported: a dark disc, the continent's silhouette under
-	 * gold foil with holes punched where the household has been, and a ring in
-	 * THAT CONTINENT'S OWN COLOUR showing the share. The figure and the count sit
-	 * below the coin, never over the ring.
-	 *
-	 * The share is not simply countries visited over countries: small countries
-	 * count whole, big ones count by the share of their regions somebody has
-	 * actually been to. Having been to Prague is having been to Czechia; having
-	 * been to New York is not having been to the United States.
+	 * The share isn't countries visited over countries — small countries count
+	 * whole, big ones by the share of their regions actually visited. Having
+	 * been to Prague is having been to Czechia; New York is not the whole US.
 	 */
 	import { geoCentroid, geoMercator, geoNaturalEarth1, geoPath, type GeoProjection } from 'd3-geo';
 	import { FOIL } from '$lib/life/map/materials';
@@ -57,13 +53,8 @@
 		let live = true;
 		void (async () => {
 			try {
-				/*
-				 * Stamped with the build, because this file is served `immutable`
-				 * for a year. v0.9.1 learned that on the country outlines and this
-				 * fetch was missed: when the shape list gained a country code per
-				 * entry, every browser that had opened the map before kept the old
-				 * format and the coins came up empty.
-				 */
+				// Stamped with the build — this file is served `immutable` for a
+				// year, so a schema change needs a new URL to reach cached browsers.
 				const response = await fetch(`/map/geo/continents?v=${encodeURIComponent(geoVersion)}`);
 				if (!response.ok) return;
 				const found = (await response.json()) as Loaded;
@@ -78,12 +69,8 @@
 	});
 
 	/**
-	 * Each continent fitted to its own coin.
-	 *
-	 * Mercator for Europe and Africa and Natural Earth for the rest, turned so
-	 * the continent is in the middle first — the prototype's choice, and the
-	 * reason Europe is legible at an inch across. Fitted to ALL of it, so nothing
-	 * hangs outside the disc.
+	 * Each continent fitted to its own coin. Mercator for Europe/Africa,
+	 * Natural Earth for the rest, rotated to centre the continent first.
 	 */
 	function projectionFor(
 		continent: string,
@@ -118,23 +105,14 @@
 				let sum = 0;
 				let whole = 0;
 				let count = 0;
-				/*
-				 * The SHAPE of each country somebody has been to, punched out of the
-				 * coating — not a dot at its middle.
-				 *
-				 * A fixed circle made every country the same size on the coin, which
-				 * is only defensible when they are all specks. Australia is half of
-				 * the Oceania coin, so having been everywhere in it still looked like
-				 * a pinprick on an untouched continent.
-				 */
+				// The SHAPE of each visited country, punched out of the coating —
+				// not a dot at its middle (Australia is half the Oceania coin, so a
+				// fixed circle would understate it badly).
 				const holes: string[] = [];
-				// A plain record, not a Map: this is a lookup built and thrown away
-				// inside one derivation, and a SvelteMap would add reactivity to
-				// something nothing reacts to.
+				// A plain record, not a Map: built and thrown away inside one
+				// derivation, so reactivity would be wasted.
 				const drawnFor: Record<string, string> = {};
-				// ONE pass: the coin's outline and the per-country lookup are the same
-				// path data, and projecting every shape of every continent twice to
-				// get both was the whole of the second loop this replaces.
+				// One pass: the coin outline and per-country lookup share the same path data.
 				const drawn: string[] = [];
 				for (const { code, geometry } of shapes) {
 					const d = draw({ type: 'Feature', properties: null, geometry } as never);
@@ -145,9 +123,7 @@
 				const path = drawn.join(' ');
 				for (const [code, credit] of Object.entries(credits)) {
 					if (found.of[code] !== continent) continue;
-					// Weighted by how big the country is: Australia is seven and a
-					// half million square kilometres of Oceania and Nauru is
-					// twenty-eight, and counting them equally said otherwise.
+					// Weighted by country size — counting Nauru equal to Australia would be wrong.
 					sum += credit * (areas[code] ?? 0);
 					count++;
 					const outline = drawnFor[code];
@@ -155,8 +131,7 @@
 						holes.push(outline);
 						continue;
 					}
-					// No outline at 110m — an island the coarse file omits. A dot at
-					// its centre is the honest fallback: something rather than nothing.
+					// No outline at 110m resolution — dot at its centre as a fallback.
 					const at = places[code];
 					if (!at) continue;
 					const point = projection(at);
@@ -165,8 +140,7 @@
 					}
 				}
 
-				// The denominator is the LAND, not the country list: every country on
-				// this continent, whether it has been visited or not.
+				// Denominator is land area, not country count — visited or not.
 				for (const [code, where] of Object.entries(found.of)) {
 					if (where === continent) whole += areas[code] ?? 0;
 				}
@@ -174,17 +148,8 @@
 				const total = totals[continent] ?? found.totals[continent] ?? 0;
 				const covered = whole > 0 ? Math.min(1, sum / whole) : 0;
 
-				/*
-				 * A hundred per cent means FINISHED, so it is withheld until every
-				 * country has been visited.
-				 *
-				 * Weighting by land is what the figure should measure, and it has
-				 * one edge nobody would accept: Oceania's sixteen smallest
-				 * countries are nine thousand square kilometres out of eight and a
-				 * half million, so scratching Australia, New Zealand and Papua New
-				 * Guinea rounds to a hundred while sixteen countries remain. The
-				 * bar filling completely is a promise; this keeps it.
-				 */
+				// 100% means every country is visited, not just the land area — else
+				// Oceania could round to 100% after just its three biggest countries.
 				const share = count < total ? Math.min(covered, 0.99) : covered;
 
 				return {

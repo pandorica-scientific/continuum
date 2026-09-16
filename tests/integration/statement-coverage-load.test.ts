@@ -1,14 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * What the ribbon reads out of the database.
- *
- * The arithmetic is held by `tests/unit/statement-coverage`; this holds the
- * QUERIES, and it exists because of a failure a unit test could never have
- * caught. `${account.id}` inside a raw correlated sub-select renders as a bare
- * `"id"`, which inside `select ... from "transaction" t` binds to the
- * transaction's own id and is therefore never true — so every account came back
- * with no evidence, and the ribbon silently drew nothing at all. Nothing threw,
- * nothing logged, and every unit test still passed.
+ * What the ribbon reads out of the database. Holds the QUERIES (arithmetic is in
+ * `tests/unit/statement-coverage`), because a bad correlated sub-select can silently
+ * match the wrong table and return no evidence for any account without throwing.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadCoverage } from '$lib/server/statements/coverage-load';
@@ -49,9 +43,8 @@ beforeEach(async () => {
 
 describe('loadCoverage', () => {
 	it('gives an account with movements a row, even with no statement filed at all', async () => {
-		// The regression. A first transaction in April is evidence the account
-		// existed, so the months since are gaps that can be filed — and before
-		// this, the row did not appear.
+		// Regression: a first transaction is evidence the account existed, so the
+		// months since must show as gaps, not be omitted entirely.
 		const acc = await makeAccount(db, { name: 'Fio current' });
 		await makeTransaction(db, {
 			accountId: acc.id,
@@ -115,11 +108,9 @@ describe('loadCoverage', () => {
 	});
 
 	it('counts every document it cannot place, whatever kind it is', async () => {
-		// The invariant: everything on the shelf is either drawn on the ribbon or
-		// counted here. Counting only `bank_statement` left a broker report — which
-		// belongs to no bank account and is deliberately not on the ribbon —
-		// invisible twice over, so the shelf said "2 documents" while the ribbon
-		// accounted for one.
+		// Invariant: everything on the shelf is either drawn on the ribbon or
+		// counted here — a broker report belongs to no bank account and must
+		// still be counted, not silently dropped.
 		const statements = await shelfIdByKey('statements', db);
 		await makeDocument(db, { shelfId: statements, type: 'bank_statement' });
 		await makeDocument(db, { shelfId: statements, type: 'broker_report' });
@@ -149,10 +140,8 @@ describe('loadCoverage', () => {
 	});
 
 	it('keeps a brokerage account out of the monthly band entirely', async () => {
-		// Accounts are accounts and investments are investments — the line
-		// `accounts/+page.server` has drawn all along. A brokerage account does
-		// not send monthly statements and never will, so eleven red months a year
-		// would be the ribbon accusing a perfectly current account of nothing.
+		// A brokerage account never sends monthly statements, so it must not
+		// appear in the monthly band as eleven months of red.
 		const broker = await makeAccount(db, { name: 'XTB portfolio', kind: 'brokerage' });
 		await makeTransaction(db, {
 			accountId: broker.id,
@@ -195,9 +184,8 @@ describe('loadCoverage', () => {
 	});
 
 	it('carries what a crowded period holds, so the band can list it', async () => {
-		// A bank re-issues a corrected statement and a household files both, so a
-		// month can hold two documents. The cell cannot open "the" document then —
-		// it opens a list — and this is what the list reads.
+		// A month can hold two documents (a corrected re-issue), so the cell
+		// opens a list, not "the" document.
 		const acc = await makeAccount(db, { name: 'Revolut' });
 		const statements = await shelfIdByKey('statements', db);
 		const ids: string[] = [];

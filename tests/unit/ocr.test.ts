@@ -9,13 +9,8 @@ import { readTabular } from '$lib/server/import/tabular/statement';
 import { proveStatement } from '$lib/server/import/proof';
 
 /**
- * Reading a statement from pixels, end to end.
- *
- * This capability was recorded as broken through two separate measurements, and
- * both times the recognition was already perfect — what stood in the way was
- * this repository's own handling of what came back. Those two defects are what
- * this suite exists to keep fixed, because neither of them fails loudly: the
- * text is right either way, and only the table falls apart.
+ * Reading a statement from pixels, end to end. Guards against table-reconstruction
+ * defects that don't fail loudly — the recognized text is right either way.
  */
 const SOURCE = resolve('tests/fixtures/synthetic/pdf-text/statement-001.pdf');
 const EXPECTED = resolve('tests/fixtures/synthetic/expected/statement-001.json');
@@ -28,10 +23,8 @@ describe.skipIf(!runnable)('reading a rendered statement', () => {
 
 		const lines = await ocrPdf(bytes, ['eng'], { dpi: 300, maxPages: 1 });
 
-		// Cells, not words. A text layer emits "Cash withdrawal / Vector Mobile"
-		// as one item and every reader clusters cells into columns by their edges;
-		// handing over five separate words made five columns out of one
-		// description and tore the table apart.
+		// Cells, not words: the reader clusters cells into columns by their edges, so five
+		// separate words would make five columns out of one description.
 		const description = lines
 			.flatMap((line) => line.cells)
 			.find((cell) => cell.startsWith('Cash withdrawal'));
@@ -41,11 +34,8 @@ describe.skipIf(!runnable)('reading a rendered statement', () => {
 		const choice = chooseGrid(grids);
 		expect(choice, 'no table was recovered from the page').toBeTruthy();
 
-		// Reading order, which means the column header sits above the movements.
-		// Tesseract's y grows downward and a PDF's grows upward: handed over raw,
-		// the page arrives upside down, the header is looked for below the first
-		// movement instead of above it, and a Debit/Credit pair then reads as one
-		// amount column with half its rows empty.
+		// Tesseract's y grows downward and a PDF's grows upward; handed over raw, the page
+		// arrives upside down with the header below the movements instead of above.
 		expect(choice!.grid.rows[0].map((cell) => cell.text)).toContain('Balance');
 
 		const reading = readTabular(choice!, choice!.transactions[0], {

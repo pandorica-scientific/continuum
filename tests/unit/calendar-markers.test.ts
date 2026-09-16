@@ -81,9 +81,9 @@ describe('which marker a generated event gets', () => {
 		);
 	});
 
-	// THE REASON THE MARKER COMES FROM THE BINDING AND NOT THE RULE. `expiry`
-	// covers leases, fixations, passports and policies at once, so keyed on the
-	// rule every one of them would carry the same blurred marker.
+	// The marker comes from the binding, not the rule: `expiry` covers leases,
+	// fixations, passports and policies at once, so keying on the rule alone
+	// would give them all the same blurred marker.
 	it('gives two events of the same rule different markers', () => {
 		const passport = marker({ table: 'document', rowId: 'd', field: 'expiresOn' }, 'expiry');
 		const fixation = marker({ table: 'loanFixationPeriod', rowId: 'p', field: 'endsOn' }, 'expiry');

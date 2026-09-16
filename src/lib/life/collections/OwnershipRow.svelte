@@ -1,12 +1,10 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	/**
-	 * The three controls that change what the cellar holds.
-	 *
-	 * Each posts the direction it means and the server applies the rule from
-	 * `ownership.ts`. Nothing here does arithmetic: a browser that computed the
-	 * new pair and posted it would be a second implementation of the rules, and
-	 * two implementations of `opened <= owned` is how the CHECK starts failing.
+	 * The three controls that change what the cellar holds. Each posts the
+	 * direction it means; the server applies the rule from `ownership.ts`.
+	 * Nothing here does arithmetic — a second implementation risks disagreeing
+	 * with the `opened <= owned` CHECK.
 	 */
 	import { enhance } from '$app/forms';
 	import Icon from '$lib/components/Icon.svelte';

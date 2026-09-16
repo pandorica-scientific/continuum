@@ -7,8 +7,8 @@ import { CATEGORY_GROUP_SEED, CATEGORY_SEED } from '$lib/categories';
 import { BANK_SEED } from '$lib/banks';
 import { DEFAULT_RULE_PRIOR, normalise, type RowLike, type ValueCondition } from '$lib/rules/match';
 
-// normalise lives in the pure rules module now, so matching has no server
-// dependency. Re-exported here because several importers still expect it.
+// Re-exported: normalise lives in the pure rules module so matching has no
+// server dependency, but importers here still expect it from this module.
 export { normalise };
 
 /** The single condition a correction implies, or null if nothing is stable. */
@@ -75,15 +75,9 @@ export async function learnRule(
 
 /**
  * Idempotent: seeds the category taxonomy on boot. Categories only — a fresh
- * install starts with no rules at all.
- *
- * Earlier versions also inserted 42 curated Czech/Polish merchant patterns here
- * so a first import filed itself. They were removed because they were wrong in
- * both directions: a household that shops nowhere near them carried dead rules
- * it never asked for, and because seeding ran on every boot, a starter rule
- * someone deleted came back at the next restart. Rules are now earned — every
- * one of them comes from a correction a person actually made, which is what the
- * confidence score claims to measure.
+ * install starts with no rules at all. Rules are earned: every one comes from
+ * a correction a person actually made, which is what the confidence score
+ * claims to measure.
  */
 export async function seedCategories(): Promise<void> {
 	// Groups first: category.group_key carries a foreign key into them.

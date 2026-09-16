@@ -49,13 +49,8 @@ function fioStatement({
 	const [year, month, day] = bookedOn.split('-');
 	const czDay = `${day}.${month}.${year}`;
 	const [counterpartyNumber, counterpartyBank] = counterpartyAccount.split('/');
-	// The closing balance has to follow from the movement.
-	//
-	// This generator used to print 0,00 both sides while emitting a real
-	// transaction, which every route now rejects as a statement that disagrees
-	// with itself — correctly. These fixtures exist to exercise pairing and
-	// deduplication, so their arithmetic was never the point; it still has to be
-	// true, or the file could not exist.
+	// The closing balance has to follow from the movement, or the route rejects
+	// the statement as self-contradictory.
 	const closing = Number(amount.replace(',', '.'));
 	const czClosing = closing.toFixed(2).replace('.', ',');
 	return new TextEncoder().encode(
@@ -112,22 +107,6 @@ afterAll(async () => {
 	await harness?.stop();
 });
 
-/**
- * RETIRED with this suite's legacy-world tests: six cases that rebuilt the
- * schema as it stood before migration 0027 and replayed that migration against
- * deliberately broken data.
- *
- * They went because v0.3.10 collapses every migration into one baseline, so 0027
- * will not exist to replay — and because the world they built could only be
- * written through the CURRENT Drizzle schema, which since the rename names
- * columns that world does not have. Keeping them meant either editing a
- * migration that already ran to describe a schema it never saw, or maintaining a
- * second vocabulary in raw SQL for a test with a known expiry date.
- *
- * What they covered that still matters is covered live: fingerprint versioning,
- * transfer pairing, and duplicate detection are all exercised against the
- * current schema by the tests that remain in this file.
- */
 describe('import database integrity', () => {
 	it('rolls back the import record and all rows when a later insert fails', async () => {
 		await insertAccount(rowId('fio-czk'), 'CZK', ['1234567890/2010']);
@@ -192,15 +171,11 @@ describe('import database integrity', () => {
 	});
 
 	it('accepts the account a person chose for a statement no adapter recognised', async () => {
-		// The reader names the FORMAT it read a file as — `tabular`, `camt053` —
-		// whenever no adapter claimed it, and account resolution compared that
-		// against the chosen account's bank. So pointing at your own account and
-		// being told "the selected account belongs to cs, but this statement
-		// belongs to tabular" was the ordinary outcome for every bank without an
-		// adapter, which is most of them.
-		//
-		// The account is the authority on which bank it is. A format name is not
-		// evidence about an institution and may not overrule it.
+		// The reader names the FORMAT it read a file as (`tabular`, `camt053`, …)
+		// whenever no adapter claimed it. Account resolution must not compare that
+		// format name against the chosen account's bank: the account is the
+		// authority on which bank it is, and a format name is not evidence about
+		// an institution.
 		await insertAccount(rowId('chosen-pln'), 'PLN', [], 'cs');
 		const { ingestFile } = await import('$lib/server/import/ingest');
 		const buffer = new Uint8Array(
@@ -220,14 +195,9 @@ describe('import database integrity', () => {
 		// Nothing here identifies an account: this file prints no number the reader
 		// recognises, and no adapter claimed it, so no issuer is known either.
 		//
-		// `bank: 'tabular'` used to be treated as the institution and carried
-		// straight into `account.bank` — which names the account, picks its emoji
-		// and is published through /api/v1 — so the ledger gained an account
-		// called, literally, `tabular PLN`. Worse, bank+currency then MATCHED, so
-		// the next unrelated bank read generically in the same currency landed in
-		// that same account.
-		//
-		// A format name is not evidence about an institution. With nothing to
+		// A format name (e.g. `tabular`) is not evidence about an institution and
+		// must never be minted into `account.bank` — that value names the account,
+		// picks its emoji, and is published through /api/v1. With nothing to
 		// identify the account, the honest move is the question, because the
 		// answer becomes permanent metadata.
 		const { ingestFile } = await import('$lib/server/import/ingest');
@@ -441,11 +411,9 @@ describe('import database integrity', () => {
 		await enqueue('fio.csv', source, rowId('fio-race'), testDb);
 
 		// A second upload arriving mid-run must not start a second reader. It joins
-		// the sweep already running, so both callers see the same drained count —
-		// what matters is that the statement was read once, not what the two return
-		// values add up to. Counting the sum instead measured the old behaviour,
-		// where the second caller raced the first for the NEXT job and merely
-		// happened to find none because this fixture holds a single file.
+		// the sweep already running, so both callers see the same drained count;
+		// what matters is that the statement was read once, not what the two
+		// return values add up to.
 		//
 		// Two, not one: filing the statement's document queues its own text
 		// extraction, drained in the same sweep as the import itself.
@@ -652,9 +620,8 @@ describe('import database integrity', () => {
 	}, 30_000);
 
 	it('shows what a statement was checked against, in words', async () => {
-		// The proof engine used to decide whether to file a statement and then
-		// discard its reasoning, so "accepted" was something to take on trust.
-		// These are the fields the evidence panel reads.
+		// The proof engine must keep its reasoning, not just its accept/reject
+		// verdict — these are the fields the evidence panel reads.
 		const { ingestFile } = await import('$lib/server/import/ingest');
 		const { PROOF_LABELS, sourceLabel } = await import('$lib/transactions/provenance');
 		await insertAccount(rowId('fio-evidence'), 'CZK', ['1234567890/2010']);
@@ -1496,9 +1463,8 @@ describe('import database integrity', () => {
 		]);
 	});
 
-	// Filing one row used to row-lock and compare the entire unpaired ledger.
-	// The window bounds that to the changed row's neighbourhood; unlike the
-	// today-anchored horizon it replaces, it does not care how old the row is.
+	// A pairing pass must be bounded to the changed row's neighbourhood, not the
+	// entire unpaired ledger, and must not care how old the row is.
 	it('bounds a pairing pass to the neighbourhood of what changed', async () => {
 		const { pairingWindowAround } = await import('$lib/server/import/pairing-run');
 

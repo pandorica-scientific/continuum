@@ -44,8 +44,8 @@ describe('the order categories are shown in', () => {
 		expect(await order()).toEqual(['salary', 'dividends', 'rent']);
 	});
 
-	// The reported fault: "Other income" sat fifth because "Interest" was added
-	// later and took the next free sort value.
+	// Regression: a catch-all must stay last even when a later addition takes
+	// a higher sort value.
 	it('keeps a catch-all last however high its sort climbs', async () => {
 		await add('other-income', 4, true);
 		await add('interest', 5);

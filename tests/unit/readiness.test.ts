@@ -2,10 +2,8 @@
 /**
  * The rules behind the readiness line.
  *
- * The failure that matters here is a FALSE GREEN: somebody reads "ready",
- * packs, and is turned round at a border. So most of these assert that the app
- * refuses to reassure — a missing passport, an unknown visa pair and an undated
- * document are all grey, never green.
+ * The failure that matters here is a FALSE GREEN, so most of these assert that
+ * the app refuses to reassure: missing, unknown and undated are all grey, never green.
  */
 import { describe, expect, it } from 'vitest';
 import {

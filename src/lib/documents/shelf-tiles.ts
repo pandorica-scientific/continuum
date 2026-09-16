@@ -2,11 +2,8 @@
 /**
  * The three figures at the top of a shelf, chosen by its ENGINE.
  *
- * `banner.ts` chose them by shelf key, through a switch with a branch per
- * seeded shelf — so a shelf the household made fell to a default, and the
- * "planned" shelves in the registry had branches nothing could reach. Keying on
- * the engine means the four layouts each answer their own question and every
- * shelf drawing that layout gets the answer, whoever made it.
+ * Keyed on the engine rather than the shelf key, so every shelf drawing a
+ * given layout gets the same answer regardless of who made it.
  *
  * A figure takes a colour only when it is a task. `0 gaps` is the state the
  * archive is for, and a red nought is an alarm about nothing.

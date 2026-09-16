@@ -154,8 +154,7 @@
 					</div>
 				</div>
 			{/if}
-			<!-- Ghost buttons under the band, as the handoff draws them: what you
-			     can do to the loan is beside the loan, not behind a link. -->
+			<!-- What you can do to the loan lives beside the loan, not behind a link. -->
 			<div class="loan-actions">
 				<button
 					type="button"

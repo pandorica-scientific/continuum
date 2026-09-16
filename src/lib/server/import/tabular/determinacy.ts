@@ -33,12 +33,8 @@ const NUMERIC_DATE =
 /**
  * The shape is not enough — the COMPONENTS have to be a possible date.
  *
- * Anchoring the pattern was assumed to be sufficient, and it is not: on any
- * dot-decimal statement `88.40`, `377.93` and `1234.56` all match it, so an
- * entire money column reads as a column of dates and the amount column then
- * cannot be found at all. The comment here used to claim `1.234` was the case
- * this guarded against; that one is excluded by the two-digit group, and every
- * ordinary two-decimal amount sailed through.
+ * On any dot-decimal statement `88.40`, `377.93` and `1234.56` all match the
+ * pattern, so an entire money column would read as dates without this check.
  *
  * A component above its range settles it. `12.05` stays a date because it
  * genuinely is ambiguous — December 5th and twelve euros five look identical,
@@ -148,25 +144,16 @@ export function resolveDateOrder(
 /**
  * The ISO period a statement prints, when that period can only be read one way.
  *
- * The printed period is used as the evidence that SETTLES an otherwise
- * ambiguous date order in the rows, which makes how the period itself is read
- * load-bearing. It used to be parsed with a hardcoded `'day-first'`, so a guess
- * about locale was laundered into a `kind: 'determined'` verdict one layer up:
- * a US export printing `01/05/2026 – 02/06/2026` (5 Jan – 6 Feb) was read as
- * 1 May – 2 June, every movement imported four months out, and the reading
- * carried the confident evidence string "only this reading places every date
- * inside 2026-05-01 to 2026-06-02". Nothing raised a question. The constant was
- * invisible because the synthetic corpus is Polish throughout, while en-US,
- * en-CA, en-AU and en-ZA are all in its locale list.
+ * The printed period is used as evidence that SETTLES an otherwise ambiguous
+ * date order in the rows, which makes how the period itself is read
+ * load-bearing — a hardcoded `'day-first'` here would launder a locale guess
+ * into a confident verdict.
  *
- * So the period is held to the same standard as everything else here: try both
- * readings, and speak only if one survives. A reading survives when both
- * endpoints are dates and the period does not run backwards. If both survive
- * and disagree, the period is genuinely ambiguous and contributes NOTHING — the
- * rows must then settle their own order, and if they cannot, that is a question
- * for the person holding the statement rather than a coin toss. If both survive
- * and agree — an ISO period, where the order cannot matter — it is not
- * ambiguous at all and is used.
+ * So the period is held to the same standard as everything else: try both
+ * readings, and speak only if one survives (endpoints are dates, period
+ * doesn't run backwards). If both survive and disagree, the period contributes
+ * NOTHING — the rows must settle their own order. If both survive and agree
+ * (an ISO period, where order can't matter), it's used.
  */
 export function resolvePeriod(
 	start: string,
@@ -231,11 +218,9 @@ export function applyDateOrder(
  * The shape of a figure, including an explicit plus.
  *
  * A statement that writes its credits `+249.00` and its debits `-11.50` is
- * saying the same thing as one that writes `249.00` — and this pattern used to
- * accept only the second. Every shape test downstream is built on it, so a bank
- * with that habit had its credits fail "is this a number", which silently
- * removed those rows from the table and cost one real statement 100 498.00
- * across four movements.
+ * saying the same thing as one that writes `249.00`. Every shape test
+ * downstream is built on this pattern, so missing the explicit plus would
+ * silently drop every credit row from the table.
  */
 const NUMBER_SHAPE = /^[-+\u2212]?\(?\s*[\d.,\s'\u00A0\u202F]+\s*\)?[-+\u2212]?$/;
 
@@ -318,12 +303,8 @@ export function resolveDecimalMark(
 	}
 	// A currency with no fractional part has no decimal mark to find.
 	//
-	// A yen is not divided, so `5,577,139` can only be a grouped whole number and
-	// there is nothing to decide — yet this asked which separator was the decimal
-	// one and refused the statement when the file could not say. It never could:
-	// the question does not arise for the currency. Kuwait's dinar makes the same
-	// point from the other end, with three fractional digits where two are
-	// assumed.
+	// A yen is not divided, so `5,577,139` can only be a grouped whole number —
+	// the decimal-mark question simply does not arise for a zero-decimal currency.
 	if (fractionDigits === 0 && commaDecimal === 0 && dotDecimal === 0) {
 		return {
 			kind: 'unavailable',
@@ -361,12 +342,9 @@ export function resolveDecimalMark(
  */
 export function parseAmount(raw: string, decimal: DecimalMark, minorDigits = 2): bigint | null {
 	if (!raw) return null;
-	// U+2212 MINUS SIGN is folded to a hyphen before anything else. `formatMinor`
-	// emits one, and Raiffeisenbank's PDFs print it literally — which is why
-	// `adapters/rb.ts` already folds it by hand. Without it here the GENERIC
-	// reader, the fallback for every bank with no adapter of its own, read every
-	// signed amount on such a page as "not a figure" and refused the statement
-	// for want of an amount column.
+	// U+2212 MINUS SIGN is folded to a hyphen before anything else: Raiffeisenbank's
+	// PDFs print it literally, and the generic reader would otherwise read every
+	// signed amount on such a page as "not a figure".
 	const trimmed = raw.trim().replace(/\u2212/g, '-');
 	if (!NUMBER_SHAPE.test(trimmed)) return null;
 
@@ -376,9 +354,7 @@ export function parseAmount(raw: string, decimal: DecimalMark, minorDigits = 2):
 		(trimmed.startsWith('(') && trimmed.endsWith(')'));
 
 	// Strip everything that is not a digit or the decimal mark. `+` belongs in
-	// this class as much as `-` does: NUMBER_SHAPE accepts an explicit plus, so a
-	// bank writing its credits `+249,00` passed the shape test and then failed
-	// the digits-only test below, returning null for every credit it has.
+	// this class as much as `-` does, since NUMBER_SHAPE accepts an explicit plus.
 	const group = decimal === ',' ? '.' : ',';
 	const cleaned = trimmed
 		.replace(/[()\s'\u00A0\u202F+-]/g, '')

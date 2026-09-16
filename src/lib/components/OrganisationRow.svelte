@@ -1,15 +1,7 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
-	//
-	// One organisation in the Documents rail's pencil mode: emoji, name, the
-	// kind badge, the document count, and the `⋯` that removes it.
-	//
-	// A third sibling of `ShelfRow` and `SubjectRow`, and the same argument for
-	// being one: the grid, the height, the hover fill and the badge are
-	// deliberately identical values, so three rows read as one row in three
-	// places rather than as three designs. What differs is the tail — an
-	// organisation is deleted rather than archived, because unlike a subject it
-	// has no paper of its own to demote.
+	// Shares layout with `ShelfRow`/`SubjectRow`; unlike a subject, an
+	// organisation is deleted rather than archived — it has no paper to demote.
 	let {
 		organisation,
 		onrename,
@@ -34,10 +26,7 @@
 	<button type="button" class="label" onclick={() => onrename?.()}>{organisation.name}</button>
 	<span class="mono count">{organisation.count}</span>
 	<span class="tail">
-		<!-- The kind is said rather than drawn: "ČSSZ" and "VZP" are two
-		     initialisms a person half-remembers, and employer-or-authority is
-		     what tells them apart at a glance. `other` says nothing worth the
-		     width. -->
+		<!-- `other` says nothing worth the width. -->
 		{#if organisation.kind !== 'other'}
 			<span class="mono badge">{organisation.kind}</span>
 		{/if}

@@ -4,10 +4,7 @@ import { ALL_MIGRATIONS, startPostgres, type Harness } from './harness';
 import { ENUMS, ENUM_COLUMNS, checkName } from '$lib/enums';
 
 /**
- * Conventions the schema is locked to as of v0.3.10.
- *
- * These are not style checks. Each one encodes a defect class the schema has
- * already been bitten by, and each is cheap enough to run on every push.
+ * Not style checks: each one encodes a defect class the schema has already been bitten by.
  */
 let harness: Harness;
 
@@ -51,24 +48,16 @@ describe('foreign keys', () => {
 				with ordinality as k(attnum, ord)
 			join pg_attribute a on a.attrelid = i.indrelid and a.attnum = k.attnum
 			where c.relnamespace = 'public'::regnamespace
-			  -- A PARTIAL index serves only queries carrying its predicate.
-			  -- property_bill_meter_property_idx indexes property_id WHERE
-			  -- source = 'meter', which does nothing for "the bills of this
-			  -- property" — counting it as covering would hide a real scan.
+			  -- A partial index only serves queries carrying its predicate; counting
+			  -- it as covering would hide a real scan.
 			  and i.indpred is null
 			group by i.indexrelid, c.relname, i.indisunique
 		`;
 
-		// An index covers a foreign key when the key's columns are a PREFIX of the
-		// index's columns — a lookup by (a) is served by an index on (a, b), but
-		// not by one on (b, a).
-		//
-		// The converse also counts, when the shorter index is UNIQUE. Every
-		// `(id, entity_kind)` key the supertype adds — one per ENTITY_KINDS entry —
-		// leads with the table's own primary key, so the primary-key index already
-		// narrows the lookup to at most one row and `entity_kind` is a stored
-		// constant. An index on the pair would be dead weight, and demanding one
-		// here would have bought a dozen of them.
+		// An index covers a foreign key when the key's columns are a prefix of the
+		// index's columns. The converse also counts when the shorter index is unique:
+		// a `(id, entity_kind)` key leads with the primary key, which already narrows
+		// the lookup to one row, so an index on the pair would be dead weight.
 		const covered = (fk: ColumnSet) =>
 			indexes.some(
 				(ix) =>
@@ -122,13 +111,11 @@ describe('enum columns', () => {
 });
 
 /**
- * `day` on the snapshot and rate tables is a time DIMENSION KEY — what the row
- * is about — rather than an attribute of it, so it keeps its bare name. Listed
- * here rather than tolerated silently.
+ * `day` on the snapshot and rate tables is a time dimension key — what the row is
+ * about — rather than an attribute of it, so it keeps its bare name.
  */
-// `active_from`/`active_to` are the two ends of a subject's period. `_on` reads
-// as a single occasion — "active_from_on" is not English — and neither name can
-// be mistaken for an instant, which is what the convention is protecting.
+// `active_from`/`active_to` are the two ends of a subject's period; "active_from_on"
+// is not English, and neither name can be mistaken for an instant.
 const DATE_NAME_EXCEPTIONS = new Set(['day', 'active_from', 'active_to']);
 
 describe('naming conventions', () => {

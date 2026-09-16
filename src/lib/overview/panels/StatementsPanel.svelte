@@ -1,10 +1,7 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
-	// One line per account: how long since its last statement was read in, and
-	// whether that is longer than this account's own rhythm allows. The
-	// threshold is per account and lives in $lib/statements/cadence — a current
-	// account read weekly and a mortgage account posted quarterly are both up to
-	// date, and one number for both would be wrong for one of them.
+	// The staleness threshold is per account and lives in $lib/statements/cadence
+	// — a weekly current account and a quarterly mortgage account need different numbers.
 	import Pill from '$lib/components/Pill.svelte';
 	import type { Hue } from '$lib/ui/hue';
 	import { readableDate } from '$lib/documents/view';
@@ -34,8 +31,7 @@
 			<span class="sub">
 				{row.bank}{row.lastOn ? ` · ${readableDate(row.lastOn)}` : ''}
 			</span>
-			<!-- A pill only where there is something to say. Every account carrying
-			     one would put a row of grey labels beside the two that matter. -->
+			<!-- A pill only where there is something to say. -->
 			{#if row.lastOn === null}
 				<span class="state"><Pill hue={row.hue}>never</Pill></span>
 			{:else if row.stale}

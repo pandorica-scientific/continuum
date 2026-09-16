@@ -47,8 +47,7 @@ const OUTLINE_PAD = 8;
  * The refinement search, in shares of the detection frame's width so the
  * numbers mean the same thing at any resolution.
  *
- * Every one of these was measured on real photographs; the harness that
- * produced them is in scratch-workspace/v0.6.0/tune.
+ * Every one of these was measured on real photographs.
  */
 /** How far from an edge of the rough quad a line may point and still be a
  *  candidate for that edge, in radians. Generous, because the rough edge can be

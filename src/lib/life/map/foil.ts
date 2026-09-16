@@ -1,19 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * The gold coating, and taking it off.
- *
- * Ported from the handoff's prototype, which is the version that has been used
- * and looks right. The shape is unchanged on purpose — four canvases, a mask
- * that records what has been removed, a cache of crumbly brush stamps, and a
- * list of flakes stepped by a frame loop.
- *
- * FOUR CANVASES, AND EACH HAS ONE JOB:
+ * The gold coating, and taking it off. Four canvases, each one job:
  *   foil    the material itself, painted once
  *   mask    where it still is; scratching erases from THIS, not from the foil
  *   relief  the shadow the remaining foil casts onto what it covers
  *   display what is actually on screen, composited from the other three
  *
- * None of this lives in reactive state. A `$state` array of flakes would
+ * None of this lives in reactive state — a `$state` array of flakes would
  * re-render a component sixty times a second to move some rectangles.
  */
 import { FOIL, SCUFF_DARK, SCUFF_LIGHT, SHAVINGS } from './materials';
@@ -62,12 +55,7 @@ export interface Flake {
 	settled: boolean;
 }
 
-/**
- * A canvas of noise, tiled over the foil.
- *
- * Made once and reused: it is the grain that stops the gradient reading as a
- * flat beige rectangle.
- */
+/** A canvas of noise, tiled over the foil — made once, the grain that stops it looking flat. */
 function noiseTile(): HTMLCanvasElement {
 	const size = 96;
 	const canvas = document.createElement('canvas');
@@ -87,12 +75,8 @@ function noiseTile(): HTMLCanvasElement {
 }
 
 /**
- * Ten crumbly stamps: a core disc plus a scatter of dots.
- *
- * Pre-baked because a stroke lays dozens of these a second, and drawing 46
- * circles per stamp at that rate is the difference between a scratch and a
- * slideshow. Ten of them, rotated and jittered at use, is enough that the eye
- * never sees the repeat.
+ * Ten crumbly stamps: a core disc plus a scatter of dots. Pre-baked because a
+ * stroke lays dozens a second — drawing 46 circles live would be a slideshow.
  */
 function makeStamps(): HTMLCanvasElement[] {
 	return Array.from({ length: STAMPS }, () => {
@@ -133,11 +117,8 @@ export class Foil {
 	private readonly foil: [HTMLCanvasElement, CanvasRenderingContext2D];
 	/**
 	 * The gold itself, unclipped, kept so a region can be coated again.
-	 *
-	 * `punch` erases from the foil canvas, so the material that was there is
-	 * gone and undoing a scratch has nothing to paint back. Rebuilding instead
-	 * would work, but `build` re-randomises the brushed grain and the noise, so
-	 * undoing one region would faintly re-texture the entire map.
+	 * `punch` erases the foil canvas permanently; rebuilding would work but
+	 * `build` re-randomises the grain, retexturing the whole map.
 	 */
 	private readonly material: [HTMLCanvasElement, CanvasRenderingContext2D];
 	private readonly mask: [HTMLCanvasElement, CanvasRenderingContext2D];

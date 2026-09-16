@@ -1,26 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * The one door to the three artwork generators.
+ * The one door to the three artwork generators — nothing outside this file
+ * imports `stamps/`, `dishes/` or `bottles/` directly.
  *
- * Nothing outside this file imports `stamps/`, `dishes/` or `bottles/`
- * directly, so the vendored libraries can be replaced without a search across
- * the screens that draw their output.
- *
- * ## Two rules, and they are the whole point
- *
- * **1. Artwork is resolved once and stored as a definition.** A trip, an idea
- * and a recipe each carry an `art` column holding what the generator decided.
- * Rendering afterwards reproduces that decision. Renaming a recipe therefore
- * does not silently repaint it, and upgrading one of these libraries does not
- * repaint the household's history. `resolve*` is for the moment a row is
- * created; `render*` is for every time afterwards.
- *
- * **2. Colour comes from a token, never from a hex.** The stamp generator bakes
- * the colour it is given into the SVG, which would be a hard-coded value that
- * is wrong in one of the two themes. So a stamp is rendered with a sentinel
- * that is swapped for `currentColor`, and the element around it sets
- * `color: var(--series-…)`. The dish library already emits `currentColor` and
- * needs none of this.
+ * Two rules: (1) artwork is resolved once and stored as a definition, so
+ * renaming a trip/idea/recipe or upgrading a generator does not repaint
+ * history — `resolve*` runs at creation, `render*` every time after.
+ * (2) Colour comes from a token, never a hex: a stamp is rendered with a
+ * sentinel swapped for `currentColor` so the surrounding element can theme it.
  */
 import { createStamp, destinations, renderStamp, symbols } from './stamps/index.mjs';
 import { createRecipeArtwork, renderRecipeDefinition } from './dishes/index.mjs';
@@ -30,11 +17,9 @@ import { COUNTRY_PALETTE, countryColour, type CountryColour } from '$lib/life/ge
 import { COUNTRY_COLOURS } from '$lib/life/geo/country-colour-table';
 
 /**
- * The colour handed to the stamp generator, and immediately taken back out.
- *
- * Any six-digit hex works — the generator puts the colour it is given in the
- * SVG and nowhere else, and it is the only hex in the output, which is what
- * makes the swap total rather than a best effort. This value is never seen.
+ * The colour handed to the stamp generator, then swapped back out.
+ * Any six-digit hex works — it is the only hex the generator emits, which
+ * makes the later swap to `currentColor` total. Never seen by a user.
  */
 const INK_SENTINEL = '#010203';
 
@@ -45,13 +30,9 @@ export type ArtDefinition = Record<string, unknown>;
  * Anything that could execute, or fetch, if this markup were inlined.
  *
  * The generated SVG is the one place in this product that reaches `{@html}`,
- * and `src/lib/icons.ts` is explicit about why the icon set avoids it: "a typo
- * in a path cannot inject anything". Here the household's own trip name is
- * printed inside the drawing, so the input is not entirely machine-made.
- *
- * The generators escape the text they insert. This does not take their word for
- * it. Checked rather than trusted, because the cost of checking is a regex and
- * the cost of being wrong is script running on the page.
+ * and it prints household-supplied text (a trip name), so the input is not
+ * entirely machine-made. Checked rather than trusted: generators claim to
+ * escape their text, but the cost of checking is a regex.
  */
 const DANGEROUS = [
 	/<\s*script/i,
@@ -82,8 +63,7 @@ export function assertInertSvg(svg: string): string {
 /** Swap the sentinel for `currentColor`, and prove none of it is left. */
 function inkFromContext(svg: string): string {
 	const painted = svg.replaceAll(INK_SENTINEL, 'currentColor');
-	// A generator that started emitting a second colour would otherwise ship a
-	// hex that is wrong in one theme, and nobody would see it until a screenshot.
+	// Catch a generator emitting a second colour — it would be wrong in one theme.
 	if (/#[0-9a-f]{3,8}/i.test(painted)) {
 		throw new Error('stamp artwork carries a colour literal the theme cannot override');
 	}
@@ -101,12 +81,7 @@ export interface StampSubject {
 	city?: string | null;
 }
 
-/**
- * The 17 symbols the library marks as suitable for anywhere.
- *
- * Sorted, so the choice below is stable whatever order the library happens to
- * enumerate its symbols in.
- */
+/** The 17 symbols the library marks as suitable for anywhere, sorted for stable ordering. */
 const ANYWHERE = Object.entries(symbols)
 	.filter(([, symbol]) => (symbol as { universal?: boolean }).universal)
 	.map(([id]) => id)
@@ -120,12 +95,9 @@ function hash(text: string): number {
 }
 
 /**
- * Find a place the library has a drawing for, named inside free text.
- *
- * A household calls an idea "Lisbon again" or "Kyoto in the autumn", not
- * "Lisbon" — so looking the whole string up finds nothing and every card falls
- * back to the same marker. Matching within the country the idea already names
- * keeps that from reaching for a same-named town on another continent.
+ * Find a place the library has a drawing for, named inside free text (e.g.
+ * "Lisbon again"). Matching is scoped to the idea's own country so it doesn't
+ * match a same-named town elsewhere.
  */
 function knownPlaceIn(text: string, country: string | null | undefined): string | null {
 	if (!country) return null;
@@ -143,19 +115,10 @@ function knownPlaceIn(text: string, country: string | null | undefined): string 
 /**
  * Decide a stamp once, at the moment a trip or an idea is created.
  *
- * Three goes at finding the right drawing, in order of how much it knows:
- *
- * 1. The **city**, when the record names one. A trip called "A week off" to
- *    Porto gets Porto's bridge rather than a generic marker.
- * 2. A **place named inside the text**, matched within the country the record
- *    already carries. This is what turns "Lisbon again" into Lisbon's tram.
- * 3. Failing both, one of the library's seventeen go-anywhere symbols, chosen
- *    from the name itself. The library's own fallback is the map pin every
- *    time, so a board of four ideas came out as four identical pins — which
- *    reads as artwork that failed rather than as artwork standing in.
- *
- * The label always stays whatever the household called it. The artwork is the
- * place's; the words are theirs.
+ * Tries, in order: the record's own city; a place named inside the text
+ * (scoped to its country); then a go-anywhere symbol chosen from the name.
+ * The library's own fallback is a single map-pin symbol for everything, which
+ * reads as failed artwork on a board of several ideas — hence the fallback here.
  */
 export interface StampChoice {
 	/**
@@ -176,10 +139,8 @@ export function resolveStamp(subject: StampSubject, choice: StampChoice = {}): A
 		country: subject.country ?? undefined,
 		color: INK_SENTINEL,
 		...(choice.seed === undefined ? {} : { seed: choice.seed }),
-		// An explicit choice wins. Failing that, only when nothing was
-		// recognised: the library's own pick is the better one when it has made a
-		// real match, and the worse one when it has not — its fallback is the map
-		// pin every time.
+		// An explicit choice wins; otherwise only fall back to a symbol when
+		// nothing was recognised — the library's own match is better than ours.
 		...(choice.icon
 			? { icon: choice.icon }
 			: lookup
@@ -196,12 +157,9 @@ export interface SymbolChoice {
 }
 
 /**
- * What to offer when somebody wants a different picture.
- *
- * The place's own landmark first, where the library has one — that is the
- * drawing somebody would actually want — then the seventeen symbols marked
- * suitable for anywhere. Not all 150: a grid of every symbol in the library is
- * a catalogue, and the household is choosing a stamp rather than shopping.
+ * What to offer when somebody wants a different picture: the place's own
+ * landmark first, then the go-anywhere symbols. Not the library's full ~150 —
+ * the household is choosing a stamp, not shopping a catalogue.
  */
 export function stampSymbolChoices(subject: StampSubject): SymbolChoice[] {
 	const label = (id: string): string =>
@@ -222,13 +180,9 @@ export function stampSymbolChoices(subject: StampSubject): SymbolChoice[] {
 }
 
 /**
- * Read a definition that came in on a form, and refuse anything strange.
- *
- * The dialogs draw the stamp in the browser and post back what was previewed,
- * so what arrives is client-controlled. It is accepted only if it renders —
- * which also runs the inertness check — and otherwise the caller resolves one
- * server-side instead. A household never sees a failure here; it sees the
- * stamp the app would have chosen anyway.
+ * Read a definition posted back from the browser and refuse anything strange.
+ * Client-controlled input: accepted only if it renders (which also runs the
+ * inertness check), otherwise the caller resolves a fresh one server-side.
  */
 export function parseStoredStamp(raw: unknown): ArtDefinition | null {
 	if (typeof raw !== 'string' || raw.trim() === '') return null;
@@ -247,16 +201,9 @@ export const stampSvg = (art: ArtDefinition): string =>
 	inkFromContext(renderStamp({ ...art, color: INK_SENTINEL } as never));
 
 /**
- * The hue a stamp is inked in.
- *
- * Its destination country's own colour on the map, which is what ties the stamp
- * wall to the map: a trip to Portugal and Portugal itself are the same colour,
- * and you notice that without being told.
- *
- * Where there is no country — an idea called "somewhere hot", a trip nobody has
- * pinned down — the colour comes from the name instead, so every stamp still
- * has one of its own. A wall of identically inked stamps reads as a list; a
- * wall of differently inked ones reads as a collection, which is what it is.
+ * The hue a stamp is inked in: the destination country's own map colour,
+ * ties the stamp wall to the map. With no country, falls back to a colour
+ * hashed from the name, so every stamp still gets one of its own.
  */
 export const stampHue = (
 	country: string | null | undefined,
@@ -293,14 +240,9 @@ export const dishSvg = (art: ArtDefinition): string =>
 // ---- Bottle silhouettes ----
 
 /**
- * Which drawing each type of bottle gets.
- *
- * Ten types, eight silhouettes, so three pairs share one. That is a statement
- * about glass rather than a shortcut: a bourbon and a whisky come in the same
- * squat bottle, a rum and a cognac in the same decanter. `wine` takes the
- * Bordeaux shape because it is the one most wine is actually sold in — a
- * household that wants the Burgundy slope is asking for a wine-style field,
- * which the cellar deliberately does not have.
+ * Which drawing each type of bottle gets. Ten types share eight silhouettes
+ * by actual glass shape (bourbon/whisky share a squat bottle, rum/cognac a
+ * decanter); `wine` defaults to Bordeaux as the most common wine bottle shape.
  */
 const SILHOUETTE: Record<EnumValue<'bottle.type'>, keyof typeof bottles> = {
 	wine: 'bordeaux',
@@ -324,24 +266,14 @@ export interface BottleSubject {
 }
 
 /**
- * Draw a bottle. There is no definition to store: the silhouette follows the
- * type, so the drawing is a function of the row rather than a decision about it.
+ * Draw a bottle. No definition to store: the silhouette follows the type.
  *
- * DELIBERATELY WITHOUT THE LABEL PHOTOGRAPH. The library will happily put one
- * in, as an `<image href="/files/…">` inside the SVG — and `assertInertSvg`
- * refuses exactly that, because `<image>` and a non-fragment `href` are two of
- * the things it exists to keep out of `{@html}`. Passing the photograph here
- * therefore threw on every bottle that had one, `artOf` caught it, and the card
- * drew nothing at all.
+ * Deliberately without the label photograph — `assertInertSvg` refuses
+ * `<image>`/non-fragment `href`, so it must be overlaid as a plain `<img>`
+ * instead (see `BottleArt.svelte`, `bottleLabelBox`).
  *
- * The photograph goes over the top instead, as an ordinary `<img>` positioned
- * by `bottleLabelBox` — see `BottleArt.svelte`. That keeps the inert rule intact
- * rather than punching a hole in it for one feature, and an `<img>` outside the
- * SVG is a plain element the browser already knows how to size and cache.
- *
- * `idPrefix` is the row's own id, because the SVG defines gradients and clip
- * paths by id and a grid of twenty bottles on one page would otherwise have
- * twenty elements all called `bottle-1`.
+ * `idPrefix` is the row's own id, since the SVG defines gradients/clip paths
+ * by id and a grid of bottles would otherwise collide on the same ids.
  */
 export function bottleSvg(subject: BottleSubject, width = 400): string {
 	return renderBottle({
@@ -353,11 +285,9 @@ export function bottleSvg(subject: BottleSubject, width = 400): string {
 }
 
 /**
- * Where the label plate sits on a silhouette, as percentages of the drawing.
- *
- * The library gives the box in its own 400 × 160 viewBox; percentages are what
- * an overlay needs, because the SVG is drawn at whatever width the card is and
- * nothing else knows how many pixels that turned out to be.
+ * Where the label plate sits on a silhouette, as percentages of the drawing
+ * (the library's box is in its 400 × 160 viewBox; the overlay doesn't know
+ * the SVG's rendered pixel size).
  */
 export function bottleLabelBox(type: EnumValue<'bottle.type'>): {
 	left: string;

@@ -533,10 +533,9 @@ export const bottle = pgTable(
 		/**
 		 * Here from the first release although nothing scans yet.
 		 *
-		 * Add-bottle is typed in v0.9.0. When the camera arrives it needs
-		 * somewhere to look up "same as your Lagavulin from March", and adding
-		 * the column later would be a migration for a feature that was always
-		 * coming.
+		 * When the camera arrives it needs somewhere to look up "same as your
+		 * Lagavulin from March", and adding the column later would be a
+		 * migration for a feature that was always coming.
 		 */
 		barcode: text('barcode'),
 		drinkFrom: integer('drink_from'),
@@ -567,9 +566,8 @@ export const bottle = pgTable(
  * This is also what "opened this year" counts — a logged tasting, not a button
  * press, which is what the tile's own note says.
  *
- * Scores are out of 100. The brief asked for 100 and 10 both; the design
- * removed the toggle as redundant, and a column that holds either would make
- * every comparison ask which scale each row was on.
+ * Scores are out of 100 — one fixed scale, so a column that could hold either
+ * a /10 or a /100 score would make every comparison ask which scale it used.
  */
 export const tasting = pgTable(
 	'tasting',
@@ -694,10 +692,9 @@ CREATE UNIQUE INDEX visit_from_trip_unique
  * The Cellar, which every install has from the first minute.
  *
  * Seeded here rather than in the demo, because Collections cannot make its own
- * shelf: v0.9.0 ships one shelf type and the rail's "New shelf" is deliberately
- * disabled until books and records arrive. A household without this row gets a
- * screen with an empty rail and an Add bottle button that does nothing, which is
- * exactly what happened on the first real install.
+ * shelf: the rail's "New shelf" is deliberately disabled until books and
+ * records arrive. A household without this row gets an empty rail and an Add
+ * bottle button that does nothing.
  *
  * `ON CONFLICT (key) DO NOTHING`, like the document shelves: the row is keyed by
  * `cellar` and the household is free to rename it afterwards.

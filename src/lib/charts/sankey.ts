@@ -1,16 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // A multi-column Sankey, laid out in the pixels of the box it is given.
 //
-// The engine knows nothing about money. It takes a graph of nodes carrying a
-// column index and links carrying a value, and produces geometry. That is what
-// makes a fifth column, a split group, or a node kind that does not exist yet a
-// change to whoever builds the graph rather than to the layout maths — and it
-// is what lets this be tested on synthetic graphs instead of only on real cash
-// flow.
-//
-// Pure: no DOM, no framework. The invariants (nothing outside the box, ribbons
-// flush with their nodes, no label collisions, columns conserving their total)
-// are enforced by unit tests across a sweep of widths.
+// Pure geometry: no DOM, no framework, no knowledge of money. Invariants
+// (nothing outside the box, ribbons flush with their nodes, no label
+// collisions, columns conserving their total) are enforced by unit tests.
 
 interface SankeyNodeInput {
 	key: string;
@@ -19,23 +12,9 @@ interface SankeyNodeInput {
 	/** CSS custom property name of the node's colour. */
 	colorVar: string;
 	column: number;
-	/**
-	 * Whether the label carries the amount under the name.
-	 *
-	 * Set by whoever builds the graph, because it is a question about meaning
-	 * rather than geometry: on the cash-flow chart the income side is read as
-	 * figures and the spending side as names, since every spending figure is
-	 * already in the breakdown strip under the diagram.
-	 */
+	/** Whether the label carries the amount under the name. Set by the graph builder, not the engine. */
 	showValue?: boolean;
-	/**
-	 * Where this block leads, or null when it leads nowhere.
-	 *
-	 * The engine never reads it — where a band goes is a question about meaning,
-	 * not about geometry — but it travels through to the shaped node, so the
-	 * renderer can wrap a block in a link without holding the graph as well as
-	 * the layout.
-	 */
+	/** Where this block leads, or null when it leads nowhere. Passed through, not read, by the engine. */
 	href?: string | null;
 }
 
@@ -65,14 +44,7 @@ export interface SankeyNode extends SankeyNodeInput {
 export interface SankeyRibbon {
 	from: string;
 	to: string;
-	/**
-	 * The link's own figure, carried through.
-	 *
-	 * Thickness cannot be read back into an amount — it is the value times a
-	 * scale nothing outside this file sees — and a band's tooltip has to state
-	 * what flowed along it. Carrying it here spares the renderer holding the
-	 * graph as well as the layout to look the same number up twice.
-	 */
+	/** The link's own figure, carried through — thickness can't be read back into an amount. */
 	value: number;
 	/** Left edge: the far side of the source column's label channel. */
 	x0: number;
@@ -87,14 +59,7 @@ export interface SankeyRibbon {
 
 interface SankeyLabel {
 	key: string;
-	/**
-	 * Whether this name is drawn at all.
-	 *
-	 * A column shrinks its type to fit every one of its names before it drops
-	 * any (see planColumn). Only when a column still cannot fit them at the
-	 * smallest readable size do the smallest bands lose their label — and they
-	 * are still on hover and in the breakdown strip.
-	 */
+	/** Whether this name is drawn at all — a column shrinks type before it drops names (see planColumn). */
 	fits: boolean;
 	column: number;
 	label: string;
@@ -145,48 +110,24 @@ const PAD_X = 6;
 const PAD_Y = 3;
 /** Ribbons need a run long enough to read as a flow rather than a smear. */
 const MIN_RUN = 48;
-/**
- * The gap between an outer column's blocks and its names.
- *
- * It is there so a leader line has something to slope along. A band thinner than
- * its own name cannot keep that name level with itself once its neighbours want
- * the same rows, and a name pushed off its band with nothing joining the two
- * names nothing at all.
- */
+/** The gap between an outer column's blocks and its names, for a leader line to slope along. */
 const LEADER = 22;
 
 const labelHeight = (font: number, withValue: boolean) =>
 	Math.ceil(font * LINE) + (withValue ? Math.ceil(font * VALUE_RATIO * LINE) + 1 : 0) + PAD_Y * 2;
 
 /**
- * How wide a run of text will actually be.
- *
- * The engine is pure and has no DOM, so the caller supplies this. The renderer
- * passes a canvas measurer using the very faces the labels are drawn in, which
- * is the only version that is right on every machine: the fallback face a
- * browser uses before a webfont arrives is wider than the webfont, and Linux
- * and macOS do not fall back to the same one. An estimate cannot know any of
- * that, and a name laid out against an estimate that is beaten is a name cut in
- * half — first on a narrow viewport, then on somebody else's operating system.
+ * How wide a run of text will actually be. The engine is pure and has no DOM,
+ * so the caller supplies this — the renderer passes a canvas measurer using
+ * the actual faces, since browser fallback fonts before a webfont loads vary
+ * in width by OS.
  */
 export type MeasureText = (text: string, font: number, kind: 'name' | 'value') => number;
 
-/**
- * The fallback for callers with nothing to measure with — tests, and any layout
- * computed before the page exists. 0.62em per character is the measured average
- * for the UI face across the names this draws, rounded up rather than to the
- * mean.
- */
+/** Fallback for callers with nothing to measure with — tests, and pre-render layout. */
 export const estimateText: MeasureText = (text, font) => text.length * font * 0.62;
 
-/**
- * A stand-in for a formatted amount, for measuring only.
- *
- * Figures are drawn in the mono face, where every glyph is one width, so a run
- * of zeroes as long as the amount measures exactly as wide as the amount — and
- * the engine does not have to know how a currency is formatted to size a box
- * for it.
- */
+/** A stand-in for a formatted amount: mono glyphs are all one width, so a run of zeroes measures the same. */
 const valueSample = (value: number) => '0'.repeat(valueChars(value));
 
 /** How many characters a grouped amount with two decimals occupies. */
@@ -215,14 +156,9 @@ function labelWidth(
  * block on its members' mean preferred position, then settle the whole column
  * into the range the box allows.
  *
- * Pool-adjacent-violators, not sweep-until-stable. A block's position is the
- * mean of its members' *preferred* positions, so recomputing block membership
- * from the *moved* positions — as a repeated sweep does — lets two arrangements
- * swap forever and never settle. Merging only ever reduces the block count, so
- * this terminates in at most one merge per entry.
- *
- * Carried over from the waterfall engine it replaces; it is the piece that took
- * the most iterations to get right. Only the settle at the end is new.
+ * Pool-adjacent-violators, not sweep-until-stable: recomputing block
+ * membership from moved positions can let two arrangements swap forever.
+ * Merging only reduces the block count, so this terminates.
  */
 function relaxLabels(preferred: number[], minGap: number, minY: number, maxY: number): number[] {
 	const order = preferred.map((y, i) => ({ y, i })).sort((a, b) => a.y - b.y);
@@ -259,13 +195,9 @@ function relaxLabels(preferred: number[], minGap: number, minY: number, maxY: nu
 	}
 	const out = new Array<number>(preferred.length);
 
-	// A column with more names than the box has rows for cannot honour both ends
-	// at once, so it is stacked from the top and allowed to run off the bottom.
-	// That is the honest outcome: what falls off the bottom is the smallest bands'
-	// names, which `room` and `fits` above have already stopped drawing, whereas
-	// pushing the overflow off the TOP would lose names the column did have room
-	// for. The count is of gaps rather than of names — `maxY` is where the LAST
-	// name may start, so n names need n − 1 gaps below `minY` to fit.
+	// Overflow: stack from the top and let it run off the bottom, so the
+	// smallest bands' names (already dropped by `room`/`fits`) are the ones
+	// lost, not names pushed off the top that did have room.
 	if ((items.length - 1) * minGap > maxY - minY) {
 		items.forEach((item, k) => {
 			out[item] = minY + k * minGap;
@@ -273,22 +205,11 @@ function relaxLabels(preferred: number[], minGap: number, minY: number, maxY: nu
 		return out;
 	}
 
-	// Settle the column into the box with two ordered walks, rather than clamping
-	// each block on its own — which is what this replaces, and what drew one name
-	// on top of another. Clamping a block by itself put that block inside the box
-	// and did nothing else: a block whose natural place ran past `maxY` was pulled
-	// up to fit, and the block above it never heard about it. It had cleared the
-	// merge check against where the lower block used to be, not against where the
-	// clamp had just put it, so two blocks that did not collide before the clamp
-	// collided after it. The crowded foot of a column, where the thin bands are,
-	// is exactly where they sit close enough for that.
-	//
-	// The forward walk pushes each position down until it clears the one above;
-	// the backward walk pushes each up until it clears the one below. The second
-	// cannot undo the first, because it measures every position against a
-	// neighbour it has already settled. Both are single walks that never revisit
-	// an entry, so both terminate — the objection to sweep-until-stable above is
-	// about recomputing block membership and does not reach them.
+	// Settle with two ordered walks rather than clamping each block on its own,
+	// which could re-collide a block against a neighbour whose clamped position
+	// it never saw. Forward walk pushes each position down past the one above;
+	// backward walk pushes each up past the one below — neither revisits an
+	// entry, so both terminate.
 	for (let i = 0; i < tops.length; i++) {
 		tops[i] = Math.max(tops[i], i === 0 ? minY : tops[i - 1] + minGap);
 	}
@@ -301,14 +222,7 @@ function relaxLabels(preferred: number[], minGap: number, minY: number, maxY: nu
 	return out;
 }
 
-/**
- * How far along the run the Bézier control points sit.
- *
- * A third, which is what Highcharts uses. The engine this replaces put both at
- * the midpoint — the steepest middle a cubic can have, and the reason a dozen
- * parallel bands smeared into each other. A third holds each band flat as it
- * leaves its block and turns once, so neighbours stay distinguishable.
- */
+/** How far along the run the Bézier control points sit — a third holds each band flat leaving its block. */
 const CURVE = 0.33;
 
 function ribbonPath(x0: number, y0: number, x1: number, y1: number, thickness: number): string {
@@ -334,11 +248,8 @@ interface ColumnPlan {
 
 /**
  * Choose one type size for a column: the largest at which every one of its
- * names fits the height, down to a readable floor.
- *
- * Per column rather than per chart, because the columns are not alike — four
- * income sources and twenty-five leaves want different sizes, and sizing the
- * whole chart for its most crowded column would shrink the names that had room.
+ * names fits the height, down to a readable floor. Per column rather than per
+ * chart, so a crowded column doesn't shrink names in columns that had room.
  */
 function planColumn(nodes: SankeyNodeInput[], boxHeight: number, measure: MeasureText): ColumnPlan {
 	const withValue = nodes.some((n) => n.showValue);
@@ -383,18 +294,10 @@ export function buildSankey(
 
 	// Margins, and where a name can go without lying on the flow.
 	//
-	// At a node's right edge its outgoing ribbons cover its height exactly — they
-	// sum to its value — so on a MIDDLE column there is no free space beside a
-	// band at all: not to its right, where its own ribbons leave, and not to its
-	// left, where its parents' arrive. Only two places on the whole diagram carry
-	// no ribbons: outside the first column, and outside the last.
-	//
-	// Holding the ribbons back to open a channel for the middle names did work,
-	// and it cost more than it bought: every band then started in mid-air, a
-	// hand's width clear of the block it came out of. So the ribbons are flush
-	// again. The outer columns write into their margins, and the middle ones
-	// write over their own flow on a plate — which is what the printed diagrams
-	// this is modelled on do too.
+	// A middle column has no free space beside a band — ribbons cover its height
+	// on both sides. Only outside the first and last columns is there space with
+	// no ribbons. So outer columns write into their margins; middle columns
+	// write over their own flow on a plate.
 	const plans = new Map<number, ColumnPlan>();
 	for (const column of columns) {
 		plans.set(
@@ -457,10 +360,9 @@ export function buildSankey(
 					(box.width - margin(first) - margin(last) - columns.length * NODE_W) / runs
 				);
 
-	// A middle column writes inside the run its own ribbons occupy, so what bounds
-	// its names is the run rather than a margin. Half of it was the first guess and
-	// cut "Food & lifestyle" in half on a tablet; they get all of it bar a gap
-	// before the next column's blocks, and shrink their type if even that is short.
+	// A middle column writes inside the run its own ribbons occupy: it gets
+	// nearly all of it (minus a gap before the next column), shrinking type
+	// if still short.
 	const roomInRun = Math.max(0, run - PAD_X * 3);
 	for (const [column, plan] of plans) {
 		if (outer(column) || plan.lane <= roomInRun || plan.lane <= 0) continue;
@@ -483,20 +385,11 @@ export function buildSankey(
 		cursor += NODE_W + (column === last ? 0 : run);
 	}
 
-	// Ordering: alternating barycentre sweeps over INDICES.
-	//
-	// This has been wrong twice, in ways worth recording. It first claimed "two
-	// median sweeps" and did one forward pass. The pass was then written to order
-	// each column by its parents' mean POSITION — reading `placed`, which is not
-	// filled until the placement loop below, so it read an empty map, returned
-	// null for every node, and silently degraded to "sort by value". The backward
-	// sweep was doing all the work, from a seed that ignored the graph.
-	//
-	// Sweeps therefore run on each other's output, not on geometry that does not
-	// exist yet: seed by value, then alternate — order each column by where its
-	// parents sit, then by where its children sit — until it settles. Barycentre
-	// ordering is not guaranteed optimal, but it converges quickly and is
-	// deterministic, so the same graph always draws the same picture.
+	// Ordering: alternating barycentre sweeps over INDICES, not positions —
+	// `placed` isn't filled until the placement loop below, so sweeps must run
+	// on each other's output (index order), not on geometry that doesn't exist
+	// yet. Seed by value, then alternate parent/child order until it settles.
+	// Not guaranteed optimal, but converges quickly and deterministically.
 	const placed = new Map<string, SankeyNode>();
 	const order = new Map<number, string[]>();
 	for (const column of columns) {
@@ -564,12 +457,9 @@ export function buildSankey(
 	}
 
 	// Ribbons leave their source stacked in TARGET order and arrive stacked in
-	// SOURCE order, so bands do not cross themselves within a node.
-	//
-	// That needs two passes, which is what was missing: the single sorted list
-	// below fed both cursors, so a ribbon's arrival offset was assigned in target
-	// order too and every node's incoming bands were stacked by where they were
-	// going rather than where they came from.
+	// SOURCE order, so bands do not cross themselves within a node. Needs two
+	// separate passes/cursors — one sorted list for both would stack incoming
+	// bands by where they're going rather than where they came from.
 	const outCursor = new Map<string, number>();
 	const inCursor = new Map<string, number>();
 	const columnOf = (key: string) => placed.get(key)?.column ?? 0;
@@ -681,8 +571,6 @@ export function buildSankey(
 				fits:
 					named.has(node.key) &&
 					labelWidth(node.label, node.value, !!node.showValue, font, measure) <= width + 0.5,
-				// Only a middle column writes over the flow, so only it needs the
-				// plate that lifts text off a saturated band.
 				plate: !outside,
 				colorVar: node.colorVar,
 				x,
@@ -710,17 +598,12 @@ export function buildSankey(
 }
 
 /**
- * Every band on the same path as one block, in both directions.
+ * Every band on the same path as one block, in both directions — upstream to
+ * the sources that feed it, downstream to the leaves it ends in.
  *
- * Lighting only the bands that TOUCH the block under the pointer answers half
- * the question: standing on "Bills" it showed the money arriving and the money
- * leaving, but not which salary it arrived from two columns to the left. A
- * Sankey is read as a route, so the whole route lights — upstream to the
- * sources that feed the block, downstream to the leaves it ends in.
- *
- * Two breadth-first walks over the link list rather than a graph structure: at
- * this size (tens of links) the cost is nothing, and a second representation
- * of the same edges is a second thing to keep in step with the layout.
+ * Two breadth-first walks over the link list rather than a graph structure:
+ * at this size the cost is nothing, and avoids a second edge representation
+ * to keep in sync with the layout.
  */
 export function pathRibbons(ribbons: readonly SankeyRibbon[], key: string | null): Set<number> {
 	const lit = new Set<number>();
@@ -753,12 +636,8 @@ export function pathRibbons(ribbons: readonly SankeyRibbon[], key: string | null
 
 /**
  * The whole route through a ribbon: everything upstream of where it starts and
- * everything downstream of where it ends, plus the band itself.
- *
- * Standing on a band used to light that band alone — the finer answer, but
- * the one nobody was asking: a reader who points at the flow between
- * "Housing" and "Mortgage" wants to see which salary it came out of, the same
- * as when they point at "Housing" itself. Both ends' paths, unioned.
+ * everything downstream of where it ends, plus the band itself — both ends'
+ * paths, unioned.
  */
 export function ribbonRoute(ribbons: readonly SankeyRibbon[], index: number | null): Set<number> {
 	if (index === null || index < 0 || index >= ribbons.length) return new Set();

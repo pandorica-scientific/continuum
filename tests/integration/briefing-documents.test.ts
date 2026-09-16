@@ -12,8 +12,7 @@ import { makeDocument, makeLoan, makeProperty } from './fixtures';
  * document is about.
  *
  * The briefing sources read the module-level `db` singleton rather than a
- * handle they are given, so this suite points that singleton at the harness the
- * way `deadlines.test.ts` and `archive-scope.test.ts` do.
+ * handle they are given, so this suite points that singleton at the harness.
  */
 vi.mock('$env/dynamic/private', () => ({
 	env: new Proxy({} as Record<string, string | undefined>, {
@@ -152,9 +151,7 @@ describe('extraction failures', () => {
 });
 
 describe('a document’s about line', () => {
-	// Person and property were the only two kinds the line could name, so a
-	// lease filed against the tenancy it is the contract for read "Filed under
-	// Tenancy." and stopped — the registry knows all nine.
+	// The registry names all nine kinds, not just person and property.
 	it('names a tenancy and a loan', async () => {
 		const propertyId = uuidv7();
 		await makeProperty(testDb, { id: propertyId, name: 'Flat Karlín', kind: 'rented' });
@@ -169,8 +166,7 @@ describe('a document’s about line', () => {
 		await makeLoan(testDb, {
 			id: loanId,
 			name: 'Mortgage ČS',
-			// Floating and so never a fixation reminder of its own, which keeps
-			// this about D7's neighbours rather than about D7.
+			// Floating, so never a fixation reminder of its own.
 			regime: 'floating',
 			principalMinor: 9_900_000n,
 			owedMinor: 9_270_000n

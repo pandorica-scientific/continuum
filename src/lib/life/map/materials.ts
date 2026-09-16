@@ -2,25 +2,13 @@
 /**
  * THE COLOUR-LITERAL EXEMPTION, AND THE ONLY ONE IN THIS PRODUCT.
  *
- * Everywhere else a colour is a token, because everywhere else a colour is
- * SEMANTIC: red means a problem, `--rose` means the Life area, and both have to
- * change when the theme does. These are not semantic. They are physical
- * materials — the gold foil on a scratch map, the shavings that come off it,
- * the paper underneath — and a material does not change colour because somebody
- * switched to the light theme. Gold foil is gold in a dark room.
- *
- * So they are hexes, they are identical in both themes, and they live in this
- * one file so the next person to find a hex in a diff can tell in one step
- * whether it is the one that is allowed. See docs/ui-guidelines.md.
+ * Everywhere else a colour is a token because it's semantic and must change
+ * with the theme. These are physical materials — gold foil, shavings, paper —
+ * that don't change colour with the theme, so they're hexes, kept in this one
+ * file. See docs/ui-guidelines.md.
  */
 
-/**
- * The foil itself, as a five-stop gradient.
- *
- * Five rather than two because two reads as a flat tint: real foil catches the
- * light unevenly, and it is the unevenness that makes it look like something
- * to scratch rather than a beige country.
- */
+/** The foil itself, a five-stop gradient — two stops would read as a flat tint. */
 export const FOIL = ['#c6a75c', '#b99a4d', '#cfb26b', '#b3944a', '#c2a457'] as const;
 
 /** What comes off it. Used by the residue when a region is scratched. */
@@ -33,25 +21,16 @@ export const LABEL_PAPER = '#efe9db';
 export const SCUFF_DARK = 'rgba(52, 41, 10, 0.22)';
 export const SCUFF_LIGHT = 'rgba(255, 246, 214, 0.3)';
 
-/**
- * The ink a country name is printed in while it is still under foil.
- *
- * Dark, because the foil is light in both themes — a white label on gold is
- * unreadable, and `--fg1` is white in the dark theme. This is part of the
- * material for the same reason the foil is.
- */
+/** The ink a country name is printed in under foil — dark, since foil is light in both themes. */
 export const FOIL_INK = '#3c3011';
 
 /** The border between two countries that are both still covered. */
 export const FOIL_EDGE = 'rgba(48, 38, 8, 0.55)';
 
 /**
- * A country name printed over a SCRATCHED country, and its halo.
- *
- * White, absolutely: a scratched country wears one of nineteen series colours,
- * and `--fg1` is white in one theme and near-black in the other — which would
- * put black text on a dark green Brazil half the time. The halo is dark for the
- * same reason. Both are the prototype's own values.
+ * A country name printed over a SCRATCHED country, and its halo. White,
+ * absolutely — `--fg1` is near-black in one theme, which would put black
+ * text on a dark green country half the time.
  */
 export const SCRATCHED_INK = '#ffffff';
 export const SCRATCHED_HALO =

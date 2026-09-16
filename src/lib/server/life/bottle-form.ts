@@ -61,9 +61,9 @@ export function bottleFrom(
 		.trim()
 		.toUpperCase();
 
-	// The currency comes back through the form so a bottle bought abroad keeps
-	// what it was paid for in. An unrecognised code is dropped along with the
-	// price rather than stored: a number with no currency is not an amount.
+	// Kept so a bottle bought abroad keeps its original currency. An
+	// unrecognised code is dropped along with the price: a number with no
+	// currency is not an amount.
 	const currency = String(form.get('boughtCurrency') ?? '')
 		.trim()
 		.toUpperCase();

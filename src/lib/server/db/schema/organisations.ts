@@ -135,11 +135,9 @@ export const lane = pgTable(
 		 * subject — through the entity supertype, exactly as `document_link` points
 		 * at its target.
 		 *
-		 * It was `organisation_id` in v0.7.7, because Income & Tax was the only
-		 * shelf drawing lanes. Property's inspections and a car's road tax are the
-		 * same shape, so the column names the supertype instead and the kind is
-		 * read from `entity` where anything needs it. Nothing else about a lane
-		 * changed.
+		 * Named after the supertype rather than `organisation_id`, since
+		 * property inspections and a car's road tax are the same shape; the
+		 * kind is read from `entity` where anything needs it.
 		 */
 		entityId: uuid('entity_id')
 			.notNull()

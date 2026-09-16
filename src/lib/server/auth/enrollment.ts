@@ -42,15 +42,8 @@ export async function createEnrollmentToken(personId: string): Promise<{ raw: st
 	const raw = randomBytes(32).toString('base64url');
 	const id = hashToken(raw);
 	const expiresAt = new Date(Date.now() + enrollmentLinkDays() * 24 * 60 * 60 * 1000);
-	// One live link per person: reissuing invalidates the previous one.
-	//
-	// A DELETE followed by an INSERT only looked like it enforced that. Nothing
-	// in the table stopped two rows for one person, so two administrators — or
-	// one double-clicked "New link" — both deleted, then both inserted, and two
-	// independent links were spendable at once. The older URL, quite possibly the
-	// one that went to the wrong address, kept working. This is a single
-	// statement against a unique person_id: the second writer overwrites the
-	// first, and the invariant is the database's to keep rather than a comment's.
+	// One live link per person: a single upsert against a unique person_id, so
+	// reissuing invalidates the previous one even under concurrent requests.
 	await db
 		.insert(enrollmentToken)
 		.values({ id, personId, expiresAt })
@@ -80,12 +73,9 @@ export async function lookupEnrollmentToken(
 /**
  * Marks the token used and returns its person, or null when it was not valid.
  *
- * Every condition lives in the UPDATE's own predicate. Two simultaneous
- * submissions therefore cannot both succeed, and — the reason expiry is checked
- * here rather than on the returned row — submitting an expired link no longer
- * stamps `usedAt` on it on the way to being rejected. That would have flipped
- * its status from `expired` to `used`, the one distinction enrollmentStatus
- * draws, on a route any unauthenticated visitor can reach.
+ * Every condition lives in the UPDATE's own predicate so two simultaneous
+ * submissions cannot both succeed, and an expired link is never stamped
+ * `usedAt` on its way to being rejected.
  */
 async function consumeEnrollmentToken(
 	raw: string,

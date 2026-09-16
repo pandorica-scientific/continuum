@@ -3,14 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { monthlyCells, onceCell, yearlyCells } from '$lib/documents/dossier-cells';
 import { coverageRow } from '$lib/statements/coverage';
 
-/**
- * A lane's cells, which are the coverage ribbon's rules with a window in place
- * of a month.
- *
- * The arithmetic is here rather than in the loader because it is the part with
- * edge cases — a two-year window that has ended, a card whose relationship
- * began mid-window — and none of those need a database to state.
- */
 describe('dossier cells', () => {
 	it('a yearly lane draws one cell per year between first evidence and now', () => {
 		const cells = yearlyCells({

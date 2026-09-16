@@ -5,14 +5,8 @@ import { describe, expect, it } from 'vitest';
 import { SYSTEM_SHELF_KEYS } from '$lib/documents/shelves';
 import { SHELF_SEED_ROWS } from '$lib/server/db/schema/documents';
 
-/**
- * The four shelves the application writes to by name, in one place.
- *
- * They used to be spelled at each writer: `'finance'` in the salary tracker and
- * again in the tax module, `'statements'` in the importer and again in the
- * broker reader. Renaming `finance` to `income_tax` in v0.8.0 is what made that
- * expensive, and the registry is what makes the next rename a one-line change.
- */
+// The four shelves the application writes to by name, kept in one registry so
+// a rename is a one-line change instead of one at every writer.
 describe('the written-to shelf keys', () => {
 	it('are four, and each is seeded as a system shelf', () => {
 		const seeded = new Map(SHELF_SEED_ROWS.map((s) => [s.key, s]));
@@ -27,13 +21,9 @@ describe('the written-to shelf keys', () => {
 	});
 
 	it('no writer spells a shelf key', () => {
-		// The literal, not the registry constant. `shelfIdByKey(SYSTEM_SHELF_KEYS.inbox)`
-		// passes; `shelfIdByKey('inbox')` is what this exists to catch.
-		//
-		// The demo seed is exempt and named here rather than skipped silently: it
-		// is a fixture that files onto shelves it is inventing content for, and
-		// the keys it spells are the ones a household may rename or remove. A
-		// writer doing that would be the defect; a demo doing it is the demo.
+		// Catches the literal, e.g. `shelfIdByKey('inbox')`; the registry constant
+		// form passes. The demo seed is exempt: it invents content for shelves a
+		// household may rename or remove, so spelling the key there is expected.
 		const hits = execSync(
 			`grep -rnE "shelfIdByKey\\('|systemShelfId\\('" src/lib/server src/routes || true`,
 			{ encoding: 'utf8' }

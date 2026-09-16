@@ -71,10 +71,10 @@ const EMPTY: PayslipReading = {
 	candidates: []
 };
 
-// Values written before v0.5.2 are a bare string: one wording per person, which
-// is what made a second employer wipe the first. Read as a one-item list and
-// rewritten as a list by the next correction — no migration, because a person
-// with one job has nothing to migrate.
+// Older stored values are a bare string: one wording per person, which is what
+// made a second employer wipe the first. Read as a one-item list and rewritten
+// as a list by the next correction — no migration, because a person with one
+// job has nothing to migrate.
 function asLists(stored: Record<string, string | string[]>): Record<string, string[]> {
 	return Object.fromEntries(
 		Object.entries(stored).map(([key, value]) => [key, learnedList(value)])
@@ -84,16 +84,16 @@ function asLists(stored: Record<string, string | string[]>): Record<string, stri
 /**
  * Gross and net labels are learned under their OWN keys.
  *
- * One shared key was the v0.4.5 arrangement, and with the reader preferring net
- * wordings it meant a person's learned label was always a net one — while
- * everything downstream filed what it found as gross.
+ * A shared key, with the reader preferring net wordings, meant a person's
+ * learned label was always a net one — while everything downstream filed
+ * what it found as gross.
  */
 async function learnedGrossLabels(): Promise<Record<string, string[]>> {
 	return asLists(await getSetting<Record<string, string | string[]>>('payslipGrossLabels', {}));
 }
 
 /**
- * Net labels, seeded from the pre-v0.4.6 `payslipLabels`.
+ * Net labels, seeded from the legacy `payslipLabels`.
  *
  * That key's values are net wordings — `pickAmount` ranked by NET_PAY_KEYWORDS —
  * so carrying them over as net is the truthful reading of what was learned.
@@ -122,8 +122,8 @@ async function learnedBonusLabels(handle: Db = db): Promise<Record<string, strin
 		{},
 		handle
 	);
-	// Values written before v0.4.6 are a bare string. Read, never rewritten:
-	// the next correction replaces the entry with a list anyway.
+	// Older stored values are a bare string. Read, never rewritten: the next
+	// correction replaces the entry with a list anyway.
 	return asLists(stored);
 }
 
@@ -272,9 +272,9 @@ export async function learnNetLabel(
 /**
  * The user stated the bonus; remember every label that adds up to it.
  *
- * Matching a single candidate on equality was the v0.4.5 contract, and it meant
- * a two-line bonus could never be learned — which is most of the months a
- * person would bother correcting.
+ * Matching only a single candidate on equality would mean a two-line bonus
+ * could never be learned — which is most of the months a person would
+ * bother correcting.
  */
 export async function learnBonusLabel(
 	subject: string,

@@ -64,8 +64,7 @@ function entryDate(mmdd: string, valueIso: string): string | undefined {
 	// across a year boundary, which runs BOTH ways: a December entry against a
 	// January value date belongs to the year before, and a January entry against
 	// a December value date (a payment valued on the 31st, booked after the New
-	// Year holiday) belongs to the year after. Only the first was handled, so
-	// the second filed the movement a full year in the past.
+	// Year holiday) belongs to the year after.
 	const year =
 		valueMonth === 1 && month === 12
 			? valueYear - 1

@@ -1,13 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * The horizontal band every chart in this folder draws into, and how a
- * categorical series is spread across it.
- *
- * Three geometry modules had their own copy of this — the same two constants
- * and the same four-line function, byte for byte — which is three places for the
- * gutter to be widened in two of them. The charts share an axis gutter by
- * design: a tax chart and a cash-flow chart stacked on one screen with different
- * left margins reads as a rendering fault, not as a choice.
+ * categorical series is spread across it. Shared so every chart uses the
+ * same axis gutter — different left margins across stacked charts would
+ * read as a rendering fault.
  */
 
 /** The viewBox width every chart here draws into. */

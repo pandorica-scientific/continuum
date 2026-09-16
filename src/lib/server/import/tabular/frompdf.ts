@@ -19,14 +19,10 @@
  *     works by deciding which lines start a movement, and Raiffeisenbank's three
  *     physical lines per movement, or Česká spořitelna's two to five, give that
  *     question no usable answer: their continuation lines carry dates and
- *     figures too.
- *
- *     That was once recorded here as a structural boundary. It is not one.
- *     `rhythm.ts` assembles those layouts correctly by asking what the page's
- *     record BEAT is and never classifying a line at all, and both readers are
- *     now offered as candidates for the proof engine to choose between. Neither
- *     dominates: this one reads a 140-row statement the other fragments, and the
- *     other reads four banks this one cannot.
+ *     figures too. `rhythm.ts` assembles those layouts correctly instead, by
+ *     asking what the page's record BEAT is rather than classifying a line, and
+ *     both readers are offered as candidates for the proof engine to choose
+ *     between — neither dominates.
  */
 import { isDateLike } from './determinacy';
 import { looksLikeSummary } from './vocabulary';
@@ -36,12 +32,9 @@ import type { Grid, RawCell } from './grid';
 /**
  * How close two cells must start to share a column, in PDF points.
  *
- * Fixed, not relative to the page width. A width-relative tolerance was tried
- * so the same code could read pixel coordinates from a photograph — and it
- * broke a statement that had been reading correctly, while another started
- * working, so the count of passing files stayed the same and hid it. It was
- * never needed: the OCR reader scales its coordinates back into PDF points
- * before handing them over, so both paths speak these units.
+ * Fixed, not relative to the page width — the OCR reader scales its
+ * coordinates back into PDF points before handing them over, so both paths
+ * speak these units and a width-relative tolerance is not needed.
  */
 const COLUMN_TOLERANCE = 12;
 /** A gap wider than this between glyph runs means separate cells, not a number. */
@@ -57,8 +50,7 @@ const CURRENCY_ONLY = /^[€$£¥]|^[A-Z]{3}$/;
  *
  * Only joins when the left part is a number that does NOT already carry a
  * decimal — `-1` + `000,00` is one amount, while `300,00` + `377,93` is two
- * columns. Getting this backwards fused the amount and balance columns of four
- * of five rows when it was first written.
+ * columns.
  */
 export function joinSplitNumbers(
 	cells: string[],
@@ -121,24 +113,15 @@ const anchorOf = (text: string, x: number, end: number): number =>
 /**
  * Column anchors shared by enough lines to be a column rather than a stray.
  *
- * Sizing this threshold from the record lines instead of the whole page was
- * tried — a statement is mostly not its table, so a page with 41 lines and 5
- * movements rejects the amount column as a stray. It read fewer statements,
- * not more, and is left here as a note rather than a change.
- *
- * Recurrence is counted over the RECORD lines, not the whole page. A statement
- * is mostly not its table: an mBank page has 41 lines and 5 movements, so the
- * amount and balance columns appear on 12% of lines and a whole-page threshold
- * rejects them as strays. Their cells then collapse into the nearest surviving
- * column — amount, balance and currency fused into one — and the table becomes
- * unreadable. Any statement with a long header and a quiet month has this
- * shape, so it is not an edge case.
+ * Recurrence is counted over the RECORD lines, not the whole page: a statement
+ * is mostly not its table. An mBank page has 41 lines and 5 movements, so the
+ * amount and balance columns appear on 12% of lines, and a whole-page threshold
+ * would reject them as strays and fuse them into the nearest surviving column.
  */
 function findColumns(lines: { cells: string[]; xs: number[]; xEnds: number[] }[]): number[] {
 	// Positions come from EVERY line, so the header's columns are represented —
 	// they name the roles, and a table clustered only from its data rows leaves
 	// the header landing between columns.
-	//
 	const tally = new Map<number, number>();
 	for (const line of lines) {
 		for (const [i, cell] of line.cells.entries()) {
@@ -158,10 +141,9 @@ function findColumns(lines: { cells: string[]; xs: number[]; xEnds: number[] }[]
 /**
  * Which column a cell belongs to: nearest anchor wins.
  *
- * Span-overlap assignment was tried instead, so that a left-aligned header and
- * its right-aligned figures would both land in the same column. It read fewer
- * statements, not more — a wide description cell overlaps several columns and
- * claims the wrong one. Nearest-anchor is cruder and measures better.
+ * Span-overlap assignment (matching a left-aligned header to its right-aligned
+ * figures by overlap) reads fewer statements, not more: a wide description
+ * cell overlaps several columns and claims the wrong one.
  */
 const columnOf = (x: number, columns: number[]): number => {
 	let best = 0;
@@ -248,12 +230,9 @@ function assembleRecords(
 			previous.cells.push(...line.cells);
 			previous.xs.push(...line.xs);
 			previous.xEnds.push(...line.xEnds);
-			// The window measures the gap to the line just absorbed, not to the
-			// one that opened the record. Leaving `y` at the record's start capped
-			// every record at three pitches from its first line however many lines
-			// it actually had — so a movement printed over four or five of them,
-			// which is ordinary for the banks that keep hand-written parsers, lost
-			// its tail to a record of its own.
+			// The window measures the gap to the line just absorbed, not to the one
+			// that opened the record, so a movement printed over several lines
+			// doesn't lose its tail once it exceeds three pitches from the start.
 			previous.y = line.y;
 			continue;
 		}
@@ -358,14 +337,11 @@ export function gridsFromPdfLines(lines: PdfLine[]): Grid[] {
  * Join pages that are the same table continued.
  *
  * A statement runs across pages and its movements do not restart on each one.
- * Reading pages separately and keeping the best of them imported 20 movements
- * from an eight-page statement — and because that statement prints no opening
- * balance, the 20 formed a perfectly closing chain and would have been filed as
- * complete. A partial import that proves itself is the worst outcome this
- * system can produce.
- *
- * Pages join when they have the same number of columns in the same places. A
- * page whose columns differ is a different table and stays separate.
+ * Reading pages separately and keeping the best of them can produce a partial
+ * reading that still closes its own chain and proves itself complete — the
+ * worst outcome this system can produce. Pages join when they have the same
+ * number of columns in the same places; a page whose columns differ is a
+ * different table and stays separate.
  */
 /**
  * Drop the header a continued page repeats before its table resumes.

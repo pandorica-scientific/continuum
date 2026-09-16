@@ -36,9 +36,7 @@ describe('csvLines', () => {
 	});
 
 	it('a stray quote mid-field does not swallow the rest of the file', () => {
-		// An inch mark in a card description is ordinary text, not syntax.
-		// Toggling on any quote turned this four-record file into two and
-		// silently dropped every movement after the stray quote.
+		// Guards against an inch mark being treated as CSV syntax and merging records.
 		const doc =
 			'date;desc;amount\n' +
 			'2026-01-01;NAKUP 27" MONITOR;-100\n' +
@@ -70,11 +68,8 @@ describe('a wrapped payment note does not drop the transaction', () => {
 
 	it('parses the same rows with and without a newline inside a quoted field', () => {
 		const baseline = parseFio(raw);
-		// "Zpráva pro příjemce" is free text the payer types; Fio quotes it, and
-		// a wrapped one arrives with a real line break inside the quotes. Split
-		// on every newline, both halves failed the column-count guard and the
-		// row vanished with no error — while the rows after it still
-		// fingerprinted cleanly, so nothing downstream noticed the gap.
+		// Guards against a quoted note with an embedded newline splitting into
+		// two malformed rows that silently vanish.
 		expect(raw).toContain('"Peněž. pomoc"');
 		const wrapped = parseFio(raw.replace('"Peněž. pomoc"', '"Peněž.\npomoc"'));
 

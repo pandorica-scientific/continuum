@@ -1,16 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * What the whole salary record adds up to, before any of it is broken down.
+ * Feeds `SalarySummaryBand.svelte` with its labels and notes verbatim.
+ * Unlike the tax band this one answers to the person filter beneath it:
+ * "what has Robert earned" and "what has the household earned" are different
+ * questions, whereas a tax year's total is the same figure whoever filed it.
  *
- * The figures `SalarySummaryBand.svelte` drew, as data, with its labels and
- * notes verbatim. Unlike the tax band this one ANSWERS to the person filter
- * beneath it: "what has Robert earned" and "what has the household earned" are
- * different questions and both are worth asking, whereas a tax year's total is
- * the same figure whoever filed it.
- *
- * Gross leads every figure and net sits in the note beneath it. v0.4.4 exists
- * because the two were being confused for each other; a headline that did not
- * say which it was would be the same defect wearing a new coat.
+ * Gross leads every figure and net sits in the note beneath it — a headline
+ * that didn't say which it was would confuse the two.
  */
 import type { Tile } from '$lib/components/tiles';
 import { displayCurrency, formatMinor } from '$lib/money';
@@ -25,6 +22,8 @@ export interface SerialisedSalaryYear {
 	baseTotalMinor: string;
 	bonusTotalMinor: string;
 	netTotalMinor: string;
+	equityTotalMinor: string;
+	equityOnPayslipMinor: string;
 	grossMonths: number;
 	netMonths: number;
 	netComplete: boolean;
@@ -81,6 +80,24 @@ export function salarySummaryTiles(
 	/** `⚠` where a year's net is short of its gross months. */
 	const incomplete = latest && !latest.netComplete ? '⚠ ' : '';
 
+	// Shares that vested in the latest year, at the close on each vest day.
+	// Its own tile rather than a line under gross: a grant is compensation,
+	// and it is not salary — folding it into either average would misstate both.
+	const latestEquity = latest ? BigInt(latest.equityTotalMinor) : 0n;
+	const latestOnPayslip = latest ? BigInt(latest.equityOnPayslipMinor) : 0n;
+	const equity: Tile = {
+		wash: 'purple',
+		label: latest ? `Equity vested · ${latest.year}` : 'Equity vested',
+		value: latestEquity > 0n ? money(latestEquity) : '—',
+		unit: latestEquity > 0n ? symbol : undefined,
+		note:
+			latestEquity > 0n
+				? latestOnPayslip > 0n
+					? `${money(latestOnPayslip)} of it on payslips`
+					: 'at the close on each vest day'
+				: 'no grant vested'
+	};
+
 	const earned: Tile = {
 		wash: 'teal',
 		label: empty ? 'Earned' : `Earned since ${rows[0].year}`,
@@ -107,7 +124,8 @@ export function salarySummaryTiles(
 				value: money(latest?.gross ?? null),
 				unit: latest ? symbol : undefined,
 				note: latest ? `${incomplete}gross · ${money(latest.net)} net` : 'no year on record'
-			}
+			},
+			equity
 		];
 	}
 
@@ -140,6 +158,7 @@ export function salarySummaryTiles(
 			value: money(latestAvgGross),
 			unit: latestAvgGross === null ? undefined : symbol,
 			note: latest ? `${incomplete}gross · ${money(latestAvgNet)} net` : 'no month on record'
-		}
+		},
+		equity
 	];
 }

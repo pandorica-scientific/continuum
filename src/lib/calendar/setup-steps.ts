@@ -26,8 +26,7 @@ export const SETUP_GUIDES: Record<string, SetupGuide> = {
 			'Your normal Apple ID password will not work — iCloud only accepts an app-specific password for calendar access.'
 	},
 
-	// Rewritten from a setup that actually worked, in the order it worked in.
-	// Every line here corresponds to something that went wrong first.
+	// Steps kept in the exact order a real setup succeeded in.
 	google: {
 		steps: [
 			'console.cloud.google.com → create a project. Free, no billing.',

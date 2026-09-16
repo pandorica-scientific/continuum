@@ -8,22 +8,15 @@ import { deletePendingGoogleAccounts } from '$lib/server/calendar/sync';
 import type { RequestHandler } from './$types';
 
 /**
- * Where Google sends the browser back to.
- *
- * The half-finished account row created when the flow started is waiting with
- * the client id, the client secret and the hash of the state nonce. This
- * completes it or removes it — a row with no refresh token can never sync, so
- * leaving one behind would put a permanently broken account in the list.
+ * Where Google sends the browser back to. Completes the pending account row
+ * or removes it — a row with no refresh token can never sync.
  */
 export const GET: RequestHandler = async ({ url, locals }) => {
 	// Guarded like everything else under (app): the callback writes a credential.
 	if (locals.person?.role !== 'admin') redirect(303, '/settings');
 
-	// A declaration returning `never`, so TypeScript knows the calls below do not
-	// return — redirect() throws. Written as an annotated arrow it needed a `!`
-	// after every use, and the day this stopped throwing nothing would have said
-	// so; the narrowing only applies to a declaration or an explicitly typed
-	// binding, so this shape is load-bearing rather than stylistic.
+	// Must stay a `function` declaration (not an arrow) for TypeScript to treat
+	// its `never` return as narrowing control flow after redirect() throws.
 	function back(message: string): never {
 		redirect(303, `/settings?calendar=${encodeURIComponent(message)}`);
 	}
@@ -32,13 +25,9 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	const state = url.searchParams.get('state');
 	const error = url.searchParams.get('error');
 
-	// Any refusal from Google, not only Cancel: consent_required, invalid_scope
-	// and the rest all end the flow, and reporting them as "an incomplete answer"
-	// sent people looking for a fault in their URL.
-	//
-	// Only the half-finished row is removed. This used to delete EVERY Google
-	// account, so pressing Cancel on a second authorisation destroyed the working
-	// first one, cascading away its sync links and conflict history.
+	// Any refusal from Google, not only Cancel, ends the flow. Only the
+	// half-finished row is removed — deleting every Google account would break
+	// a working one when a second authorisation is cancelled.
 	if (error) {
 		await deletePendingGoogleAccounts();
 		back(error === 'access_denied' ? 'Authorisation cancelled.' : `Google refused: ${error}.`);

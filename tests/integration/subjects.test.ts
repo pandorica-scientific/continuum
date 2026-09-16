@@ -1,14 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * Subjects get a writer.
- *
- * The whole archive-scope subsystem — the predicate, the "Include archived
- * subjects" toggle, the honesty counts, the briefing and calendar demotion —
- * has existed and been tested since v0.7.0, and nothing in the application
- * ever wrote `archived_at`. This suite is that missing half: the module the
- * rail calls, and the proof that what it writes is what the predicate already
- * reads. Nothing here re-tests the predicate itself; `archive-scope` holds its
- * truth table.
+ * Subjects get a writer: the module the rail calls, and proof that what it
+ * writes is what the archive-scope predicate reads. `archive-scope` holds
+ * the predicate's own truth table; this suite does not re-test it.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
@@ -121,10 +115,8 @@ async function postAction(action: string, fields: Record<string, string>, locals
 
 describe('the subjects list', () => {
 	it('seeds no subject at all, because a subject now belongs to a shelf', async () => {
-		// v0.7.x seeded a catch-all "Household" so a document always had something
-		// to be about. A subject lives on a shelf now, and paper that names no
-		// card sits on the dossier's "Not assigned yet" — drawn, not stored, so
-		// there is nothing to protect from being archived.
+		// Paper that names no subject sits on the dossier's "Not assigned yet" —
+		// drawn, not stored, so there is nothing to protect from being archived.
 		const before = await listSubjects(testDb);
 		expect(before.filter((s) => s.name === 'Household')).toHaveLength(0);
 	});

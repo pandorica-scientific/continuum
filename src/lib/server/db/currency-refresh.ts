@@ -7,18 +7,14 @@ import type { Queryable } from './index';
 /**
  * Materialise CLDR's currency list into the `currency` table.
  *
- * The table exists so currency columns can carry a real foreign key. It is NOT
- * a source of truth about currencies: `$lib/money` is, and it reads the
- * runtime's own CLDR data. Seeding ISO 4217 by hand would create a second
- * answer free to drift from the first, and the two genuinely disagree — ISO
- * gives HUF two decimal places where CLDR gives zero, and CLDR is how the
- * currency is actually written. `minorDigits` already made that choice; this
- * follows it rather than voting again.
+ * The table exists so currency columns can carry a real foreign key. It is
+ * NOT a source of truth about currencies: `$lib/money` (reading the
+ * runtime's CLDR data) is — seeding ISO 4217 by hand would create a second
+ * answer free to drift from the first (e.g. ISO gives HUF two decimal
+ * places, CLDR gives zero).
  *
- * UPSERT ONLY, never DELETE. A code that disappears from a future runtime's
- * data must not take every row referencing it down with it — a transaction
- * denominated in a currency ICU stopped listing is still a transaction that
- * happened.
+ * UPSERT ONLY, never DELETE: a code that disappears from a future runtime's
+ * data must not take every row referencing it down with it.
  */
 export async function refreshCurrencies(handle: Queryable): Promise<number> {
 	const codes =

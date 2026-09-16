@@ -2,14 +2,10 @@
 /**
  * The figures a shelf's summary band shows, counted once.
  *
- * One flat shape for every shelf rather than a query per shelf, because the
- * decision about WHICH three a shelf shows lives in `$lib/documents/shelf-tiles`
- * and belongs in exactly one place. This module fills what a document row can
- * answer and leaves the rest to the loader that owns it: `missing` on a dossier
- * comes from the cells, and on the ribbon from the gaps, because a hole is a
- * fact about periods and answering it a second time from document rows would be
- * a second answer to one question.
- *
+ * One flat shape for every shelf rather than a query per shelf; WHICH three a
+ * shelf shows lives in `$lib/documents/shelf-tiles`. This module fills what a
+ * document row can answer and leaves the rest — e.g. `missing` — to the
+ * loader that owns that fact.
  */
 import { eq, sql } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';

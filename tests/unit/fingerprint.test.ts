@@ -44,11 +44,8 @@ describe('fingerprint occurrence counter', () => {
 	it('a bank reference dominates, but does not disable the counter', () => {
 		const withRef = [row({ bankRef: 'A1' }), row({ bankRef: 'A2' })];
 		expect(new Set(fingerprintAll(withRef)).size).toBe(2);
-		// Two rows sharing a reference are still two rows. bankRef is only as
-		// unique as the bank makes it — a split card authorisation, or one
-		// instruction number printed on both legs of an order, repeats it.
-		// Collapsing them here let the unique index drop the second row, so
-		// real money left the ledger reported as a skipped duplicate.
+		// Guards against a shared bankRef collapsing two real rows into one and
+		// silently dropping money from the ledger.
 		const dupRef = fingerprintAll([row({ bankRef: 'A1' }), row({ bankRef: 'A1' })]);
 		expect(new Set(dupRef).size).toBe(2);
 	});
@@ -60,10 +57,8 @@ describe('fingerprint occurrence counter', () => {
 		expect(fingerprintAll([row({ bankRef: 'A1' }), row({ bankRef: 'A1' })])).toEqual(first);
 	});
 
-	// Pinned literals, not self-comparisons: these are the exact digests rows
-	// already carry at FINGERPRINT_VERSION 2. Adding the occurrence counter to
-	// the reference branch must not disturb them, or every stored row would
-	// need re-fingerprinting and re-imported statements would duplicate.
+	// Pinned literals: these must stay stable or every stored row would need
+	// re-fingerprinting and re-imported statements would duplicate.
 	it('fingerprints already stored at version 2 are unchanged', () => {
 		expect(fingerprintAll([row({ bankRef: 'A1' })])[0]).toBe(
 			'ce0b2825d26ad068c6f03be8b470dd513c11afdf0f02113750e0b517792556ca'

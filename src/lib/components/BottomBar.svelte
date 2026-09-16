@@ -5,16 +5,8 @@
 	import { areaForPath, visibleAreas, type Area, type ModuleToggles } from '$lib/modules/registry';
 
 	/**
-	 * The phone's navigation, below 720px.
-	 *
-	 * It replaces a ☰ button in the bottom-right corner that opened a drawer:
-	 * every screen change was two taps, and the first of them was on a control
-	 * with no state — nothing about it said where you already were.
-	 *
-	 * Four areas and the drawer. The design asked for five areas and no drawer,
-	 * which does not fit seven: two of them would have been unreachable on a
-	 * phone. The fifth slot is the way to the other three, plus settings and the
-	 * theme — all of which already live in the sidebar this opens.
+	 * The phone's navigation, below 720px: four areas plus a drawer for the rest
+	 * (settings, theme, and any area that doesn't fit).
 	 */
 	interface Props {
 		modules: ModuleToggles;
@@ -25,15 +17,14 @@
 
 	let { modules, importBadge, drawerOpen, onopen }: Props = $props();
 
-	// The four a phone reaches for, in the order the sidebar lists them. Named
-	// rather than "the first four visible", because that order puts Retirement —
-	// a screen somebody opens twice a year — in front of Documents.
+	// Explicit order rather than "the first four visible" — keeps Retirement out
+	// ahead of Documents regardless of sidebar order.
 	const PREFERRED = ['overview', 'money', 'assets', 'documents'];
 
 	const areas = $derived(visibleAreas(modules));
 
-	// Falls back through whatever else is visible, so switching Documents off
-	// leaves four filled slots rather than a gap.
+	// Falls back through whatever else is visible, so a disabled area leaves
+	// four filled slots rather than a gap.
 	const slots = $derived.by(() => {
 		const byKey = new Map(areas.map((a) => [a.key, a]));
 		const picked: Area[] = PREFERRED.map((key) => byKey.get(key)).filter((a) => a !== undefined);
@@ -89,9 +80,8 @@
 		position: fixed;
 		inset: auto 0 0 0;
 		z-index: 25;
-		/* Opaque: content scrolls under this. --card is a tint in the dark theme
-		   and would let the page through, which is the same defect the old ☰
-		   button had. */
+		/* Must be opaque: --card is a tint in the dark theme and would let content
+		   scroll through it. */
 		background: var(--bg2);
 		border-top: 1px solid var(--bd);
 		padding: var(--space-3) var(--space-2) calc(var(--space-3) + var(--safe-bottom));

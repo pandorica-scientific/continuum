@@ -3,10 +3,8 @@ import { parseOfx } from '$lib/server/import/standards/ofx';
 import { proveStatement } from '$lib/server/import/proof';
 
 /**
- * OFX arrives in two dialects under one extension, and the older one is not
- * XML: OFX 1.x is SGML, where a tag is opened, never closed, and its value runs
- * to the end of the line. Handing that to an XML parser fails with a message
- * about malformed markup, which tells the person who exported it nothing.
+ * OFX arrives in two dialects under one extension: OFX 1.x is SGML (unclosed tags,
+ * value runs to end of line), not XML.
  */
 const SGML = `OFXHEADER:100
 DATA:OFXSGML
@@ -28,9 +26,7 @@ describe('parseOfx', () => {
 		const [statement] = parseOfx(SGML);
 		expect(statement.currency).toBe('GBP');
 		expect(statement.accountNumber).toBe('12345678');
-		// A transaction ends where the next one begins, with no closing tag to
-		// wait for. Filing it after resetting the fields instead of before yields
-		// exactly one movement however many the file holds.
+		// A transaction ends where the next one begins, with no closing tag to wait for.
 		expect(statement.rows).toHaveLength(2);
 		expect(statement.rows.map((row) => row.amountMinor)).toEqual([10_000n, -4_050n]);
 		expect(statement.rows[0].bookedAt).toBe('2026-01-01');
@@ -39,21 +35,15 @@ describe('parseOfx', () => {
 	});
 
 	it('takes the balance from LEDGERBAL and not from AVAILBAL', () => {
-		// Available balance is what may be spent, not what the account holds. A
-		// pending card authorisation makes them differ, and reading the wrong one
-		// puts every such statement at odds with its own movements.
+		// Available balance is what may be spent, not what the account holds; a pending card
+		// authorisation makes them differ.
 		const [statement] = parseOfx(SGML);
 		expect(statement.closingBalanceMinor).toBe(105_950n);
 	});
 
 	it('does not invent an opening balance the file never stated', () => {
-		// `closing - sum(movements)` was computed here so the endpoint check would
-		// have something to test. It cannot: `opening + sum === closing` then
-		// reduces to `closing === closing` and holds whatever was read, so an OFX
-		// export missing a transaction passed it and every OFX file was rated P1
-		// on a check that could not fail. OFX prints no per-row balances either,
-		// so with no stated opening figure there is genuinely nothing in the file
-		// to check the movements against, and saying so is the honest answer.
+		// Computing `closing - sum(movements)` as an opening balance would make the
+		// endpoint check vacuous: `opening + sum === closing` always holds by construction.
 		const [statement] = parseOfx(SGML);
 		expect(statement.openingBalanceMinor).toBeUndefined();
 
@@ -70,9 +60,8 @@ describe('parseOfx', () => {
 	});
 
 	it('ignores the timezone on a timestamp', () => {
-		// The booking date is the date the bank printed. Shifting it into the
-		// reader's zone moves movements across midnight, which changes the month
-		// they fall in.
+		// The booking date is the date the bank printed; shifting it into the reader's zone
+		// could move it across midnight into a different month.
 		expect(parseOfx(SGML)[0].rows[0].bookedAt).toBe('2026-01-01');
 	});
 

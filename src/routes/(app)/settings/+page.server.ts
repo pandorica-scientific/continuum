@@ -64,10 +64,8 @@ import type { Action } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
 /**
- * Refusing from inside a transaction has to throw. `fail()` only returns a
- * value, which Drizzle reads as a normal completion and commits — harmless
- * while every guard sits above every write, but a trap the day one does not,
- * and it holds the FOR UPDATE locks until COMMIT even for a rejected request.
+ * Refusing from inside a transaction has to throw: `fail()` only returns a
+ * value, which Drizzle reads as a normal completion and commits.
  */
 class Refused extends Error {
 	constructor(
@@ -91,21 +89,14 @@ async function transactional(work: (tx: Tx) => Promise<void>) {
 
 /**
  * Admins who could still sign in, with those rows locked for the rest of the
- * transaction. The lock is the whole point: the guard and the write have to see
- * the same count, or two administrators demoting each other in the same moment
- * both read "2", both pass, and the instance is left with nobody in charge.
+ * transaction — so two administrators demoting each other at once cannot both
+ * read "2", both pass, and leave the instance with nobody in charge.
  *
- * The predicate is canSignIn's, in SQL. It used to be the deactivation half
- * only, which counted an administrator created but never enrolled — someone who
- * has no password, holds nothing but a one-time link, and cannot reach these
- * controls at all. Adding one was enough to walk the household past this guard:
- * the count read two, the only real administrator was allowed to step down, and
- * recovering meant the psql one-liner in the README.
- *
- * Postgres refuses FOR UPDATE alongside an aggregate, so this returns the rows
- * and measures them. A household has a handful of administrators, and ordering
- * by id keeps two concurrent transactions from taking the locks in opposite
- * orders and deadlocking.
+ * The predicate matches canSignIn's exactly, in SQL — an admin with no
+ * password (still pending enrollment) cannot reach these controls and must not
+ * count toward the quorum. Postgres refuses FOR UPDATE alongside an aggregate,
+ * so this returns the rows and measures them; ordering by id avoids deadlocks
+ * between concurrent transactions taking the same locks.
  */
 async function lockActiveAdminCount(tx: Tx): Promise<number> {
 	const rows = await tx
@@ -120,9 +111,8 @@ async function lockActiveAdminCount(tx: Tx): Promise<number> {
 }
 
 /**
- * The person an action acts on, in the shape the guards want — read inside the
- * same transaction as the count, and after it, so the two cannot disagree about
- * whether this person is one of the administrators still standing.
+ * The person an action acts on, read inside the same transaction as the count
+ * and after it, so the two cannot disagree about the administrator quorum.
  */
 async function policyTarget(tx: Tx, personId: string) {
 	const rows = await tx
@@ -141,16 +131,10 @@ async function policyTarget(tx: Tx, personId: string) {
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	const openMode = await isOpenMode();
-	// Members reach this page for their own password. Everything
-	// else on it — backup destinations on the host filesystem, server status,
-	// the API token list — is administrator business and is not fetched at all
-	// for anyone else, so it cannot leak through the payload.
-	//
-	// The household roster is the one thing in between. Members see who lives
-	// here, because that is not a secret in a household; they do not see who
-	// administers it, anyone's birth year, who is deactivated, or which accounts
-	// have no password set yet — that last one names exactly the people with a
-	// live enrollment link outstanding.
+	// Everything but the household roster and the member's own password is
+	// administrator business and is not fetched at all for anyone else, so it
+	// cannot leak through the payload. Members see who lives here (not a secret),
+	// but not roles, birth years, deactivation, or pending enrollment.
 	const isAdmin = locals.person?.role === 'admin';
 
 	const [
@@ -167,12 +151,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		calendarSyncMinutes,
 		investTax
 	] = await Promise.all([
-		// All three render only inside the isAdmin branches of this page, so a
-		// member paid for three queries to fill sections their copy never draws.
-		// The currency list is the one that costs something real — it reads the FX
-		// table. The module map is merely redundant: the (app) layout loads one for
-		// everybody to decide the sidebar, so this was a second copy of it rather
-		// than a leak of anything.
+		// All three render only inside the isAdmin branches, so a member skips the queries.
 		isAdmin ? getModules() : null,
 		isAdmin ? getBaseCurrency() : null,
 		isAdmin ? availableCurrencies() : [],
@@ -198,9 +177,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		isAdmin ? listCalendarAccounts() : [],
 		isAdmin ? getCalendarMarkers() : true,
 		isAdmin ? getSyncIntervalMinutes() : 15,
-		// How realised gains are taxed. Beside the base currency because both
-		// are facts about the country the household is taxed in, and the form
-		// used to sit on the Investments screen where a setting read as a figure.
+		// How realised gains are taxed — beside base currency, both facts about the taxing country.
 		isAdmin ? getSetting<GainsPolicy>('investTax', DEFAULT_GAINS_POLICY) : null
 	]);
 
@@ -266,18 +243,13 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 const MEMBER_ACTIONS = new Set(['changePassword']);
 
 /**
- * Administrator enforcement for the whole page, applied once.
- *
- * Written the other way round — a requireAdmin() at the top of each action —
- * the guard was correct twelve times over and the shape was still wrong: the
- * cost of forgetting the thirteenth is an action anyone signed in can call,
- * with nothing failing to say so. That is exactly what /settings/export was
- * until recently. Here, forgetting is a 403 the author meets immediately, and
- * escaping the guard takes naming yourself in MEMBER_ACTIONS above.
+ * Administrator enforcement for the whole page, applied once, rather than a
+ * requireAdmin() call repeated at the top of every action — where forgetting
+ * one means an action anyone signed in can call, silently.
  *
  * The cast preserves the concrete shape of the object literal, which is what
- * SvelteKit derives the page's `form` type from — widening it to Actions would
- * cost every field on it.
+ * SvelteKit derives the page's `form` type from; widening it to `Actions`
+ * would lose every field.
  */
 function administered<T extends Actions>(actions: T): T {
 	return Object.fromEntries(
@@ -299,10 +271,8 @@ export const actions = administered({
 		if (!kind) return fail(400, { message: 'Unknown calendar provider.' });
 		if (kind.oauth) return fail(400, { message: `${kind.label} is connected by authorising it.` });
 
-		// One account per provider. The form is hidden once one exists, but a stale
-		// page or a direct POST would otherwise create a second — and two accounts
-		// pointed at the same calendar each keep their own view of what they have
-		// sent, so neither can see the other's writes.
+		// One account per provider: two connected to the same calendar would each
+		// keep their own view of what they sent, so neither sees the other's writes.
 		const existing = await db
 			.select({ id: calendarAccount.id })
 			.from(calendarAccount)
@@ -350,10 +320,7 @@ export const actions = administered({
 			return fail(400, { message: 'The OAuth client ID and secret are both needed.' });
 		}
 
-		// The same one-account-per-provider rule connectCalendar enforces, and for
-		// the same reason: the form is hidden once one exists, but a stale page or
-		// a direct POST would otherwise reach here — and here it would replace a
-		// working connection rather than create a second one.
+		// The same one-account-per-provider rule connectCalendar enforces.
 		const connected = await db
 			.select({ id: calendarAccount.id, credential: calendarAccount.credential })
 			.from(calendarAccount)
@@ -369,15 +336,8 @@ export const actions = administered({
 		const started = startAuth(clientId, clientSecret, redirectUri);
 
 		// A half-finished row, holding the secret and the state hash while the
-		// browser is away. Any earlier ATTEMPT is cleared first so a stale pending
-		// row cannot be matched by a later callback.
-		//
-		// Only attempts. This used to delete every Google row, which meant pressing
-		// Authorise again on a WORKING connection destroyed it before the browser
-		// had even reached Google — cascading away every sync link (suppressions
-		// included, so events the household had deliberately deleted came back) and
-		// every unacknowledged conflict. Abandon the consent screen at that point
-		// and there was nothing left to go back to.
+		// browser is away. Only pending ATTEMPTS are cleared — a working connection
+		// must survive pressing Authorise again.
 		await deletePendingGoogleAccounts();
 		await db.insert(calendarAccount).values({
 			id: uuidv7(),
@@ -493,9 +453,6 @@ export const actions = administered({
 		return { ok: true };
 	},
 
-	// getSyncIntervalMinutes has read this setting since sync was added and
-	// nothing anywhere wrote it, so the documented "a household on a metered
-	// connection may want it slower" was not actually available to anyone.
 	setCalendarInterval: async ({ request }) => {
 		const form = await request.formData();
 		const minutes = Number(form.get('minutes'));
@@ -562,12 +519,8 @@ export const actions = administered({
 	},
 
 	// ---- The category tree ----
-	//
-	// Groups and leaves were a constant until this release; these five actions
-	// are what make them a household's own. Colour is chosen from the palette
-	// rather than typed: every token carries a value per theme and the set was
-	// validated for separation under colour-vision deficiency, so a free hex
-	// would be illegible in one theme or indistinguishable in both.
+	// Colour is chosen from the palette rather than typed: the set is validated
+	// for separation under colour-vision deficiency, which a free hex is not.
 
 	addGroup: async ({ request }) => {
 		const form = await request.formData();
@@ -621,12 +574,8 @@ export const actions = administered({
 
 	removeLeaf: async ({ request }) => {
 		const form = await request.formData();
-		// An empty destination means "there was nothing to move" — the screen only
-		// offers a delete without one when the count below said so. It is checked
-		// again here rather than trusted: deleteCategory refuses if anything has
-		// been filed under it in the meantime. Orphaning the rows would drop them
-		// out of every total that filters on a category, which reads as money
-		// vanishing.
+		// Rechecked here, not trusted from the screen: deleteCategory refuses if
+		// anything has been filed under it in the meantime.
 		const result = await deleteCategory(
 			String(form.get('categoryId') ?? ''),
 			String(form.get('reassignTo') ?? '') || null
@@ -661,25 +610,17 @@ export const actions = administered({
 		return { ok: true };
 	},
 
-	// `dir` is a path on the host that the server will later write a full
-	// database dump to. Nobody but an administrator gets to choose it, which is
-	// administered()'s job now rather than this action's.
 	saveBackup: async ({ request }) => {
 		const form = await request.formData();
 		const cadence = String(form.get('cadence') ?? '') as BackupCadence;
 		if (!BACKUP_CADENCES.includes(cadence)) return fail(400, { message: 'Unknown cadence.' });
 		const dir = String(form.get('dir') ?? '').trim();
-		// The dump is plaintext SQL carrying every password hash and access
-		// token, so where it lands is checked before it is stored — and checked
-		// here, where the mistake can still be shown to the person who made it,
-		// rather than failing silently at three in the morning.
+		// The dump is plaintext SQL carrying every password hash and access token,
+		// so where it lands is checked here, before it is stored.
 		const problem = dir ? backupDirProblem(resolve(dir), resolve(env.UPLOAD_DIR || 'data')) : null;
 		if (problem) return fail(400, { message: problem });
 		if (dir) {
-			// The folder itself need not exist — the backup creates it — so the
-			// check walks up to the nearest ancestor that does. Catching an
-			// unwritable destination here beats discovering it from a failed run
-			// at three in the morning.
+			// The folder need not exist yet — the backup creates it — so walk up to the nearest ancestor that does.
 			let probe = resolve(dir);
 			for (;;) {
 				const exists = await access(probe, constants.F_OK).then(
@@ -723,18 +664,10 @@ export const actions = administered({
 	},
 
 	runBackupNow: async () => {
-		// Started, not awaited. A backup dumps the whole database and copies every
-		// uploaded file; awaiting it held the request — and therefore the
-		// interface — open for as long as that took, which on a household with
-		// years of statements is not a moment.
-		//
-		// The outcome is not lost by returning early: `runBackup` records it under
-		// `backupLastRun`, which this page already reads and shows.
+		// Started, not awaited: a full dump + file copy can take a while, and the
+		// outcome is not lost — `runBackup` records it under `backupLastRun`.
 		if (backupInProgress()) return { ok: true, message: 'A backup is already running.' };
-		// Rejection handled, not merely ignored: `performBackup` records its own
-		// failures, but the config read and the final write sit outside that try,
-		// so a database that is briefly away rejects here — and an unhandled
-		// rejection takes the process down with it.
+		// An unhandled rejection here would take the process down.
 		void runBackup().then(
 			(run) => {
 				if (!run.ok) console.warn('Backup failed:', run.note);
@@ -800,17 +733,12 @@ export const actions = administered({
 			.where(eq(person.id, personId));
 		const target = rows[0];
 		if (!target) return fail(404, { message: 'No such person.' });
-		// An enrollment link overwrites a password and signs its visitor in. Minting
-		// one for somebody who has already enrolled is an account takeover, so the
-		// "still pending" condition has to hold here and not only in the markup
-		// that decides whether to draw the button.
+		// An enrollment link overwrites a password and signs its visitor in, so
+		// minting one for somebody already enrolled would be an account takeover —
+		// checked here, not only in the markup deciding whether to draw the button.
 		if (target.passwordHash !== null) {
 			return fail(400, { message: 'That person has already enrolled.' });
 		}
-		// Still pending, but closed — deactivation revoked whatever link they had.
-		// A replacement would look valid, be passed on in good faith, and then be
-		// refused at /enroll with the wording a broken link gets, leaving both
-		// sides blaming the URL rather than the account.
 		if (target.deactivatedAt) {
 			return fail(400, { message: 'That account is deactivated — reactivate them first.' });
 		}
@@ -824,12 +752,7 @@ export const actions = administered({
 		const personId = asRowId(form.get('personId'));
 
 		return transactional(async (tx) => {
-			// Counted first, because that call is what takes the locks: every
-			// administrator the count includes is held for the rest of the
-			// transaction, so if the target is one of them the read below sees a row
-			// nobody else can move. A target the count does not include — a member, a
-			// pending or deactivated admin — is read unlocked, which is harmless
-			// precisely because they are not what the guard is measuring.
+			// Counted first, because that call is what takes the locks.
 			const activeAdmins = await lockActiveAdminCount(tx);
 			const target = await policyTarget(tx, personId);
 			if (!target) throw new Refused(404, 'No such person.');
@@ -838,10 +761,8 @@ export const actions = administered({
 			if (!verdict.ok) throw new Refused(400, verdict.reason);
 
 			await tx.update(person).set({ deactivatedAt: new Date() }).where(eq(person.id, personId));
-			// Credentials and the password hash are left intact so reactivation is a
-			// clean undo; live sessions are cut, and so is any enrollment link they
-			// never got round to opening — a closed account must not still be
-			// claimable by whoever holds that URL.
+			// Credentials stay intact so reactivation is a clean undo; sessions and
+			// any un-opened enrollment link are cut so a closed account is not claimable.
 			await tx.delete(session).where(eq(session.personId, personId));
 			await revokeEnrollmentTokens(personId, tx);
 		});

@@ -7,12 +7,9 @@ const digitCache = new Map<string, number>();
 
 /**
  * Minor units per currency, from the runtime's own CLDR data rather than a
- * hand-kept table. `availableCurrencies()` offers every code the CNB quotes —
- * which includes HUF, JPY, KRW and ISK, all of which CLDR gives no minor unit
- * at all — so a four-entry table with `?? 2` stored those amounts 100× too
- * large, and the same wrong factor reached the register's SQL amount filter and
- * the API's wire format. Well-formed codes the runtime does not recognise still
- * fall back to 2.
+ * hand-kept table. Several quoted currencies (HUF, JPY, KRW, ISK) have no
+ * minor unit at all, so a hardcoded `?? 2` fallback would misstate them.
+ * Well-formed codes the runtime does not recognise still fall back to 2.
  *
  * CLDR, not ISO 4217: the two disagree (ISO gives HUF two digits, CLDR gives
  * zero) and CLDR follows how the currency is actually written, which is what a
@@ -21,15 +18,12 @@ const digitCache = new Map<string, number>();
 /**
  * Is this actually a currency?
  *
- * Three capital letters is a shape, not a fact. `SYN-0001` is an account
- * number, and the pattern that finds a currency beside a figure matched its
- * first three characters — so a workbook imported with a currency of "SYN",
- * past a guard that checked the shape and nothing else.
+ * Three capital letters is a shape, not a fact — `SYN-0001` is an account
+ * number, and a pattern that only checks the shape can match its first three
+ * characters.
  *
  * The list comes from the platform's own locale data rather than a table
- * written here, so it neither goes stale nor has to be maintained: ICU knows
- * what the currencies are, and it is already what `minorDigits` asks how many
- * decimal places each one has.
+ * written here, so it neither goes stale nor has to be maintained.
  */
 const KNOWN = new Set(
 	typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('currency') : []
@@ -65,12 +59,9 @@ export function displayCurrency(code: string): string {
 /**
  * Minor units as a plain number of major units, and back.
  *
- * Every conversion between the two goes through these. Scattering `/ 100` and
- * `* 100` across charts, screens and the API worked only while every currency
- * had exactly two minor units: the moment `minorDigits` started telling the
- * truth about HUF and JPY, one half of a round trip could be currency-aware
- * while the other stayed hardcoded, and the figure came out a hundred times
- * wrong with nothing to flag it.
+ * Every conversion between the two goes through these rather than a scattered
+ * `/ 100` or `* 100`: not every currency has exactly two minor units, so a
+ * hardcoded factor is wrong for some of them.
  *
  * `toMajor` loses precision by construction — it exists for charts and
  * percentages, which need a number. Anything that has to stay exact should keep
@@ -193,25 +184,22 @@ const AXIS_STEPS = [
  * Labels for one axis's gridlines.
  *
  * Two rules, and neither is what mapping `compactMinor` over the values gives
- * you — which is what this used to do.
+ * you.
  *
- * ONE step across the whole axis, chosen from its largest value. Left to decide
- * for itself, every label crossed the thousand and million thresholds on its
- * own, so a single scale printed `0 · 653k · 1M · 2M · 3M`. Those are five even
- * steps of about 653 000, and nothing on screen says so: the reader has to
- * convert two units in their head before the axis is even linear.
+ * ONE step across the whole axis, chosen from its largest value. Left to
+ * decide for itself, every label crosses the thousand and million thresholds
+ * on its own, printing e.g. `0 · 653k · 1M · 2M · 3M` — five even steps with
+ * nothing on screen saying so.
  *
- * And a label may not move its own gridline nearer a neighbouring one than the
- * one it names — half the closest gap, below. Distinctness was the whole of the
- * old test, and at whole millions 1.96M and 2.61M are distinct: as "2M" and
- * "3M", each overstating its line by about a sixth. Distinctness cannot catch
- * that, because it asks whether two labels differ rather than whether either is
- * true. A gridline is a claim about where a value sits; sharing the step is
- * what makes the precision affordable, because one decimal now buys it on every
- * label at once.
+ * And a label may not move its own gridline nearer a neighbouring one than
+ * the one it names — half the closest gap, below. Distinct labels are not
+ * enough: at whole millions 1.96M and 2.61M print as "2M" and "3M", each
+ * overstating its line by about a sixth. A gridline is a claim about where a
+ * value sits, so precision is added a decimal at a time until every label is
+ * both distinct and honest.
  *
- * A cell may still round hard — `compactMinor` is untouched. It stands alone,
- * with no neighbour to be measured against and no scale to be linear on.
+ * A cell may still round hard — `compactMinor` is untouched, since it has no
+ * neighbour to be measured against.
  */
 export function compactAxis(values: bigint[], currency: string): string[] {
 	const majors = values.map((v) => toMajor(v, currency));

@@ -35,10 +35,8 @@ describe('RRULE expansion', () => {
 		]);
 	});
 
-	// THE REASON tz IS A COLUMN. Europe/Prague leaves summer time on 2026-10-25.
-	// A 09:00 local event must stay 09:00 local: 07:00Z while CEST (+02:00), then
-	// 08:00Z once CET (+01:00). Expanding in UTC alone would keep emitting 07:00Z
-	// and quietly shift the event an hour for half the year.
+	// A 09:00 local event must stay 09:00 local across the DST transition: 07:00Z
+	// while CEST, then 08:00Z once CET. Expanding in UTC alone would shift it an hour.
 	it('holds local wall-clock time across a DST transition', () => {
 		const out = expand(
 			'FREQ=WEEKLY;BYDAY=SU',
@@ -71,9 +69,7 @@ describe('RRULE expansion', () => {
 		]);
 	});
 
-	// RFC 5545: a BYMONTHDAY that a month does not have is SKIPPED, never rolled
-	// forward. February has no 31st, so the February occurrence simply does not
-	// exist — it must not appear on 1 or 3 March.
+	// RFC 5545: a BYMONTHDAY a month doesn't have is SKIPPED, never rolled forward.
 	it('skips a monthly-by-date occurrence in a month too short for it', () => {
 		const out = expand(
 			'FREQ=MONTHLY;BYMONTHDAY=31',
@@ -127,8 +123,6 @@ describe('RRULE expansion', () => {
 	});
 
 	// COUNT counts occurrences from DTSTART, not occurrences inside the window.
-	// Counting within the window would make a rule return different totals
-	// depending on which month you happened to be looking at.
 	it('counts COUNT from the series start, not from the window', () => {
 		const all = expand(
 			'FREQ=DAILY;COUNT=3',
@@ -169,20 +163,15 @@ describe('RRULE expansion', () => {
 		);
 	});
 
-	// A daily rule with no COUNT and no UNTIL is infinite. The window bounds the
-	// output, but a caller passing a decade-wide window must not hang the request
-	// — it must fail loudly instead.
+	// An unbounded rule with a decade-wide window must fail loudly, not hang.
 	it('refuses to walk an unbounded rule past its iteration cap', () => {
 		expect(() =>
 			expand('FREQ=DAILY', '1900-01-01T09:00:00Z', 'UTC', '1900-01-01', '2200-01-01')
 		).toThrow(/too many occurrences/i);
 	});
 
-	// WEEKS RUN MONDAY→SUNDAY. The epoch is a Thursday, so bucketing by
-	// `time / 604800000` put the Monday and the Friday of one calendar week into
-	// different weeks — and with INTERVAL=2 that pushed every Friday a week late.
-	// Only a single-weekday interval rule was covered before, which is exactly the
-	// shape that cannot see it.
+	// Regression: bucketing weeks by `time / 604800000` (epoch is a Thursday) split
+	// a Mon/Fri week across two buckets, pushing every Friday a week late under INTERVAL=2.
 	it('measures a multi-weekday interval from Monday, not from the epoch', () => {
 		expect(
 			expand(
@@ -202,10 +191,8 @@ describe('RRULE expansion', () => {
 		]);
 	});
 
-	// Google and Apple both write "monthly on the second Tuesday" this way. The
-	// ordinal prefix was filtered out as an unknown weekday code, which left the
-	// rule with no BYDAY and no BYMONTHDAY — so it fell through to "the day of the
-	// month the series started on" and an imported series recurred on the 13th.
+	// Regression: the BYDAY ordinal prefix was filtered out as an unknown weekday
+	// code, so an imported "second Tuesday" series fell back to the start date's day.
 	it('honours a BYDAY ordinal prefix', () => {
 		expect(
 			expand('FREQ=MONTHLY;BYDAY=2TU', '2026-01-13T09:00:00Z', 'UTC', '2026-03-01', '2026-03-31')
@@ -222,18 +209,15 @@ describe('RRULE expansion', () => {
 		expect(formatRrule(parseRrule('FREQ=MONTHLY;BYDAY=2TU')!)).toBe('FREQ=MONTHLY;BYDAY=2TU');
 	});
 
-	// Math.max(0, NaN) is NaN, and `emitted >= NaN` is false forever — so a
-	// malformed COUNT silently REMOVED the limit rather than being ignored, and
-	// formatRrule then wrote `COUNT=NaN` back out for a provider to reject.
+	// Regression: `emitted >= NaN` is always false, so a malformed COUNT silently
+	// removed the limit instead of being ignored, and round-tripped as COUNT=NaN.
 	it('ignores a COUNT that is not a number', () => {
 		expect(parseRrule('FREQ=DAILY;COUNT=x')?.count).toBeNull();
 		expect(formatRrule(parseRrule('FREQ=DAILY;COUNT=x')!)).toBe('FREQ=DAILY');
 	});
 
-	// A zone name arrives from other people's calendars, not only from this app.
-	// Intl throws a RangeError on one it does not know, and every read path
-	// expands through here — so one imported Outlook event used to 500 the whole
-	// calendar screen, with nothing on it to reach the event and correct it.
+	// Regression: Intl throws on an unrecognized zone name (e.g. from Outlook),
+	// and every read path expands through here, so it must fall back instead of 500ing.
 	it('falls back to UTC for a zone Intl does not recognise', () => {
 		expect(isKnownTimeZone('Europe/Prague')).toBe(true);
 		expect(isKnownTimeZone('W. Europe Standard Time')).toBe(false);
@@ -248,9 +232,7 @@ describe('RRULE expansion', () => {
 		).not.toThrow();
 	});
 
-	// The inverse of instantOfWall's date half, and the reason `slice(0, 10)` is
-	// not it: in a zone ahead of UTC an event at local midnight reports the day
-	// before.
+	// `slice(0, 10)` is wrong here: in a zone ahead of UTC, local midnight reports the day before.
 	it('reads a calendar date on the event own clock', () => {
 		expect(localDate('2026-09-09T22:00:00.000Z', 'Europe/Prague')).toBe('2026-09-10');
 		expect(localDate('2026-09-09T22:00:00.000Z', 'UTC')).toBe('2026-09-09');

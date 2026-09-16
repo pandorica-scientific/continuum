@@ -1,11 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-/**
- * The one thing the map's colouring must never do is put two neighbours in the
- * same colour, because that reads as one larger country.
- *
- * A hash-and-repair scheme was tried during design and silently failed this.
- * These tests are what would have caught it.
- */
+// Two neighbouring countries must never share a colour, or they read as one
+// larger country.
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {

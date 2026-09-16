@@ -177,11 +177,10 @@ export type ExpiryTone = 'expired' | 'soon' | 'quiet';
 /**
  * How a document's expiry reads on a record's card.
  *
- * Deliberately a projection of `expiryTreatment` rather than a second rule.
- * The property card used to say "anything with a date is amber, a passed date
- * is red", which made a lease renewing in three years the same colour as one
- * renewing next week; the Documents screen has known better since v0.7.0 and
- * this is how a card borrows that knowledge instead of restating it.
+ * Deliberately a projection of `expiryTreatment` rather than a second rule:
+ * a lease renewing in three years must not read as the same colour as one
+ * renewing next week, and a card borrows that knowledge instead of
+ * restating it.
  *
  * `subjectArchived` is false by design: a card belongs to ONE record and shows
  * the paper filed against it, so there is no subject in the picture whose
@@ -406,11 +405,10 @@ export interface GroupSummary {
 /**
  * The four fields the summary actually reads.
  *
- * A whole `DocRow` was the parameter until the Overview's Paper panel wanted
- * the same three numbers over the whole archive: making it select eleven
- * columns it would never look at, and invent a shelf label per row, only to
- * satisfy a type is a cost paid for nothing. The rest of the row is the list
- * screen's business.
+ * Narrowed so a caller wanting only these numbers (the whole archive, say)
+ * need not select columns it will never look at or invent a shelf label per
+ * row just to satisfy the type. The rest of the row is the list screen's
+ * business.
  */
 export type ExpiringRow = Pick<DocRow, 'expiresOn' | 'expiryVerb' | 'addedOn' | 'subjectArchived'>;
 
@@ -481,10 +479,9 @@ export function aboutOptionLabel(option: { name: string; meta?: string; count: n
 /**
  * One subject as the rail draws it.
  *
- * No `household` flag since v0.8.0: nothing seeds a catch-all subject any more,
- * because a subject now belongs to a shelf and paper that names no card sits on
- * the dossier's "Not assigned yet" card instead — which is drawn rather than
- * stored, so there is nothing to protect from being archived.
+ * No `household` flag: a subject belongs to a shelf, and paper that names no
+ * card sits on the dossier's "Not assigned yet" card instead — which is drawn
+ * rather than stored, so there is nothing to protect from being archived.
  */
 export interface RailSubject {
 	id: string;

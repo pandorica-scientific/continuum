@@ -40,9 +40,7 @@
 		onclose: () => void;
 	} = $props();
 
-	// Editing an existing split starts from its lines; a fresh split starts
-	// from two empty ones, since one line is not a split. The parent keys this
-	// component by transaction id, so this intentionally is a one-time draft.
+	// A fresh split starts from two empty lines, since one line is not a split.
 	// svelte-ignore state_referenced_locally
 	let lines = $state<SplitLine[]>(
 		existing.length > 0
@@ -54,12 +52,8 @@
 	);
 	let actionError = $state<string | null>(null);
 
-	/**
-	 * Decimal string to a number of minor units, tolerating "1 234,56" and the
-	 * real minus sign (U+2212) that formatMinor renders negatives with \u2014 without
-	 * that, the target for any money-out transaction would parse as zero and the
-	 * dialog could never balance.
-	 */
+	/** Decimal string to minor units, tolerating "1 234,56" and the real minus
+	 *  sign (U+2212) formatMinor renders negatives with. */
 	function toMinor(raw: string): bigint | null {
 		try {
 			return parseAmountToMinor(raw, currency);

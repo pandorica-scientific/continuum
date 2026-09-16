@@ -80,12 +80,8 @@ describe('outputSize', () => {
 
 describe('the source cap against the output ceiling', () => {
 	it('lets a page that fills the frame reach the ceiling exactly, and no further', () => {
-		// This is the whole reason MAX_SOURCE_LONG is `MAX_OUTPUT_WIDTH * A4_RATIO`
-		// rather than a number somebody liked. A page photographed to fill the
-		// frame gives a source of exactly that long edge, and the page rendered
-		// out of it is A4 at 300 dpi — the largest this pipeline ever writes. So
-		// the cap costs a well-framed photograph NOTHING: there is no resolution
-		// on the far side of it that the PDF could have carried.
+		// MAX_SOURCE_LONG is `MAX_OUTPUT_WIDTH * A4_RATIO` precisely so a
+		// well-framed photograph costs nothing: it already reaches the ceiling.
 		const short = Math.round(MAX_SOURCE_LONG / A4_RATIO);
 		const page = outputSize(fullFrameCorners(short, MAX_SOURCE_LONG));
 		expect(page.width).toBe(MAX_OUTPUT_WIDTH);
@@ -93,9 +89,8 @@ describe('the source cap against the output ceiling', () => {
 	});
 
 	it('is what a photograph twice as large would have come out at anyway', () => {
-		// The clamp in `outputSize` is the ceiling; the cap on the source only
-		// decides how much work is done to reach it. A 4× larger frame produces
-		// the same page.
+		// The clamp in `outputSize` is the ceiling; the source cap only decides
+		// how much work is done to reach it.
 		const short = Math.round(MAX_SOURCE_LONG / A4_RATIO);
 		expect(outputSize(fullFrameCorners(short * 2, MAX_SOURCE_LONG * 2))).toEqual(
 			outputSize(fullFrameCorners(short, MAX_SOURCE_LONG))
@@ -144,8 +139,7 @@ describe('quadAspect', () => {
 	});
 
 	it('is huge for a line of text, which is how one gets rejected', () => {
-		// Measured against real photographs, the old edge-based detector outlined
-		// a single heading: 0.2% of the frame at roughly 20:1.
+		// Regression: the old edge-based detector could outline a single heading line.
 		expect(quadAspect(rect(560, 28))).toBeCloseTo(20, 1);
 	});
 
@@ -176,15 +170,13 @@ describe('turnCorners', () => {
 	});
 
 	it('keeps the corners named for where they now are', () => {
-		// The whole point: rotating used to discard the crop, handing back the
-		// entire photograph. A quarter turn is exact, so there is nothing to lose.
+		// A quarter turn is exact, so the crop must not be discarded in the process.
 		expect(turned.tl.x).toBeLessThan(turned.tr.x);
 		expect(turned.tl.y).toBeLessThan(turned.bl.y);
 	});
 
 	it('comes back exactly after four turns', () => {
-		// Which is what makes this safe to apply repeatedly: someone spinning a
-		// page all the way round must not lose a pixel of the crop to rounding.
+		// Safe to apply repeatedly: a full spin must not lose a pixel to rounding.
 		const round = turnCorners(turnCorners(turnCorners(turned, 100), 200), 100);
 		expect(round).toEqual(corners);
 	});

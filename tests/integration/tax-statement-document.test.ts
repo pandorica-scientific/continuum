@@ -4,9 +4,8 @@
 // is on the Finance shelf, and each is filed against the same person — which is
 // what makes them appear in the household's own files rather than nowhere.
 //
-// A year's filing is several pieces of paper, not one, so since v0.4.3 the link
-// is a document_link row against the statement's entity rather than a column on
-// the statement. The old `document_id` column is dead and no longer read.
+// A year's filing is several pieces of paper, not one, so the link is a
+// document_link row against the statement's entity, not a column on it.
 import { eq } from 'drizzle-orm';
 import { rowId } from '../row-id';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -376,14 +375,10 @@ describe('loadStatements', () => {
 });
 
 /**
- * Task 9's semantics, on the tax screen's own action.
- *
- * `deleteAttachment` used to call `deleteDocument` directly: a plain row
- * delete, with `salary_entry.document_id` SET NULL underneath it. That leaves
- * a stale row behind — still counted in a year's total, with nothing on
- * screen to say where it came from — for exactly the reason `removeDocument`
- * (Task 9) exists. Switching the action to it means a payslip attached here
- * is forgotten the same way one deleted from the Salary screen is.
+ * `deleteAttachment` must go through `removeDocument`, not a plain row
+ * delete: a plain delete SET NULLs `salary_entry.document_id` and leaves a
+ * stale row still counted in a year's total, with nothing on screen to say
+ * where it came from.
  */
 describe('deleteAttachment', () => {
 	interface Locals {

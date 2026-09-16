@@ -4,8 +4,7 @@ import { RuleTester } from 'eslint';
 import { readFile } from 'node:fs/promises';
 import rule from '../../eslint-rules/no-raw-geometry.js';
 
-// Mirrors the maps inside the rule. The test below asserts both agree with
-// app.css, so this cannot quietly fall out of step.
+// Mirrors the maps inside the rule; the test below asserts both agree with app.css.
 const RADIUS: Record<number, string> = {
 	4: 'xs',
 	6: 'sm',
@@ -17,11 +16,8 @@ const RADIUS: Record<number, string> = {
 };
 const SPACE: Record<number, number> = { 2: 1, 4: 2, 6: 3, 8: 4, 10: 5, 12: 6, 14: 7, 16: 8 };
 
-// The rule reads the <style> block as text rather than as a parsed stylesheet,
-// exactly as the licence rule reads the file as text: ESLint does not parse CSS
-// inside a Svelte component. These fixtures are therefore plain JS whose source
-// happens to contain a <style> block, which exercises the scanning without
-// needing the Svelte parser.
+// The rule reads the <style> block as text, since ESLint does not parse CSS inside a
+// Svelte component; fixtures are plain JS whose source contains a <style> block.
 const tester = new RuleTester();
 const run = (valid: unknown[], invalid: unknown[]) =>
 	tester.run('no-raw-geometry', rule as never, { valid, invalid } as never);
@@ -34,10 +30,7 @@ describe('design/no-raw-geometry', () => {
 	});
 
 	it('reads every part of a shorthand, not only a lone value', () => {
-		// The rule matched `^(\\d+)px$` for a long time, so `gap: 8px` was caught
-		// and `gap: 8px 14px` went straight through with both numbers on the
-		// scale. Twenty files carried one. A rule that looks enforced and is not
-		// is worse than no rule, because nobody looks again.
+		// Regression: `gap: 8px 14px` must be caught, not just a lone `gap: 8px`.
 		expect(() =>
 			run(
 				[],
@@ -52,9 +45,8 @@ describe('design/no-raw-geometry', () => {
 	});
 
 	it('leaves a shorthand that already names one axis alone', () => {
-		// Mixing a token with a number is a deliberate choice about one axis, not
-		// a number that drifted in — and there is nothing to suggest replacing it
-		// with.
+		// Mixing a token with a number is a deliberate choice about one axis, not a number
+		// that drifted in.
 		expect(() =>
 			run([{ code: 'const c = `<style>.a{gap:var(--space-4) 3px;}</style>`;' }], [])
 		).not.toThrow();
@@ -91,12 +83,8 @@ describe('design/no-raw-geometry', () => {
 		).not.toThrow();
 	});
 
-	// The rule enforces "if the scale names this number, use the name" — not
-	// "every number must be on the scale". This product genuinely uses 1px
-	// spacing granularity in about sixty places, and snapping those to the
-	// nearest token was measured: individually invisible, and in aggregate it
-	// moved all fourteen screens. A rule that forced them would be a restyle
-	// wearing a lint rule's clothes.
+	// The rule enforces "if the scale names this number, use the name" — not "every
+	// number must be on the scale".
 	it('leaves a value the scale has no name for alone', () => {
 		expect(() =>
 			run(

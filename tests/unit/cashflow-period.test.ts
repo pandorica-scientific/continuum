@@ -52,15 +52,8 @@ describe('addMonths', () => {
 	});
 });
 
-/**
- * The window a window is compared against.
- *
- * Every case here asserts the same thing in a different shape: the previous
- * window is the SAME window, moved. A trailing year compared against the eleven
- * months before it, or a year-to-date compared against a full previous year,
- * would report the difference in how much time each covered as a change in what
- * the household did.
- */
+// The previous window must be the same window, moved — comparing unequal
+// spans would misreport a change in coverage as a change in the household.
 describe('previousRange', () => {
 	it('compares a month with the month before it, across a year boundary too', () => {
 		expect(previousRange('month', '2026-03')).toEqual({
@@ -105,15 +98,8 @@ describe('periodQuery', () => {
 	});
 });
 
-/**
- * The link a figure on the waterfall carries, and the filter the register reads
- * back out of it.
- *
- * Both halves are asserted here rather than only the string, because the string
- * is not the point: what matters is that the register answers the question the
- * chart asked. A param renamed on one side and not the other would still
- * produce a perfectly well-formed URL.
- */
+// Asserts both the URL and the round-trip through the filter parser, since a
+// param renamed on one side only would still produce a well-formed URL.
 const query = (href: string) => new URLSearchParams(href.slice(href.indexOf('?') + 1));
 
 describe('registerHref', () => {

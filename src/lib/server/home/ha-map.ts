@@ -265,14 +265,10 @@ export function meterCandidates(states: HaState[]): Record<string, { id: string;
  * Multiplier turning a reading in the sensor's own unit into kWh, or null when
  * the unit is not an energy unit we can convert.
  *
- * The unit lives in the entity's attributes, never in its state, and Home
- * Assistant energy sensors report whatever their integration reports — Shelly,
- * Tasmota and ESPHome commonly report Wh. Assuming kWh made a 186 kWh month
- * read as 186 000, and that figure is not merely displayed: it is multiplied by
- * the price per kWh and written onto the household's bill as money.
- *
- * Null rather than a guess of 1: an energy figure a thousand times wrong is
- * worse than no energy figure.
+ * The unit lives in the entity's attributes, never in its state, and
+ * integrations like Shelly, Tasmota and ESPHome commonly report Wh, not kWh —
+ * and the figure is multiplied by the price per kWh and written onto the
+ * household's bill as money. Null rather than a guess of 1.
  */
 export function energyToKwh(unit: string | null | undefined): number | null {
 	switch ((unit ?? '').trim().toLowerCase()) {
@@ -302,20 +298,17 @@ export function energyToKwh(unit: string | null | undefined): number | null {
  * in the counter's own unit.
  *
  * Sums the rises rather than subtracting the ends, because the counter does
- * reset — a Home Assistant restart, a meter swap, an integration reload. Taking
- * `last - first` then clamping at zero reported such a month as 0, which is
- * indistinguishable on screen from a month of no consumption at all.
+ * reset (a restart, a meter swap, an integration reload); `last - first`
+ * clamped at zero would read a reset month as indistinguishable from a month
+ * of no consumption.
  */
 export function risingTotal(readings: readonly number[]): number {
 	let total = 0;
 	for (let i = 1; i < readings.length; i++) {
 		const delta = readings[i] - readings[i - 1];
-		// A decrease is a counter reset, not negative consumption: the counter
-		// restarted from zero and climbed to its current reading, so that reading
-		// is the part of the period we can still account for. Whatever it counted
-		// between the previous sample and the reset is unrecoverable — but
-		// discarding the whole step reported a reset month as zero, which reads
-		// exactly like a month of no consumption at all.
+		// A decrease is a counter reset, not negative consumption: what it
+		// counted before the reset is unrecoverable, but the reading itself
+		// still counts rather than reporting the step as zero.
 		total += delta > 0 ? delta : readings[i];
 	}
 	return total;
@@ -325,11 +318,8 @@ export function risingTotal(readings: readonly number[]): number {
  * Daily kWh from history samples of a total-increasing energy sensor.
  *
  * Each day's figure is `risingTotal` over that day's own samples plus the
- * previous day's last reading, so the two views of the same data agree about
- * what a counter reset means. Comparing only the day's last reading against the
- * previous day's dropped the reset day from the series entirely — not zero, not
- * a gap, simply absent, which reads on screen as a day nobody was home, while
- * the month tile beside it counted the consumption.
+ * previous day's last reading, so a counter reset is handled the same way
+ * here as in the month total instead of silently dropping the reset day.
  */
 export function dailyDeltas(
 	samples: { at: string; value: number }[],

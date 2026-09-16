@@ -2,11 +2,9 @@
 /**
  * The bottle silhouette, and where its label sits.
  *
- * These exist because of a bug that reached a phone: the label photograph was
- * handed to the drawing library, which put it in as `<image href="/files/…">`,
- * which `assertInertSvg` refuses — so every bottle with a photograph threw, the
- * error was caught, and the card drew nothing at all. The drawing is inert and
- * the photograph goes over the top.
+ * Regression: the label photograph must never be embedded in the SVG itself
+ * (`assertInertSvg` refuses `<image href>`) — the drawing is inert and the
+ * photograph goes over the top.
  */
 import { describe, expect, it } from 'vitest';
 import { BOTTLE_ASPECT, assertInertSvg, bottleLabelBox, bottleSvg } from '$lib/life/art';

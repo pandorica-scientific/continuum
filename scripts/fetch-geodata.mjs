@@ -501,8 +501,8 @@ function dissolveToRegions(admin, sources) {
 	return [...dissolved, ...kept];
 }
 
-/** Where the curated place dataset lives. Committed; see datasets/README.md. */
-const PLACES_SOURCE = join('datasets', 'travel-places.json');
+/** Where the curated place dataset lives. Committed; see assets/datasets/README.md. */
+const PLACES_SOURCE = join('assets', 'datasets', 'travel-places.json');
 
 /**
  * The curated places, trimmed and filed under the regions the MAP draws.

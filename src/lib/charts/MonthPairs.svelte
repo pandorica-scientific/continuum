@@ -5,12 +5,7 @@
 
 	/**
 	 * Six months, two bars each: what came in beside what went out.
-	 *
-	 * Drawn with boxes rather than SVG because nothing here needs a coordinate
-	 * system — a bar is a height, a month is a column, and the grid does the
-	 * rest at any width. The replaced chart measured itself, drew an axis and
-	 * a title, and answered a question ("what share was kept, on average?")
-	 * that the tiles above it already answer.
+	 * Boxes rather than SVG — nothing here needs a coordinate system.
 	 */
 	interface Month {
 		/** `YYYY-MM`. */
@@ -31,8 +26,7 @@
 	} = $props();
 
 	const max = $derived(Math.max(1, ...months.flatMap((m) => [m.earned, m.spent])));
-	// A month with any movement at all gets a visible bar: 2% is a mark, 0% is a
-	// gap that reads as missing data.
+	// Any movement gets a visible bar: 0% reads as missing data.
 	const pct = (value: number) => (value > 0 ? Math.max(2, Math.round((value / max) * 100)) : 0);
 	const fmt = (value: number) => formatMinor(fromMajor(value, currency), currency);
 	const short = (month: string) => monthLabel(month).slice(0, 3);
@@ -75,8 +69,7 @@
 		width: 100%;
 		height: 140px;
 	}
-	/* 38% of the column and never wider than 34px: six months on a phone and
-	   six on a monitor are the same picture at two scales. */
+	/* 38% of the column, capped at 34px, so phone and monitor draw the same picture. */
 	.bar {
 		display: block;
 		width: 38%;

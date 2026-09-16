@@ -4,13 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { ART_KEYS, GENERIC_ART, documentArtUrl } from '$lib/documents/art';
 import { ENUMS } from '$lib/enums';
 
-/**
- * The manifest is what the artwork was generated from; `ART_KEYS` is what the
- * app can actually draw. They are produced by different steps — a render that
- * failed halfway leaves the second short of the first without anything else
- * noticing, because a missing face degrades to the generic one and looks
- * deliberate.
- */
+// The manifest and ART_KEYS are produced by different steps; a render that
+// failed halfway would silently degrade to the generic face and look deliberate.
 const manifest = JSON.parse(
 	readFileSync('src/lib/assets/doc-placeholders/manifest.json', 'utf8')
 ) as {

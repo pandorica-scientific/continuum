@@ -15,14 +15,10 @@ export type Queryable = Db | Tx;
 /**
  * Run an operation in a transaction, unless one is already open.
  *
- * Every write that spans more than one statement wants this, and a caller
- * cannot know whether the handle it was given is the connection or an open
- * transaction — nesting `db.transaction` inside one would be a savepoint, which
- * is not what "make these two writes atomic" means. Asking the handle whether it
- * can start one is the whole trick.
- *
- * There were two copies of this, in `import/ingest.ts` and `tags/index.ts`,
- * neither of which is where transaction plumbing belongs.
+ * A caller cannot know whether the handle it was given is the connection or
+ * an open transaction — nesting `db.transaction` inside one would be a
+ * savepoint, which is not what "make these two writes atomic" means. Asking
+ * the handle whether it can start one is the whole trick.
  */
 export async function inTransaction<T>(
 	handle: Queryable,

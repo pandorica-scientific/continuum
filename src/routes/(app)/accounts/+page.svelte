@@ -63,9 +63,7 @@
 	{/snippet}
 </ScreenHeader>
 
-<!-- The line over both columns, so the first account card and the pie beside
-     it start on the same edge. It sat inside the left column, which pushed the
-     cards a row under the panel they are counted in. -->
+<!-- Spans both columns so the first account card and the pie start on the same edge. -->
 <div class="list-head">
 	<span class="list-title"
 		>Accounts <span class="list-note"
@@ -79,9 +77,6 @@
 	<div class="error">{form.message}</div>
 {/if}
 
-<!-- Two columns: the accounts themselves, and what they add up to. The pie used
-     to sit in a section of its own below the list, which put the answer to
-     "where is the money" a scroll away from the money. -->
 <section class="cols">
 	<div class="left">
 		{#if data.accounts.length === 0}
@@ -92,9 +87,6 @@
 		{/if}
 
 		{#each data.accounts as a (a.id)}
-			<!-- One card per account, not a row in a shared list: an account is a
-			     thing with a balance, and the share bar under its name is the same
-			     figure as its wedge in the pie beside it. -->
 			<article class="acct" class:open={editing === a.id}>
 				<span class="acct-tile" style:background="color-mix(in srgb, {a.color} 18%, transparent)"
 					>{a.emoji}</span
@@ -130,16 +122,8 @@
 			</article>
 
 			{#if editing === a.id}
-				<!-- Everything about this account that is not its balance: the fields
-				     that name it, the numbers a transfer is matched on, and the paper
-				     filed against it. Behind the pencil, because a card that always
-				     showed its statements pushed the next account off the screen. -->
 				<div class="panel">
 					{#if a.numbers.length > 0}
-						<!-- The numbers this account is known by, written when it was
-						     created AND learned from statements as they arrived. Shown
-						     nowhere until now, so the one thing that explains why a
-						     transfer did or did not pair was unreachable. -->
 						<span class="mono numbers">{a.numbers.join(' · ')}</span>
 					{/if}
 					<form
@@ -168,18 +152,15 @@
 						<label class="field">
 							<span>Whose</span>
 							<select name="ownerPersonId" value={a.ownerPersonId ?? ''}>
-								<!-- Joint is a real answer, not an absence — which is all it was
-							     until now, because nothing ever set an owner. -->
+								<!-- Joint is a real answer, not an absence. -->
 								<option value="">Joint</option>
 								{#each data.people as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
 							</select>
 						</label>
 						<label class="field">
 							<span>Currency</span>
-							<!-- Locked once anything is filed here: every stored amount is minor
-						     units OF THIS CURRENCY, so changing it would reinterpret history
-						     rather than convert it. The server refuses it too; this only
-						     avoids offering something that will be refused. -->
+							<!-- Locked once anything is filed: every stored amount is minor units
+						     of this currency, so changing it would reinterpret history. -->
 							<select name="currency" value={a.currency} disabled={!a.canChangeCurrency}>
 								{#each data.currencies as c (c)}<option>{c}</option>{/each}
 							</select>
@@ -209,9 +190,7 @@
 		{#if adding}
 			<form method="POST" action="?/addAccount" use:enhance class="add-form">
 				<input name="name" placeholder="Name (e.g. Fio joint account)" />
-				<!-- The list is data now, so a bank added below appears here without a
-				     deploy. Picking the sentinel opens the dialog rather than filing the
-				     account under a bank literally called Other. -->
+				<!-- Picking the sentinel opens the add-bank dialog instead of filing under it. -->
 				<select name="bank" bind:value={bankKey} onchange={onBankChange}>
 					{#each data.banks as b (b.key)}
 						<option value={b.key}>{b.label}</option>
@@ -230,8 +209,6 @@
 					<option value="">Joint</option>
 					{#each data.people as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
 				</select>
-				<!-- The placeholder alone could not say why this is wanted, and on a
-				     narrow screen it was cut off before it finished saying what it is. -->
 				<div class="numbers-field">
 					<input name="numbers" placeholder="Account number(s), comma separated" />
 					<InfoHint label="Why account numbers are needed">
@@ -252,10 +229,7 @@
 		<section class="card sits">
 			<Eyebrow hue="--teal" icon="chart" label="Where the cash sits">
 				{#snippet right()}
-					<!-- The total moves out of the hole and into the header. It was set in
-					     13px type inside an 88px disc, which is the smallest a figure this
-					     important is printed anywhere in the app — and the disc it sat in
-					     was the reason the chart had a hole at all. -->
+					<!-- Total is in the header, not the donut's hole — this figure is too important to print that small. -->
 					<span class="sits-total display"
 						>{data.cashTotalFormatted}<span class="ccy">{data.baseCurrencyDisplay}</span></span
 					>
@@ -435,9 +409,7 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	/* The same figure as this account's wedge in the pie, said twice on purpose:
-	   beside the name it answers "how much of our cash is here" without moving
-	   the eye to the chart. */
+	/* Same figure as the pie wedge, repeated here so it reads without looking at the chart. */
 	.share {
 		display: flex;
 		align-items: center;
@@ -598,8 +570,6 @@
 			grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 		}
 	}
-	/* Restored: the v2 restyle dropped these while the markup kept using them,
-	   so the edit and add forms laid out as unstyled blocks. */
 	.edit-form {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));

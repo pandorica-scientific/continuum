@@ -18,13 +18,8 @@
 		title: string;
 		caption: string;
 		syncedAt?: string;
-		/**
-		 * A household-editable mark, in place of the area's icon.
-		 *
-		 * Shelves, accounts and subjects each carry an emoji the household chose,
-		 * and on a screen that IS one of them that emoji is the identity — drawing
-		 * the area's icon beside it would be two marks for one thing.
-		 */
+		/** Household-editable mark, in place of the area's icon, for a screen
+		 *  that IS a shelf/account/subject the household named. */
 		emoji?: string;
 		/** Only for screens outside the navigation; every listed screen names its
 		 *  own icon in the registry. */
@@ -34,18 +29,21 @@
 		actions?: Snippet;
 	} = $props();
 
-	// Taken from the page rather than passed in: every screen already renders
-	// this header, and threading the module toggles through sixteen call sites
-	// to draw one row of pills would be a poor trade.
+	// Taken from the page rather than passed in — every screen renders this
+	// header, so threading toggles through every call site isn't worth it.
 	const modules = $derived(page.data.modules as ModuleToggles | undefined);
+	const importBadge = $derived((page.data.importBadge as number | undefined) ?? 0);
+	const tabBadge = (path: string): string | null =>
+		path === '/import' && importBadge > 0
+			? `${importBadge} transaction${importBadge === 1 ? '' : 's'} waiting to be reviewed`
+			: null;
 	const area = $derived(modules ? areaForPath(page.url.pathname) : undefined);
 	const screens = $derived(
 		area && modules
 			? (visibleAreas(modules).find((candidate) => candidate.key === area.key)?.screens ?? [])
 			: []
 	);
-	// An area holding one screen renders no row at all — a single pill would be
-	// a label pretending to be a choice.
+	// A single pill would be a label pretending to be a choice.
 	const tabs = $derived(screens.length > 1 ? screens : []);
 	const current = $derived(
 		area?.screens.find(
@@ -60,23 +58,15 @@
 	}
 </script>
 
-<!-- The tab's name, from the one component every screen renders: a title
-     per page used to be nowhere, and a browser tab reading only the address is
-     the first thing a screen reader announces. -->
 <svelte:head>
 	<title>{title} · Continuum</title>
 </svelte:head>
 
-<!-- `steady` reserves the slots above the tab row on a phone, so the row lands
-     in the same place on every screen of an area. It is only set where a tab
-     row is actually drawn: on a one-screen area there is nothing that can jump,
-     and the reserved space would be air bought for nothing. -->
+<!-- `steady` reserves the slots above the tab row on a phone, so it lands
+     in the same place on every screen of an area; skipped on one-screen areas. -->
 <header class:steady={tabs.length > 0}>
 	<div class="titles">
 		<h1>
-			<!-- The area's hue in a tile, in place of the bare glyph — and in place
-			     of the emoji prefix the title used to carry, which put a picture
-			     inside the sentence a screen reader reads as its heading. -->
 			{#if emoji}
 				<IconTile hue="--{area?.hue ?? 'brand'}" {emoji} size={46} />
 			{:else if titleIcon}
@@ -90,9 +80,6 @@
 		{#if syncedAt}
 			<span class="synced"><Icon name="clock" size={14} /> synced {syncedAt}</span>
 		{/if}
-		<!-- Importing lives on the floating quick-add button, which is on every
-		     screen that offers it. A second link in the header was the same
-		     destination twice. -->
 		{@render actions?.()}
 	</div>
 </header>
@@ -109,6 +96,14 @@
 			>
 				<Icon name={screen.icon} size={15} />
 				{screen.label}
+				{#if tabBadge(screen.path)}
+					<span
+						class="tab-badge"
+						role="status"
+						aria-label={tabBadge(screen.path)}
+						title={tabBadge(screen.path)}
+					></span>
+				{/if}
 			</a>
 		{/each}
 	</nav>
@@ -165,9 +160,8 @@
 		background: var(--card);
 		white-space: nowrap;
 	}
-	/* Money carries seven pills, which will not fit a narrow viewport on one
-	   line. They scroll sideways rather than wrapping into a second row that
-	   would shift every screen's content down by a variable amount. */
+	/* Scroll sideways rather than wrap, so a narrow viewport doesn't shift
+	   content down by a variable amount. */
 	.subtabs {
 		display: flex;
 		gap: var(--space-2);
@@ -179,9 +173,13 @@
 	.subtabs::-webkit-scrollbar {
 		display: none;
 	}
-	/* The rule under the row is gone: with a filled pill marking the current
-	   screen, the line was a second answer to a question already answered, and
-	   it cut the header off from the band of figures below it. */
+	.tab-badge {
+		width: 7px;
+		height: 7px;
+		border-radius: var(--radius-pill);
+		background: var(--yellow);
+		flex: none;
+	}
 	.tab {
 		display: inline-flex;
 		align-items: center;
@@ -206,8 +204,7 @@
 		color: var(--fg1);
 		font-weight: 600;
 	}
-	/* The icon carries the hue on the lit pill; on the others it stays as quiet
-	   as the label, or seven colours compete for the same row. */
+	/* The icon carries the hue only on the lit pill, or colours compete on the row. */
 	.tab.active :global(svg) {
 		color: var(--tab-hue);
 	}
@@ -217,29 +214,15 @@
 			font-size: var(--text-4xl);
 			gap: var(--space-5);
 		}
-		/* The sub-tab row lands in the SAME place on every screen.
-
-		   On a phone the header stacks, so two things above the tabs vary in
-		   height: a caption is one line or two, and a screen with a primary
-		   action wraps that button onto a row of its own. Measured across the
-		   twenty screens that draw a tab row, the combination put it at four
-		   different heights — 144, 188, 204 and 224 — so switching tab moved the
-		   row out from under the thumb that had just tapped it, by as much as
-		   80px. On the desktop widths it was already stable at one position,
-		   which is why this is a phone-only rule.
-
-		   Both slots are therefore reserved rather than fitted. It costs up to
-		   56px of quiet space on the sparsest screens, and buys a frame that
-		   does not move — which is what a frame is for. Anything that changes
-		   the header's stack on a phone has to keep this true. */
+		/* Reserve space for the caption and actions so the sub-tab row lands at
+		   the same height on every screen when the header stacks on a phone —
+		   otherwise switching tabs moves the row out from under the tapping thumb. */
 		.steady .caption {
 			display: block;
 			min-height: calc(2 * 1.55em);
 		}
-		/* Stacked, not wrapped. Left to `flex-wrap`, an EMPTY actions slot is
-		   zero wide, fits beside the title and adds no height at all, while a
-		   filled one wraps onto its own row and adds 36px — so reserving its
-		   height only works once it is always its own row. */
+		/* Stacked, not wrapped: an empty actions slot under `flex-wrap` takes no
+		   height, so the reserved height only works if it's always its own row. */
 		.steady {
 			flex-direction: column;
 			gap: var(--space-5);

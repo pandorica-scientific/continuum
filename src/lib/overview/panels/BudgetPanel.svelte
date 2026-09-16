@@ -1,9 +1,7 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
-	// Two bars a row: what the month cost, in the group's own colour, over what
-	// it usually costs, in the quiet foreground. Paired rather than one bar with
-	// a marker on it, because the question is "how far apart are these two", and
-	// two lengths side by side answer that without anybody reading a number.
+	// Two bars a row: this month's cost over what it usually costs. Paired
+	// rather than one bar with a marker, so "how far apart" reads without a number.
 	import { deltaTone } from '$lib/charts/delta';
 	import type { BudgetRow } from '$lib/budget';
 
@@ -18,8 +16,6 @@
 		{#each data.rows as row (row.key)}
 			<div class="row">
 				<span class="label">{row.label}</span>
-				<!-- Spending more is the bad news here, which is the half of the
-				     judgement the percentage on its own cannot carry. -->
 				<span class="mono over" style:color="var({deltaTone(row.overPct, false)})">
 					{row.overPct === null ? '—' : `${row.overPct > 0 ? '+' : ''}${row.overPct}%`}
 				</span>

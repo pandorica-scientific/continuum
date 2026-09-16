@@ -36,18 +36,12 @@ export const actions: Actions = {
 			MODULE_KEYS.map((key) => [key, form.get(`module_${key}`) === 'on'])
 		) as ModuleToggles;
 
-		// A rejected submission re-renders the wizard, so it has to carry back what
-		// was typed — losing a half-filled household to one bad password is its own
-		// bug. Passwords are deliberately absent: echoing one would write it into the
-		// response HTML, where the browser and any cache along the way can keep it.
-		// Asked for explicitly. Everyone who can reach the address is everyone on
-		// the instance, including the administrator — see auth/open-mode.ts, which
-		// records the consequence rather than mitigating it.
-		//
-		// Turning it on LATER requires an administrator to re-enter their password,
-		// because that is the last moment a password can prove intent. There is no
-		// password here yet and no instance to protect, so ticking the box IS the
-		// intent, and that is the whole difference.
+		// `entered` below re-populates the wizard on rejection; passwords are deliberately
+		// excluded so they never get echoed into response HTML.
+		// See auth/open-mode.ts for what open mode means (everyone reaching the address,
+		// including the admin, can sign in as anyone). Ticking this box here IS the
+		// intent — unlike enabling it later, which requires re-entering a password to
+		// prove intent, there's no password yet to do that with.
 		const openMode = form.get('openMode') === 'on';
 
 		const entered = {
@@ -81,16 +75,11 @@ export const actions: Actions = {
 		const minLength = passwordMinLength();
 		const validated: { name: string; password: string; birthYear: number | null }[] = [];
 		for (const p of people) {
-			// With no password protection there is nothing to validate: the fields
-			// are disabled on screen and whatever arrives is ignored. Passwords are
-			// never DELETED by open mode — there simply are none to store yet, and
-			// closing the instance later takes everyone through the normal path.
+			// Open mode: no password to validate, the fields are disabled client-side.
 			if (!openMode) {
 				const passwordError = passwordLengthError(p.password, minLength, `${p.name}'s password`);
 				if (passwordError) return reject(400, passwordError);
-				// Asked twice because this is the only password on a fresh instance: a
-				// typo here locked the owner out of their own household immediately,
-				// with nothing to fall back on.
+				// Confirmed twice: a typo here would lock the owner out with nothing to fall back on.
 				const mismatch = passwordsMatchError(p.password, p.confirmation, `${p.name}'s passwords`);
 				if (mismatch) return reject(400, mismatch);
 			}
@@ -103,26 +92,20 @@ export const actions: Actions = {
 
 		const prepared = validated.map((p) => ({ ...p, id: uuidv7() }));
 
-		// Claim first, then do the expensive work. Concurrent losing requests wait
-		// for the singleton and return without hashing any password. Hashes are
-		// deliberately sequential as well: even the winning request must not turn an
-		// attacker-sized form into parallel Argon2 memory pressure. The surrounding
-		// transaction means a hashing or write failure rolls the claim back with the
-		// rest, so setup remains retryable.
+		// Claim the setup singleton first so concurrent losing requests skip hashing
+		// entirely. Hashes run sequentially so an attacker-sized form can't trigger
+		// parallel Argon2 memory pressure. Wrapped in a transaction so a failure rolls
+		// the claim back and setup stays retryable.
 		const initialized = await runInitialSetup(db, async (tx) => {
 			const firstId = prepared[0].id;
 			for (const p of prepared) {
-				// No password, not an empty one. Hashing '' would store a credential
-				// that an empty form field could later satisfy — the opposite of what
-				// "this instance has no passwords yet" means. Closing the instance
-				// later takes everyone through the normal path of setting one.
+				// null, not hashPassword(''), or an empty form field would satisfy the "credential".
 				const hash = openMode ? null : await hashPassword(p.password);
 				await tx.insert(person).values({
 					id: p.id,
 					name: p.name,
 					initials: initialsFor(p.name),
-					// The person who runs the wizard administers the instance; anyone
-					// else added here is an ordinary member.
+					// The wizard's runner administers the instance; anyone else added is a member.
 					role: p.id === firstId ? 'admin' : 'member',
 					birthYear: p.birthYear,
 					passwordHash: hash

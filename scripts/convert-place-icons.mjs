@@ -9,7 +9,7 @@
  * one thing to understand about this file: unlike the map geometry and the OCR
  * models, the engravings are not fetched at build time, so nothing in CI and
  * nothing in the Docker build runs this. The build only ever copies what is
- * already in `place-icons/`.
+ * already in `assets/place-icons/`.
  *
  * ## Why the masters are not in the repository
  *
@@ -31,7 +31,7 @@
  *
  * ## Why each file carries its own copyright
  *
- * `NOTICE.md` and `place-icons/README.md` state the terms, and neither travels
+ * `NOTICE.md` and `assets/place-icons/README.md` state the terms, and neither travels
  * with an image somebody has extracted from the repository or pulled out of the
  * container. An XMP block inside the file does. cwebp cannot write one — it only
  * COPIES metadata, and the masters have none — so webpmux adds it afterwards.
@@ -41,7 +41,7 @@ import { existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } f
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 
-const OUT = 'place-icons';
+const OUT = 'assets/place-icons';
 
 /** Whose work this is. Matches README.md and NOTICE.md; change all three. */
 const HOLDER = 'Robert Kiewisz';

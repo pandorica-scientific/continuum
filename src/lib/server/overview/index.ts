@@ -1,11 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// One data builder per Overview panel.
-//
-// The board only computes what it is actually showing. Eighteen panels' worth
-// of queries on every load would be a serious regression from the four the
-// fixed screen ran, and most people will place a handful — so the loader asks
-// for the visible keys and nothing else runs. The "Add a panel" tray needs only
-// titles, which come from the registry and cost nothing.
+// One data builder per Overview panel. Only the panels actually placed are
+// computed — the loader asks for the visible keys and nothing else runs.
 
 import { and, count, desc, eq, isNotNull, ne, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
@@ -54,7 +49,7 @@ import { accountBalanceInBase } from '$lib/accounts/balance';
 import { annualisedReturn } from '$lib/server/invest/series';
 import { getRevisionedSetting } from '$lib/server/settings';
 import { RETIRE_DEFAULTS, retModel, type RetireConfig } from '$lib/retire';
-import { displayCurrency, formatMinor, toMajor } from '$lib/money';
+import { compactAxis, displayCurrency, formatMinor, fromMajor, toMajor } from '$lib/money';
 import { notOwnTransfer } from '$lib/server/transactions/transfers';
 
 /** Deterministic series colours, in the order V2 assigns them. */
@@ -65,28 +60,20 @@ const today = () => new Date().toISOString().slice(0, 10);
 /**
  * Shared work, computed at most once per request however many panels want it.
  *
- * `netWorth` in particular is already computed by the (app) layout for the
- * sidebar card, so the loader hands that promise straight in rather than
- * running the whole calculation a second time.
+ * `netWorth` is already computed by the (app) layout for the sidebar card, so
+ * the loader hands that promise straight in rather than recomputing it.
  */
 interface PanelContext {
 	baseCurrency: string;
 	period: Period;
 	/**
-	 * The month the period-scoped panels are anchored to, as `YYYY-MM`: the one
-	 * `?anchor` asked for, or the latest with a transaction in it, or null for a
-	 * household that has imported nothing yet.
+	 * The month the period-scoped panels are anchored to (`YYYY-MM`): the one
+	 * `?anchor` asked for, the latest with a transaction, or null.
 	 *
-	 * `?anchor` re-anchors the two period-scoped panels — where the money went,
-	 * and the month against its average — and nothing else. The screen's header
-	 * caption stays on the data month — "as of the latest statement" — because
-	 * that is what every other panel is actually reporting, and it would be a lie
-	 * the moment somebody stepped back a month.
+	 * Re-anchors only the two period-scoped panels — the header caption stays on
+	 * the data month, since that's what every other panel reports.
 	 *
-	 * The loader asks for it once and every panel that needs a month reads it
-	 * from here, so no two panels can end up anchored to different months. A
-	 * month outside what the record holds is clamped where the bounds are read,
-	 * not here.
+	 * Read from here so no two panels end up anchored to different months.
 	 */
 	anchorMonth: string | null;
 	netWorth: () => Promise<NetWorth>;
@@ -94,10 +81,8 @@ interface PanelContext {
 	/**
 	 * Every expense group's spending, month by month, over the whole record.
 	 *
-	 * Memoised beside the other two because two things on this screen want it —
-	 * the briefing's overspend card and the month-against-its-average panel —
-	 * and it is the whole ledger, its splits and the rate table. Computed twice
-	 * it was the most expensive thing on the Overview, done identically.
+	 * Memoised because two panels want it (briefing's overspend card, and the
+	 * month-against-its-average panel) and it's the most expensive query here.
 	 */
 	spending: () => Promise<GroupMonthSpend[]>;
 }
@@ -177,21 +162,47 @@ const builders: Record<string, Builder> = {
 				)
 			}));
 
-		if (points.length < 2) return { points: [], caption: 'Not enough history yet.', unit: '' };
+		if (points.length < 2) {
+			return { points: [], caption: 'Not enough history yet.', unit: '', yTicks: [], xTicks: [] };
+		}
 
 		const low = Math.min(...points.map((p) => p.value));
 		const high = Math.max(...points.map((p) => p.value));
 		const span = high - low || 1;
+		const y = (value: number) => 100 - ((value - low) / span) * 100;
+
+		// Floor, middle, ceiling — labelled on one shared step so "2.4M" and
+		// "2.6M" read off the same scale.
+		const gridValues = [low, (low + high) / 2, high];
+		const gridLabels = compactAxis(
+			gridValues.map((v) => fromMajor(v, ctx.baseCurrency)),
+			ctx.baseCurrency
+		);
+		const yTicks = gridValues.map((value, i) => ({ y: y(value), label: gridLabels[i] }));
+
+		// One label where each year begins, plus the first month when the span
+		// starts mid-year, so the reader knows which stretch of time this is.
+		const xTicks: { x: number; label: string }[] = [];
+		points.forEach((p, i) => {
+			const month = p.day.slice(0, 7);
+			const previous = i > 0 ? points[i - 1].day.slice(0, 7) : null;
+			if (previous === month) return;
+			const x = (i / (points.length - 1)) * 100;
+			if (i === 0) xTicks.push({ x, label: month });
+			else if (month.endsWith('-01') && x < 92) xTicks.push({ x, label: month.slice(0, 4) });
+		});
 
 		return {
 			unit: displayCurrency(ctx.baseCurrency),
 			caption: `${points[0].day.slice(0, 7)} → ${points[points.length - 1].day.slice(0, 7)}`,
 			first: points[0].value,
 			last: points[points.length - 1].value,
+			yTicks,
+			xTicks,
 			// Normalised to 0–100 so the component draws without knowing the scale.
 			points: points.map((p, i) => ({
 				x: (i / (points.length - 1)) * 100,
-				y: 100 - ((p.value - low) / span) * 100
+				y: y(p.value)
 			}))
 		};
 	},
@@ -218,9 +229,7 @@ const builders: Record<string, Builder> = {
 			name: r.name,
 			emoji: r.emoji || '🏦',
 			// Today's basis, matching the sidebar total rather than each statement
-			// date, so the two figures cannot disagree. totalMinor is the converted
-			// figure with a face-value fallback; exactMinor is null when no rate
-			// was found, which this panel does not distinguish.
+			// date, so the two figures cannot disagree.
 			minor: accountBalanceInBase(rates, r.balanceMinor, r.currency, ctx.baseCurrency, day)
 				.totalMinor
 		}));
@@ -385,9 +394,8 @@ const builders: Record<string, Builder> = {
 			.leftJoin(person, eq(taxStatement.personId, person.id))
 			.orderBy(desc(taxStatement.year));
 
-		// One row per person: their most recent declared year. Keyed on the id,
-		// not the name — two people sharing a name are still two people, and a
-		// statement whose person row has gone still has an id of its own.
+		// One row per person: their most recent declared year, keyed on id not
+		// name — two people can share a name.
 		const latest = new Map<string, (typeof statements)[number]>();
 		for (const s of statements) {
 			if (!latest.has(s.personId)) latest.set(s.personId, s);
@@ -410,10 +418,8 @@ const builders: Record<string, Builder> = {
 	},
 
 	activity: async (ctx) => {
-		// The day the money moved, which is the day the register lists this row
-		// under and the day cash flow counts it in. Ordering and printing the
-		// booking date here made one card payment read 07-02 on the Overview and
-		// 06-28 in the register it links to.
+		// The day the money moved — matches the register and cash flow, avoiding
+		// a card payment reading a different date here than in the register it links to.
 		const day = effectiveDate();
 		const rows = await db
 			.select({
@@ -477,15 +483,13 @@ const builders: Record<string, Builder> = {
 		// rows that come back.
 		const readable = archiveScopePredicate(false);
 
-		// `systemShelfId` throws where the shelf is not there, and it is right to
-		// for anything that FILES into it. A panel that only counts has no such
-		// stake: nothing to count, nothing to say.
+		// `systemShelfId` throws where the shelf is missing; a panel that only
+		// counts has no stake in that, so swallow it.
 		const inboxId = await systemShelfId(SYSTEM_SHELF_KEYS.inbox).catch(() => null);
 
 		const [inboxRows, shelfRows, expiring, filed] = await Promise.all([
-			// Deliberately WITHOUT the archive half, because that is exactly what
-			// the review screen counts. This figure carries a link to that screen,
-			// so a household told "3 waiting" has to find three there.
+			// Deliberately WITHOUT the archive half — matches what the review
+			// screen counts, since this figure links to it.
 			inboxId
 				? db.select({ n: count() }).from(document).where(eq(document.shelfId, inboxId))
 				: Promise.resolve([]),
@@ -506,11 +510,9 @@ const builders: Record<string, Builder> = {
 					expiresOn: document.expiresOn,
 					expiryVerb: document.expiryVerb,
 					addedOn: document.addedOn,
-					// One document may be filed against several subjects, and an
-					// archived one demotes its paper — the same rule the Documents
-					// screen applies in JavaScript over links it has already loaded.
-					// The archive scope above only hides a document whose subjects
-					// are ALL archived, so this is not the same question.
+					// A document filed against several subjects: an archived one
+					// demotes it, same rule the Documents screen applies. Distinct from
+					// the archive scope above, which hides only when ALL are archived.
 					subjectArchived: sql<boolean>`exists (
 						select 1 from ${documentLink} dl
 						join ${subject} s on s.id = dl.target_id
@@ -518,9 +520,7 @@ const builders: Record<string, Builder> = {
 					)`
 				})
 				.from(document)
-				// Only dated paper: a document with no expiry is neither soon, nor
-				// past, nor what happens next, and reading the whole archive to
-				// find that out three times is a query nobody needs.
+				// Only dated paper: nothing without an expiry is soon, past, or next.
 				.where(and(readable, isNotNull(document.expiresOn))),
 			db
 				.select({ last: sql<string | null>`max(${document.addedOn})` })
@@ -533,12 +533,9 @@ const builders: Record<string, Builder> = {
 		return {
 			inbox: inboxRows[0]?.n ?? 0,
 			expiring: { soon: summary.soon, expired: summary.expired, next: summary.nextExpiry },
-			// The busiest five. A household with twenty shelves would otherwise
-			// turn a six-row panel into a scrolling list of ones and twos.
+			// The busiest five, not all of them.
 			shelves: shelfRows
-				// By id, not by the key: `inboxId` is what the count above was taken
-				// against, and the two have to mean the same shelf. A key match is a
-				// second opinion about which shelf the inbox is.
+				// By id, not key: `inboxId` was taken by id, and must mean the same shelf.
 				.filter((row) => row.id !== inboxId)
 				.sort((a, b) => b.n - a.n || a.label.localeCompare(b.label))
 				.slice(0, TOP_SHELVES)
@@ -565,11 +562,9 @@ const builders: Record<string, Builder> = {
 			db.select({ key: bank.key, label: bank.label }).from(bank)
 		]);
 
-		// The ACCOUNT says which bank it is with, not the statement: an import
-		// takes its bank from the account it lands in, and an account nobody has
-		// imported yet still has to be able to say. `account.bank` is not a
-		// foreign key (see the schema), so a key the list does not hold falls
-		// back to itself rather than to a blank.
+		// The ACCOUNT says which bank it is with, not the statement — an import
+		// takes its bank from the account. `account.bank` is not a foreign key,
+		// so an unknown key falls back to itself rather than a blank.
 		const bankLabel = new Map(banks.map((b) => [b.key, b.label]));
 
 		const daysByAccount = new Map<string, string[]>();
@@ -582,9 +577,8 @@ const builders: Record<string, Builder> = {
 
 		const day = today();
 		return {
-			// Creation order, the same as the Accounts panel: two panels listing
-			// the same accounts in two different orders is a puzzle, and the state
-			// each one is in is what the pill is for.
+			// Creation order, same as the Accounts panel — two panels listing the
+			// same accounts differently would be a puzzle.
 			rows: accounts.map((a) => {
 				const status = statementStatus(daysByAccount.get(a.id) ?? [], day);
 				return {
@@ -610,10 +604,8 @@ const builders: Record<string, Builder> = {
 		return {
 			rows: people.map((p) => {
 				const { netMinor, grossMinor } = p.latest;
-				// The arrow is on NET where a net was stated — it is the figure that
-				// lands in the account — and falls back to gross only for a month
-				// nobody stated a net for. Comparing net this month against gross
-				// last month would report a pay cut of about a third.
+				// Arrow is on NET where stated (falls back to gross only when no net
+				// was stated) — comparing net against gross would report a false pay cut.
 				const onNet = netMinor !== null;
 				const current = onNet ? netMinor : grossMinor;
 				const before = onNet ? (p.previous?.netMinor ?? null) : (p.previous?.grossMinor ?? null);
@@ -629,8 +621,7 @@ const builders: Record<string, Builder> = {
 					net: netMinor === null ? null : money(netMinor, ctx.baseCurrency),
 					gross: grossMinor === null ? null : money(grossMinor, ctx.baseCurrency),
 					deltaPct: pct,
-					// Earning more is the good news here, which is the half of the
-					// judgement the percentage itself cannot carry.
+					// Earning more is the good news here — the percentage alone can't say that.
 					deltaTone: deltaTone(pct, true)
 				};
 			})
@@ -649,8 +640,7 @@ const builders: Record<string, Builder> = {
 		let totalOwedMinor = 0n;
 
 		const rows = loans
-			// A loan that is paid off is history, and the panel is about what is
-			// still owed. The Loans screen keeps it and says "paid off".
+			// Paid-off loans are history; this panel is about what's still owed.
 			.filter((l) => l.owedMinor > 0n)
 			.map((l) => {
 				const periods: FixationPeriod[] = allPeriods
@@ -662,7 +652,7 @@ const builders: Record<string, Builder> = {
 						paymentMinor: p.paymentMinor
 					}));
 				const current = periodForMonth(periods, month);
-				// The same pill the Loans screen draws, from the same function.
+				// The same pill the Loans screen draws.
 				const pill = fixationPill(l.regime, periods, false, day);
 				totalOwedMinor += convertOrFace(
 					rates,
@@ -675,10 +665,8 @@ const builders: Record<string, Builder> = {
 				return {
 					id: l.id,
 					name: l.name,
-					// In the LOAN's own currency. A mortgage is owed in the currency it
-					// was taken out in, and that is the figure printed on the statement
-					// somebody is checking this against; the total below is the one
-					// figure that has to be converted to be addable at all.
+					// In the LOAN's own currency, matching the statement; the total
+					// below is the only figure converted.
 					owed: money(l.owedMinor, l.currency),
 					ratePct: current ? current.annualRatePct.toFixed(2) : null,
 					payment: current ? money(current.paymentMinor, l.currency) : null,
@@ -693,13 +681,9 @@ const builders: Record<string, Builder> = {
 
 	budget: async (ctx) => {
 		const unit = displayCurrency(ctx.baseCurrency);
-		// The latest COMPLETE month, which is not always the month the board is
-		// anchored to. The anchor is normally the newest month the record holds,
-		// and for most of every month that is the month we are still in — putting
-		// three days of shopping beside twelve full months of it would report
-		// every group as far under its average, which is the one direction a
-		// comparison can be wrong in without looking wrong. So a running anchor
-		// steps back one month, and a month with nothing in it draws nothing.
+		// The latest COMPLETE month, not necessarily the anchored one — comparing
+		// a few days of the current month against full prior months would falsely
+		// show every group under its average.
 		const month = comparedMonth(ctx.anchorMonth, today().slice(0, 7));
 		if (!month) return { month: null, unit, rows: [] };
 
@@ -714,8 +698,7 @@ const builders: Record<string, Builder> = {
 					month: row.month,
 					spent: toMajor(row.spentMinor, ctx.baseCurrency)
 				})),
-				// In waterfall order, and expense stages only: income and savings
-				// are not things a month can run over on.
+				// Expense stages only — income and savings aren't things a month runs over on.
 				expenseGroups(groups),
 				month
 			)
@@ -726,11 +709,9 @@ const builders: Record<string, Builder> = {
 /**
  * Build exactly the panels asked for, concurrently, and let each one fail alone.
  *
- * `Promise.all` would take the whole screen down with any single builder. That
- * is not hypothetical: `energy` calls out to Home Assistant over HTTP, so an
- * unplugged box turned the entire Overview into a 500 — and because the panel
- * placement persists, it stayed broken until the layout was edited by hand.
- * A panel that cannot load now renders its own failure and the board survives.
+ * `Promise.all` would take the whole screen down with any single builder —
+ * e.g. `energy` calling out to Home Assistant over HTTP. A failed panel now
+ * renders its own failure instead.
  */
 export async function panelData(
 	keys: string[],

@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * The shapes a `DataTable` is fed, and the two sums it does on them.
+ * The shapes a `DataTable` is fed.
  *
  * A screen owns its columns — what they are called, how wide, when they go.
- * The table owns everything the columns have in common: the header strip,
- * the row line, the open group's ground, the summary row. Seven screens
- * drew that chrome themselves before v0.8.1, each a shade apart; this is
- * where the shade is decided once.
+ * The table owns everything the columns have in common: header strip, row
+ * line, open group's ground, summary row.
  */
 
 export type Align = 'start' | 'end' | 'center';

@@ -44,9 +44,6 @@ export const load: PageServerLoad = async () => {
 			.orderBy(account.createdAt, account.id),
 		loadRateTable(),
 		db.select().from(bank).orderBy(bank.label),
-		// Whose an account is. Everything has been joint by omission until now:
-		// addAccount never set an owner, so the join below always found nobody and
-		// the row said "joint" because there was nothing else it could say.
 		db
 			.select({ id: person.id, name: person.name })
 			.from(person)
@@ -56,10 +53,8 @@ export const load: PageServerLoad = async () => {
 	const bankEmoji = new Map(banks.map((b) => [b.key, b.emoji]));
 	const today = new Date().toISOString().slice(0, 10);
 
-	// How many transactions each account holds. Currency may only be corrected
-	// while an account is empty: every stored amount is minor units OF THAT
-	// currency, so a later change would reinterpret history rather than convert
-	// it. Counted here so the form does not offer what the server will refuse.
+	// Currency may only change while an account is empty: every stored amount is
+	// minor units of that currency, so a later change would reinterpret history.
 	const held = new Map(
 		(
 			await db
@@ -69,12 +64,8 @@ export const load: PageServerLoad = async () => {
 		).map((row) => [row.accountId, row.n])
 	);
 
-	// Statements and broker reports, through the one query every documents card
-	// uses. `documentsAbout` stays one query per account (it is narrow), run
-	// concurrently for every account up front rather than one at a time.
-	// `candidateDocumentsFor` is the other half: ONE query for the whole
-	// visible library plus ONE for `document_link` across every account, not
-	// the whole library fetched again for each account's picker.
+	// `documentsAbout` is one query per account, run concurrently. `candidateDocumentsFor`
+	// is one query for the whole library plus one for links, not refetched per account.
 	const accountIds = accounts.map((a) => a.id);
 	const [documentsByAccountId, candidatesByAccountId] = await Promise.all([
 		Promise.all(accountIds.map(async (id) => [id, await documentsAbout(id)] as const)).then(
@@ -90,9 +81,7 @@ export const load: PageServerLoad = async () => {
 			a.balanceMinor,
 			a.currency,
 			baseCurrency,
-			// This is today's cash/net-worth total. The statement date describes
-			// freshness; it must not make this screen use a different FX basis from
-			// the net-worth total in the sidebar.
+			// Today, not the statement date — keeps this on the same FX basis as the sidebar's net worth.
 			today
 		);
 		rows.push({
@@ -101,14 +90,11 @@ export const load: PageServerLoad = async () => {
 			bank: a.bank,
 			ownerPersonId: a.ownerPersonId,
 			canChangeCurrency: (held.get(a.id) ?? 0) === 0,
-			// What the person actually typed, for the edit form. The display emoji
-			// below falls back to the bank's, which is not the same thing: putting a
-			// fallback into an edit field turns "unset" into a value on the next save.
+			// Raw value for the edit form; falling back to the bank's emoji here would
+			// turn "unset" into a value on the next save.
 			ownEmoji: a.emoji || '',
-			// The numbers this account is known by. Written when it was created AND
-			// learned from statements as they arrive, but never shown until now — so
-			// the one thing that explains why a transfer did or did not pair was
-			// unreachable.
+			// Numbers learned from statements as they arrive, shown so a transfer's
+			// pairing (or non-pairing) is explainable.
 			numbers: a.numbers ?? [],
 			emoji: a.emoji || bankEmoji.get(a.bank) || '🏦',
 			kind: a.kind,
@@ -146,8 +132,7 @@ export const load: PageServerLoad = async () => {
 				'var(--yellow)',
 				'var(--green)'
 			];
-			// id, not name: two accounts may legitimately share a name, and a keyed
-			// each block with a repeated key throws rather than degrading.
+			// id, not name: two accounts may share a name, and a duplicate key throws in the keyed each block.
 			return { id: r.id, label: r.name, pct, from, to, color: colors[i % colors.length] };
 		}
 	);
@@ -171,12 +156,8 @@ export const load: PageServerLoad = async () => {
 		if (!out || !into) return [];
 		return [
 			{
-				// The pair's own id. What this list is keyed on in the markup, and it
-				// has to be something unique: it was keyed on date+route, and two
-				// transfers between the same two accounts on the same day — which is
-				// ordinary, a standing order and a manual top-up — produced the same
-				// key twice. Svelte throws `each_key_duplicate` on that during
-				// hydration, which killed the whole page and rendered it blank.
+				// Pair id, not date+route: two transfers between the same accounts on
+				// the same day (e.g. standing order + manual top-up) would otherwise share a key.
 				id: p.id,
 				date: out.bookedOn,
 				route: `${accountName(out.accountId)} → ${accountName(into.accountId)}`,
@@ -185,16 +166,13 @@ export const load: PageServerLoad = async () => {
 		];
 	});
 
-	// The share and the colour each account is drawn in, taken from the donut
-	// rather than computed twice: the bar on an account's card and its wedge in
-	// the pie are the same figure, and two derivations of one number is how they
-	// end up disagreeing. A brokerage account has no wedge, so it has no bar.
+	// Reuses the donut's share/colour rather than recomputing, so the bar on a
+	// card and its wedge in the pie never disagree. Brokerage has no wedge, so no bar.
 	const shareById = new Map(donut.map((d) => [d.id, { pct: d.pct, color: d.color }]));
 
 	return {
 		currencies: await availableCurrencies(),
-		// "Other" is a fallback rather than an institution, so it goes last —
-		// just above the "add a bank" control the markup renders after this list.
+		// "Other" is a fallback, not an institution, so it goes last.
 		banks: orderBanksForChoosing(
 			banks.map((b) => ({ key: b.key, label: b.label, emoji: b.emoji }))
 		),
@@ -263,13 +241,6 @@ export const actions: Actions = {
 		return { ok: true };
 	},
 
-	/**
-	 * Add a bank the list does not have.
-	 *
-	 * Choosing "Other" used to file the account under a row literally called
-	 * Other, losing the name of the bank it is actually with. The five that
-	 * shipped were the five the author banked with.
-	 */
 	addBank: async ({ request }) => {
 		const form = await request.formData();
 		const label = String(form.get('label') ?? '').trim();
@@ -280,8 +251,7 @@ export const actions: Actions = {
 		if (!key) return fail(400, { message: 'That name has no letters or digits in it.' });
 
 		const [existing] = await db.select().from(bank).where(eq(bank.key, key));
-		// Not an error: the household meant to end up with this bank on the list,
-		// and it is. Reporting a clash would be pedantry about spelling.
+		// Not an error: the household meant to end up with this bank on the list, and it is.
 		if (existing) return { ok: true, bankKey: key };
 
 		await db.insert(bank).values({ key, label, emoji });
@@ -289,10 +259,8 @@ export const actions: Actions = {
 	},
 
 	/**
-	 * File an existing document against an account — the "Attach" picker on its
-	 * `DocumentsCard`. There is no upload here: an imported statement files
-	 * itself, and a brokerage report is added from Investments, so this card
-	 * only ever attaches paper that already exists.
+	 * File an existing document against an account. No upload here — a statement
+	 * files itself, and a brokerage report is added from Investments.
 	 */
 	attachDocument: async ({ request }) => {
 		const form = await request.formData();

@@ -47,9 +47,8 @@ describe('taking a job out of the queue', () => {
 		expect(await testDb.select().from(job)).toHaveLength(0);
 	});
 
-	// The read is happening in another worker and cannot be stopped from here.
-	// Deleting the row would leave that worker finishing into nothing, and could
-	// leave a statement half ingested.
+	// Deleting a running job would leave its worker finishing into nothing,
+	// possibly half-ingesting a statement.
 	it('refuses one that is being read right now, and says why', async () => {
 		await add('d', 'running');
 		const result = await dismissJob('d', testDb);

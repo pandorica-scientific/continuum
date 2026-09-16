@@ -1,22 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // The calendar sync seam.
 //
-// Modelled on HomeProvider (src/lib/server/home/provider.ts), including the
-// self-describing field list, so the Settings connect form renders itself and no
-// screen learns anything about Google or CalDAV.
+// Modelled on HomeProvider (src/lib/server/home/provider.ts): a self-describing
+// field list lets the Settings connect form render itself.
 //
 // THE UNIT OF TRANSFER IS A WHOLE SERIES — an event plus every one of its
-// exceptions, moved atomically. That is the decision everything else rests on,
-// because it is the single thing the two providers disagree about:
-//
-//   - CalDAV keeps a recurring event and all its overrides in ONE resource: a
-//     single .ics holding the master VEVENT plus one VEVENT per RECURRENCE-ID.
-//   - Google gives every override its own event resource, tied back to the
-//     parent by recurringEventId and originalStartTime.
-//
-// Sync individual occurrences and the engine has to understand both models. Make
-// the unit "the series", and CalDAV maps one-to-one while Google's fan-out to
-// N+1 resources becomes the Google adapter's private problem.
+// exceptions, moved atomically. CalDAV keeps a recurring event and all its
+// overrides in ONE resource; Google gives every override its own resource tied
+// back by recurringEventId. Making the unit "the series" maps CalDAV one-to-one
+// and turns Google's fan-out into the Google adapter's private problem.
 
 import type { EventSeries } from '$lib/server/calendar/series';
 
@@ -63,11 +55,9 @@ export interface PullResult {
 	 * "everything the server holds".
 	 *
 	 * LOAD-BEARING. Under reset, an event's absence from the listing means it was
-	 * deleted — that is the whole point of a full reconcile. But a provider that
-	 * lists only the last ninety days is not saying anything at all about what
-	 * came before, and reading its silence as deletion is how a year of authored
-	 * events gets destroyed the first time Google expires a syncToken. The engine
-	 * only lets absence mean deletion inside this window.
+	 * deleted — the whole point of a full reconcile. But a provider that lists
+	 * only the last ninety days says nothing about what came before, so the
+	 * engine only lets absence mean deletion inside this window.
 	 */
 	resetFrom?: string | null;
 }

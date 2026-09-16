@@ -1,17 +1,8 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
-	//
-	// Several tags on one record: the ones it has as chips, and one field to add
-	// another. Typing offers every tag the household already has, so
-	// "renovation" is picked rather than retyped as "renovations" — two tags for
-	// one intention is the failure this control exists to prevent. A name that
-	// matches nothing still creates a tag; a settings screen first would be a
-	// second decision.
-	//
-	// The server folds case and whitespace the same way, from the same function:
-	// `foldTagName` is in `$lib/tags-view` precisely because this control cannot
-	// reach server code and a fold that differs by a hair makes two tags out of
-	// one without erroring.
+	// `foldTagName` lives in `$lib/tags-view` (not server code) so this control
+	// and the server fold case/whitespace identically — a mismatch would create
+	// two tags out of one without erroring.
 	import { foldTagName } from '$lib/tags-view';
 
 	let {

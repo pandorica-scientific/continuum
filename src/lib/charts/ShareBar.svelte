@@ -1,12 +1,8 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	/**
-	 * One bar, every share of it in its own colour.
-	 *
-	 * The first thing a "where did it go" list should say is the proportions,
-	 * before any figure is read; this is that, above the list. Shares are
-	 * percentages already summed by the caller, so a share of 0 draws nothing
-	 * rather than a hairline claiming to be something.
+	 * One bar, every share of it in its own colour. Shares are percentages
+	 * already summed by the caller; a share of 0 draws nothing.
 	 */
 	let {
 		segments,

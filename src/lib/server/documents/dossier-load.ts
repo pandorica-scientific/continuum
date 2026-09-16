@@ -2,14 +2,11 @@
 /**
  * What a dossier shelf draws: one card per unit, with its lanes and its history.
  *
- * Generalised in v0.8.0 from `counterparties-load`, which drew this for
- * organisations alone because Income & Tax was the only shelf with lanes. A
- * car's road tax and a flat's boiler inspection are the same shape, so the
- * cards come from whatever the shelf's `unit` says and the lanes hang off the
- * entity supertype.
+ * A car's road tax and a flat's boiler inspection are the same shape as an
+ * organisation's filings, so cards come from whatever the shelf's `unit` says
+ * and lanes hang off the entity supertype rather than being organisation-only.
  *
- * Two things changed besides the generalisation, and both are rulings rather
- * than refactors:
+ * Two rulings worth stating:
  *
  * - **Membership is `document.lane_id`, not a match.** `matchesLane` PROPOSES a
  *   lane and a person confirms it. Two lanes on one card can both match a

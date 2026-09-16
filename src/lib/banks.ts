@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // The banks a fresh instance starts with, and nothing more.
 //
-// These used to be a hardcoded <option> list on the accounts screen plus a
-// parallel emoji map in its loader — two places to edit, and no way for a
-// household banking somewhere else to say so. They are seeded into `bank` on
-// boot; adding one from the accounts screen writes a row like any other.
+// Seeded into `bank` on boot; adding one from the accounts screen writes a
+// row like any other.
 
 export interface BankSeed {
 	key: string;
@@ -42,16 +40,12 @@ export function bankKeyFor(label: string): string {
 /**
  * The order banks are offered in when somebody is choosing one.
  *
- * Alphabetical among the real institutions, with "Other" last. It is a
- * fallback rather than a bank, and sorting it by its label dropped it into the
- * middle of the list — between Monzo and Revolut — where it read as one more
- * institution somebody had added.
+ * Alphabetical among the real institutions, with "Other" last — it is a
+ * fallback rather than a bank, so it never sorts into the middle by label.
+ * The "add a bank" control is not in this list; the markup renders it after
+ * these options.
  *
- * The "add a bank" control is not in this list at all: the markup renders it
- * after these options, because it is an action rather than a choice.
- *
- * `localeCompare` rather than `<`, so "Česká spořitelna" sorts before "Fio
- * banka" instead of after "Zurich".
+ * `localeCompare` rather than `<`, so accented labels sort correctly.
  */
 const FALLBACK_KEY = 'other';
 

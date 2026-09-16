@@ -97,7 +97,7 @@ COPY --from=build /app/docker/mdns.mjs ./mdns.mjs
 # Deliberately the LAST copy, and so its own layer. Engravings arrive in batches
 # over many releases and will reach about 85 MB; a release that adds none must
 # not re-push or re-pull the lot, and layer order is the whole of that fix.
-COPY --from=build /app/place-icons ./place-icons
+COPY --from=build /app/assets/place-icons ./assets/place-icons
 
 # Uploaded files (property photos, documents, statements) live on this volume.
 # /run/continuum is where the announcer leaves the machine's name and

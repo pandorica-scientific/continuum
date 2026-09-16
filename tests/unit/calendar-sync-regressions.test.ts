@@ -11,11 +11,8 @@ import type { EventSeries } from '$lib/server/calendar/series';
 // makes them worth keeping is the failure, not the function.
 
 describe('recurrence expansion', () => {
-	// FREQ=WEEKLY with no BYDAY is valid RFC 5545 and is what Apple Calendar and
-	// several CalDAV clients emit. Matching on day-of-MONTH instead of weekday
-	// made it expand roughly monthly, so a weekly event pulled from a connected
-	// calendar lost three of every four occurrences — on screen and in the
-	// published feed alike.
+	// FREQ=WEEKLY with no BYDAY is valid RFC 5545. Matching day-of-month instead
+	// of weekday made it expand roughly monthly, losing three of four occurrences.
 	it('expands a weekly rule with no BYDAY once a week, not once a month', () => {
 		const out = expand('FREQ=WEEKLY', '2026-09-10T09:00:00Z', 'UTC', '2026-09-01', '2026-09-30');
 		expect(out).toEqual([
@@ -36,10 +33,9 @@ describe('recurrence expansion', () => {
 		expect(out).toEqual(['2026-09-10T09:00:00.000Z', '2026-09-24T09:00:00.000Z']);
 	});
 
-	// The window's two ends were read on different clocks: UTC midnight at the
-	// start, zone-local end of day at the finish. That opens a hole the width of
-	// the offset at the start of every window — in Prague an event at 00:30 on the
-	// 1st appeared in neither that month nor the one before.
+	// Regression: the window's two ends were read on different clocks (UTC
+	// midnight at the start, zone-local end of day at the finish), opening a
+	// gap the width of the offset at the start of every window.
 	it('sees an event in the offset gap at the start of a month exactly once', () => {
 		const at = '2026-08-31T22:30:00Z'; // 00:30 on 1 September in Prague
 		const september = expand('', at, 'Europe/Prague', '2026-09-01', '2026-09-30');
@@ -142,10 +138,8 @@ describe('all-day round trip', () => {
 	};
 
 	// DTEND is exclusive, so a one-day event on the 28th is written as the 1st.
-	// Reading it back as midnight rather than end of day made every generated
-	// all-day event come back a day short — which hashed differently, which the
-	// engine read as a remote DATE MOVE, which wrote a new payment day into the
-	// loan on every single pass.
+	// Reading it back as midnight instead of end-of-day made every generated
+	// all-day event a day short, hashing as a remote date move on every pass.
 	it('reads its own DTEND back to the instant it was written from', () => {
 		const back = parseIcs(toIcs(generated));
 		expect(back?.startsAt).toBe(generated.startsAt);

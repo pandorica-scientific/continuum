@@ -1,11 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-/**
- * When a bottle wants drinking.
- *
- * The gate is the whole point: a bottle with no window has no opinion, and
- * without that gate a bottle of gin gets told to "drink soon" inside a window
- * that does not exist.
- */
 import { describe, expect, it } from 'vitest';
 import { drinkPhase, phaseHue, phaseWord } from '$lib/life/collections/drink-by';
 

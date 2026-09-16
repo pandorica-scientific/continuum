@@ -45,9 +45,7 @@ describe('a straight outline', () => {
 	});
 
 	it('reduces exactly to the bilinear map, so a flat page is not a special case', () => {
-		// With four straight edges the Coons patch IS the bilinear surface: the
-		// ruled parts and the correction cancel. Anything else here means a flat
-		// page would be silently re-sampled by a feature it does not use.
+		// With four straight edges the Coons patch IS the bilinear surface.
 		const maps = meshMaps(square, 21, 41);
 		for (const [col, row] of [
 			[10, 20],
@@ -90,11 +88,8 @@ describe('a bowed outline', () => {
 	});
 
 	it('does not pincushion the interior', () => {
-		// The Coons patch subtracts the bilinear surface through the corners
-		// because both ruled surfaces already contain it. Leaving that term out
-		// pulls the middle of a FLAT page inward — a fault that looks like a lens
-		// rather than a mistake — so it is checked on the flat case, where the
-		// centre must land exactly at the centre.
+		// Omitting the bilinear correction pulls the middle of a FLAT page inward — a
+		// fault that looks like a lens rather than a mistake.
 		const maps = meshMaps(square, 21, 41);
 		expect(at(maps, 21, 10, 20).x).toBeCloseTo(50, 2);
 		expect(at(maps, 21, 10, 20).y).toBeCloseTo(100, 2);
@@ -119,11 +114,8 @@ describe('the size a bowed page is rendered at', () => {
 	});
 
 	it('is still held to the ceiling a flat page is held to', () => {
-		// `outputSize` clamps and the bowed path does not go through it, so the
-		// span measured here has to be clamped by whoever uses it — otherwise a
-		// bowed page in a large frame asks for an output the size of its own arc
-		// length in source pixels: about 7000×9800 from a 48 MP photograph, which
-		// is a 274 MB Mat and the remap maps beside it.
+		// The bowed path bypasses `outputSize`'s clamp, so the caller must clamp this
+		// span itself — otherwise a bowed page in a large frame asks for a ~274 MB Mat.
 		const huge: Outline = {
 			corners: {
 				tl: { x: 0, y: 0 },
@@ -144,9 +136,8 @@ describe('the size a bowed page is rendered at', () => {
 
 describe('an edge sampled unevenly', () => {
 	it('is walked by arc length, so the page does not stretch where points bunch', () => {
-		// Points crowded at one end of an edge would otherwise be traversed
-		// slowly and the sparse end quickly, stretching the paper across the
-		// difference.
+		// Points crowded at one end would otherwise be traversed slowly, stretching
+		// the paper across the difference.
 		const bunched: Point[] = [
 			{ x: 2, y: 0 },
 			{ x: 4, y: 0 },
@@ -157,8 +148,7 @@ describe('an edge sampled unevenly', () => {
 			edges: { top: bunched, right: [], bottom: [], left: [] }
 		};
 		const maps = meshMaps(outline, 21, 41);
-		// Halfway along the top edge is halfway along its LENGTH, which for a
-		// straight run from 0 to 100 is still 50 however the points are spaced.
+		// Halfway along the top edge is halfway along its LENGTH, not its point count.
 		expect(at(maps, 21, 10, 0).x).toBeCloseTo(50, 0);
 	});
 });

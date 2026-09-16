@@ -89,28 +89,23 @@ describe('reassign-and-delete', () => {
 		await expect(reassignAndDelete(inbox, household, testDb)).rejects.toThrow(/system/i);
 		expect(await shelfExists(inbox)).toBe(true);
 
-		// D4: finance and property joined inbox/statements as system shelves —
-		// the salary tracker files payslips and tax attachments to finance by
-		// key, so a household that deleted it would break the next payslip.
+		// The salary tracker files payslips and tax attachments to finance by key,
+		// so deleting it would break the next payslip.
 		const finance = await shelfIdByKey('income_tax', testDb);
 		await expect(reassignAndDelete(finance, household, testDb)).rejects.toThrow(/system/i);
 		expect(await shelfExists(finance)).toBe(true);
 
-		// identity, health and inventory carry the flag for the other reason:
-		// nothing writes to them by key, so deleting one would break nothing that
-		// runs, and they are fixed anyway so that a passport, a test result and a
-		// boiler warranty are findable in the same place on every instance.
-		// Asserted here because that is exactly the kind of rule a later refactor
-		// "simplifies" back out by deriving the flag from who writes to it.
+		// identity, health and inventory carry the flag for a different reason: nothing
+		// writes to them by key, but they stay fixed so a passport, a test result and
+		// a boiler warranty are findable in the same place on every instance.
 		for (const key of ['identity', 'health', 'inventory']) {
 			const id = await shelfIdByKey(key, testDb);
 			await expect(reassignAndDelete(id, inbox, testDb)).rejects.toThrow(/system/i);
 			expect(await shelfExists(id)).toBe(true);
 		}
 
-		// vehicles is seeded and removable — not every household drives. The
-		// contrast that proves the guard reads the `system` flag rather than
-		// refusing every seeded shelf.
+		// vehicles is seeded but removable, proving the guard reads the `system`
+		// flag rather than refusing every seeded shelf.
 		const vehicles = await shelfIdByKey('vehicles', testDb);
 		await reassignAndDelete(vehicles, household, testDb);
 		expect(await shelfExists(vehicles)).toBe(false);

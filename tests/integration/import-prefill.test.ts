@@ -1,14 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * Arriving at the import from a gap on the Statements ribbon.
+ * Arriving at the import screen from a gap on the Statements ribbon.
  *
- * The ribbon knows which account and which month it just asked about, and
- * before this the import screen took no parameters at all — so clicking a gap
- * meant answering a question the screen that sent you had already answered.
- *
- * Everything is validated rather than trusted. These are URL parameters, so a
- * stale bookmark naming a deleted account has to leave a usable upload form
- * rather than a 500: the page is still worth having with nothing filled in.
+ * URL parameters are validated, not trusted: a stale bookmark naming a
+ * deleted account must still leave a usable upload form, not a 500.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';

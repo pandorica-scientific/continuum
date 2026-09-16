@@ -15,9 +15,8 @@ import { ICONS } from '$lib/icons';
 const allModules = (on: boolean): ModuleToggles =>
 	Object.fromEntries(MODULE_KEYS.map((key) => [key, on])) as ModuleToggles;
 
-// A panel is three things in three places — a registry entry, a component and a
-// data builder. Nothing in the type system ties them together, so a fourteenth
-// panel can half-exist and only show up as a blank box at runtime.
+// A panel is a registry entry, a component, and a data builder; nothing ties them
+// together, so a panel can half-exist and only show up as a blank box at runtime.
 describe('the panel registry', () => {
 	it('gives every panel a component file', () => {
 		for (const panel of PANELS) {
@@ -29,9 +28,8 @@ describe('the panel registry', () => {
 		}
 	});
 
-	// The eyebrow is an icon now, and Icon.svelte looks its name up in ICONS. A
-	// name that is not there renders an empty <svg>, so a typo costs a panel its
-	// eyebrow with nothing thrown and nothing logged.
+	// Icon.svelte looks the name up in ICONS; a missing name renders an empty <svg>
+	// with nothing thrown or logged.
 	it('names an icon that exists for every panel', () => {
 		for (const panel of PANELS) {
 			expect(panel.icon in ICONS, `${panel.key} names an unknown icon: ${panel.icon}`).toBe(true);
@@ -50,8 +48,6 @@ describe('the panel registry', () => {
 		}
 	});
 
-	// Every panel must be reachable, or it sits in the registry forever with no
-	// way to place it.
 	it('offers every panel when every module is on', () => {
 		for (const panel of PANELS) {
 			expect(panelAvailable(panel.key, allModules(true)), `${panel.key} is never available`).toBe(
@@ -66,29 +62,19 @@ describe('the panel registry', () => {
 		}
 	});
 
-	// The first-run picker offers all eighteen at once, and a title alone does
-	// not say what "Paper" or "Statements" will actually draw. The line under it
-	// is the only thing that does, so a panel added without one silently reads
-	// as the odd one out on the very screen that introduces the board.
 	it('gives every panel a description', () => {
 		for (const panel of PANELS) {
 			expect(panel.description.trim(), `${panel.key} has no description`).not.toBe('');
-			// One line beside an icon: past this it wraps to three on a narrow
-			// chip and the grid stops looking like a set of equals.
 			expect(
 				panel.description.length,
 				`${panel.key} describes itself at length`
 			).toBeLessThanOrEqual(90);
-			// A fragment rather than a sentence, like every other caption here.
 			expect(panel.description.endsWith('.'), `${panel.key} ends in a full stop`).toBe(false);
 		}
 	});
 
-	// A panel's header offers "Open →", and pathDisabled is what 404s a screen
-	// whose module is switched off. So any module that closes a panel's
-	// destination has to be one the panel is already gated on — otherwise the
-	// board keeps offering a link into a not-found page, which is exactly what
-	// the pre-V2 Overview did with its unconditional calendar link.
+	// A module that closes a panel's link destination (pathDisabled) must be one the
+	// panel is already gated on, or the board offers a link into a 404.
 	it('gates every panel on the modules that close its link', () => {
 		for (const panel of PANELS) {
 			if (!panel.href) continue;
@@ -105,17 +91,11 @@ describe('the panel registry', () => {
 });
 
 describe('the suggested layout', () => {
-	// Nothing but this stops a mistake reaching everyone who takes the offer —
-	// the picker's primary button and Reset both apply it unread.
 	it('survives normalisation unchanged', () => {
 		expect(normalise(SUGGESTED_LAYOUT, PANEL_BOUNDS)).toEqual(SUGGESTED_LAYOUT);
 	});
 
-	// The suggested board used to restate every panel's size. Reducing the
-	// briefing panel's default height then changed the definition and not the
-	// board, so the screen went on drawing the old size and looked for all the
-	// world like a rendering bug. Sizes belong to the panel; only x and y belong
-	// to the arrangement.
+	// Sizes belong to the panel definition; only x and y belong to the arrangement.
 	it('takes every size from the panel it places, not from a second copy', () => {
 		for (const placed of SUGGESTED_LAYOUT) {
 			const panel = panelDefinition(placed.k);
@@ -132,8 +112,6 @@ describe('the suggested layout', () => {
 		const bottom = Math.max(...SUGGESTED_LAYOUT.map((p) => p.y + p.h));
 		const covered = new Set<number>();
 		for (const p of SUGGESTED_LAYOUT) for (let y = p.y; y < p.y + p.h; y++) covered.add(y);
-		// Every row from the top to the tallest panel's bottom has something on
-		// it: an empty band across the whole board is dead space nobody chose.
 		for (let y = 0; y < bottom; y++) expect(covered.has(y), `row ${y} is empty`).toBe(true);
 	});
 
@@ -148,8 +126,6 @@ describe('the suggested layout', () => {
 		}
 	});
 
-	// What "Use the suggested board" hands somebody who has just arrived: four
-	// panels that answer the questions the app is opened for, and no more.
 	it('is the suggested board, and only those four panels', () => {
 		expect(SUGGESTED_LAYOUT.map((p) => p.k)).toEqual([
 			'briefing',
@@ -160,8 +136,6 @@ describe('the suggested layout', () => {
 	});
 });
 
-// The seven glyphs Spec C drew for the board, checked the way the scan and
-// documents batches check their own.
 const ADDED = ['bell', 'layers', 'coins', 'bars', 'trend', 'key', 'alert'] as const;
 
 describe('the overview icons', () => {
@@ -170,9 +144,8 @@ describe('the overview icons', () => {
 	});
 
 	it('keeps every typed primitive inside the 24 viewBox', () => {
-		// Only circle/line/rect are checked. A `path` string mixes absolute
-		// coordinates, relative offsets and arc flags, so scanning it for numbers
-		// cannot tell a coordinate from a sweep flag.
+		// Only circle/line/rect are checked; a `path` string mixes coordinates and
+		// flags, so scanning it for numbers can't tell one from the other.
 		const outside: string[] = [];
 		for (const name of ADDED) {
 			for (const part of ICONS[name]) {

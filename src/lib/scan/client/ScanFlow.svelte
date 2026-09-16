@@ -1,20 +1,12 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	// The one component a call site mounts. It owns which screen is showing.
+	// Every pixel operation happens on the server.
 	//
-	// Every pixel operation now happens on the server. What is left here is the
-	// journey — camera, inspect, corners, keep, add or retake, done — which is
-	// deliberately unchanged: the same screens in the same order, doing the same
-	// things. Only where the work happens moved.
-	//
-	// THE PHOTOGRAPH IS A CACHE, NOT STORAGE. The file the camera produced is
-	// held only while its page is on the inspection or corner screen, so the
-	// corner handles can be drawn over the phone's own copy without fetching
-	// anything. The moment the page is kept it is released, and what remains is
-	// a preview URL of a couple of hundred kilobytes. Coming back to re-edge a
-	// kept page fetches the original again, which is rare and cheap; holding
-	// twenty photographs to make it free would cost 60 MB on the device least
-	// able to spare it.
+	// The photograph is a cache, not storage: the phone's file is held only
+	// while its page is on the inspection or corner screen, then released once
+	// kept, leaving just a preview URL. Re-editing a kept page re-fetches the
+	// original rather than holding twenty photographs (60 MB) just in case.
 
 	import { type Line, type Outline, type PageMode, type Rotation } from '../core/index.ts';
 	import { isSecureForCamera } from './camera.svelte.ts';
@@ -46,40 +38,27 @@
 		 *  instead of opening the viewfinder. */
 		incoming?: File[];
 		/**
-		 * What comes out at the end.
-		 *
-		 * `document` is the journey this engine was built for: many pages,
-		 * thresholded, assembled into one PDF. `picture` is the same camera and
-		 * the same corner editor stopping halfway — one page, in colour, handed
-		 * back as an image. A wine label, a meter dial, the back of a card: things
-		 * that want the de-skew and would be ruined by the rest of it.
+		 * What comes out at the end. `document` is many pages, thresholded, and
+		 * assembled into one PDF. `picture` is the same camera and corner editor
+		 * stopping halfway: one page, in colour, handed back as an image.
 		 */
 		finish?: 'document' | 'picture';
 		onclose: () => void;
 		/** The upload path's Replace: there is no viewfinder to go back to. */
 		onchoosefile?: () => void;
 		/**
-		 * The finished page, handed to whatever the call site already does with
-		 * a file.
-		 *
-		 * `original` is the photograph it was cropped FROM, whole and untouched —
-		 * the file the camera or the drop produced. A picture site can keep both:
-		 * the crop for where a crop belongs, the whole frame for where it does
-		 * not. Absent for a document, which has no use for it.
+		 * The finished page, handed to whatever the call site already does with a
+		 * file. `original` is the whole, uncropped photograph it came from —
+		 * absent for a document, which has no use for it.
 		 */
 		ondone: (file: File, original?: File) => void | Promise<void>;
 	} = $props();
 
-	/**
-	 * Derived, not read once: `finish` is a prop, and a plain read would capture
-	 * whatever it was the first time this mounted. It never changes at any call
-	 * site today, which is exactly why a silent capture would go unnoticed.
-	 */
+	/** Derived rather than read once, so a future prop change wouldn't be silently missed. */
 	const picture = $derived(finish === 'picture');
 
-	// The INITIAL value is exactly what is wanted here, and reading it once is
-	// deliberate: were this to start on 'capture', the viewfinder would mount for
-	// a frame and ask for camera permission — for a photograph already in hand.
+	// Read once, deliberately: starting on 'capture' would mount the viewfinder
+	// and ask for camera permission for a photograph already in hand.
 	// svelte-ignore state_referenced_locally
 	let screen = $state<'capture' | 'preview' | 'review' | 'reading' | 'corners'>(
 		incoming.length ? 'reading' : 'capture'
@@ -87,14 +66,7 @@
 	const session = createSession();
 	let busy = $state(false);
 	let failure = $state<string | null>(null);
-	/**
-	 * What the reading screen is doing right now.
-	 *
-	 * It began as a diagnostic — a phone on plain http has no console anyone can
-	 * reach, and naming the step is what located a hang that had no error to
-	 * report. It stays because the honest answer to "why is this taking a
-	 * moment" is worth showing.
-	 */
+	/** What the reading screen is doing right now, shown since a phone on plain http has no reachable console. */
 	let stage = $state('');
 
 	/** The page currently being inspected, as the server and the phone each see it. */
@@ -114,15 +86,7 @@
 	}
 
 	let held = $state<Held | null>(null);
-	/**
-	 * A picture starts in colour and a document starts thresholded.
-	 *
-	 * Only the default differs — all four modes are offered either way. Nobody
-	 * photographs a wine label wanting 1-bit black and white first, and nobody
-	 * scans a contract wanting a three-megabyte colour JPEG; but a receipt
-	 * photographed as a picture may well want thresholding, and that is the
-	 * household's call rather than this component's.
-	 */
+	/** A picture starts in colour and a document starts thresholded; all four modes are offered either way. */
 	// svelte-ignore state_referenced_locally
 	let mode = $state<PageMode>(picture ? 'color' : 'bw');
 	/** Bumped on every render so the preview URL is a new one to the browser. */
@@ -140,9 +104,8 @@
 
 	/**
 	 * Where the next page comes from. The in-page viewfinder needs a secure
-	 * context, which a self-hosted Continuum on a plain-http address never
-	 * has; there, every page comes from the phone's own camera app instead,
-	 * through the input below, and lands on the same pipeline.
+	 * context; on plain http, every page comes from the phone's own camera app
+	 * instead, through the input below, landing on the same pipeline.
 	 */
 	const viewfinder = typeof window !== 'undefined' && isSecureForCamera(window.location);
 	let cameraInput = $state<HTMLInputElement | null>(null);
@@ -151,13 +114,7 @@
 		else cameraInput?.click();
 	}
 
-	/**
-	 * Send a photograph up and show what comes back.
-	 *
-	 * The upload is the only thing the phone does with the file besides display
-	 * it. A 12 MP HEIC that used to be decoded here — 3.6 seconds, and the
-	 * allocation that failed on iOS — is now bytes on a socket.
-	 */
+	/** Send a photograph up and show what comes back. */
 	async function read(file: File) {
 		screen = 'reading';
 		failure = null;
@@ -221,13 +178,9 @@
 	}
 
 	/**
-	 * Show the photograph with handles on it.
-	 *
-	 * The phone's own copy is used when it still has one, which is the common
-	 * case and costs nothing. A page that was already kept has released its
-	 * file, and a HEIC that this browser will not decode never displayed in the
-	 * first place — both fall through to the server's downscaled original, which
-	 * is what that endpoint exists for.
+	 * Show the photograph with handles on it. The phone's own copy is used when
+	 * it still has one; a kept page (file released) or undecodable HEIC falls
+	 * through to the server's downscaled original.
 	 */
 	function openCorners() {
 		if (!held || !session.id) return;
@@ -241,13 +194,7 @@
 		cornersUrl = originalUrl(session.id, held.pageId);
 	}
 
-	/**
-	 * Render at full resolution, store the artefact, and add the page.
-	 *
-	 * This is where the phone lets go of the photograph: the document has it
-	 * now, and holding twenty of them is the memory problem this release exists
-	 * to remove.
-	 */
+	/** Render at full resolution, store the artefact, and add the page — where the phone lets go of the photograph. */
 	async function keep() {
 		if (!held || !session.id) return;
 		busy = true;
@@ -262,24 +209,19 @@
 			});
 			session.add(held.pageId, mode, previewUrl(session.id, held.pageId, token));
 			const kept = held.pageId;
-			// Taken before `discard()` releases it: this is the photograph as it
-			// arrived, which is the one thing the server never keeps.
+			// Taken before `discard()` releases it: the server never keeps the original.
 			const original = held.file;
 			discard();
 
-			// A picture is one page and there is nothing to assemble, order or
-			// name — so keeping it IS finishing it, and a review screen holding a
-			// single thumbnail and a filename field would be a step that asks a
-			// question nobody has.
+			// A picture is one page with nothing to assemble or name, so keeping
+			// it is finishing it.
 			if (picture) {
 				await handOver(kept, original);
 				return;
 			}
 
-			// A dropped photo has no viewfinder to go back to, and a full document
-			// has nowhere further to go: both land on the review screen, as does
-			// every page on plain http. Otherwise return to the camera, which is
-			// what someone scanning a stack wants.
+			// A dropped photo has no viewfinder to return to; a full document has
+			// nowhere further to go. Otherwise back to the camera for the next page.
 			screen = fromUpload || session.full || !viewfinder ? 'review' : 'capture';
 		} catch (error) {
 			failure = error instanceof Error ? error.message : 'That page could not be kept.';
@@ -337,13 +279,9 @@
 	}
 
 	/**
-	 * Discard the page being inspected, on the server as well as here.
-	 *
-	 * The replacement is uploaded into the SAME session, so a page dropped
-	 * without saying so stays on disk as its full-size original until the
-	 * document is made — twice the scratch for a page photographed twice, and
-	 * more for a difficult one. `discard()` on its own is for a page that is
-	 * staying, which is the one the keep path has just committed.
+	 * Discard the page being inspected, on the server as well as here. The
+	 * replacement uploads into the same session, so without this a retaken page
+	 * doubles the scratch on disk until the document is made.
 	 */
 	function retake() {
 		if (held && session.id) dropScanPage(session.id, held.pageId);
@@ -358,13 +296,9 @@
 	}
 
 	/**
-	 * Hold the page still underneath.
-	 *
-	 * `overflow: hidden` on the body is the obvious lock and it does not work on
-	 * iOS Safari — touch scrolling ignores it. The technique that does work is to
-	 * pin the body with `position: fixed` at its current offset, which takes it
-	 * out of flow entirely so there is nothing left to scroll, then put the
-	 * offset back on the way out.
+	 * Hold the page still underneath. `overflow: hidden` doesn't work on iOS
+	 * Safari (touch scrolling ignores it), so the body is pinned with
+	 * `position: fixed` at its current offset instead.
 	 */
 	$effect(() => {
 		const body = document.body;
@@ -389,23 +323,15 @@
 			body.style.left = previous.left;
 			body.style.right = previous.right;
 			body.style.overflow = previous.overflow;
-			// Pinning the body scrolled it to the top; put the reader back where
-			// they were rather than at the top of the documents list.
+			// Pinning the body scrolled it to the top; restore where it was.
 			window.scrollTo(0, offset);
 		};
 	});
 
 	/**
-	 * The scratch goes back however the screen ends, not only when Cancel is
-	 * pressed.
-	 *
-	 * Closing the tab, a phone that goes flat, a call site that unmounts this
-	 * component — all of them are the end of the scan as far as the server is
-	 * concerned, and none of them reach `abandon()`. The sweep is the backstop
-	 * and runs two hours later; this is the same request at the moment the screen
-	 * goes away, which is what `keepalive` on that fetch is for. It is a no-op
-	 * once a document has been made: `make()` disposes the session first, so
-	 * there is no id left to drop.
+	 * The scratch goes back however the screen ends, not only on Cancel: closing
+	 * the tab or unmounting never reaches `abandon()`. A no-op once a document
+	 * has been made, since `make()` disposes the session first.
 	 */
 	$effect(() => {
 		const leave = () => {
@@ -428,8 +354,7 @@
 </script>
 
 <!-- The phone's camera app, for a page on plain http. `capture` opens the
-     camera directly rather than the gallery; the photo is read like a dropped
-     one. -->
+     camera directly rather than the gallery. -->
 <input
 	bind:this={cameraInput}
 	type="file"
@@ -513,11 +438,9 @@
 			// On the upload path there is no viewfinder to return to, so Replace
 			// means "pick a different file" and the button says so.
 			if (held?.from === 'upload') {
-				// But the pages already kept are not this photograph's to throw
-				// away. Handing back to the call site UNMOUNTS this component and
-				// the session goes with it, so retaking a page you did not like
-				// silently cost you every page behind it. Retake in place instead
-				// and leave the document alone.
+				// Handing back to the call site unmounts this component, and the
+				// session with it — so retake in place instead of losing every
+				// page already kept.
 				if (session.pages.length > 0) {
 					retake();
 					// Somewhere to land if the camera is dismissed: the review

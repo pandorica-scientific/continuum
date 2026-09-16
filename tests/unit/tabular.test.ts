@@ -9,11 +9,9 @@ import { chooseGrid, detectRegions, transactionRows } from '$lib/server/import/t
 import { normalise } from '$lib/server/import/tabular/vocabulary';
 import { looksLikeSummary, roleOfHeader } from '$lib/server/import/tabular/vocabulary';
 
-/**
- * The shape of a real mBank export, reduced but structurally faithful: a long
- * key/value preamble, a turnover summary, an opening balance, the movements,
- * and a closing balance sharing the movements' width.
- */
+// The shape of a real mBank export, reduced but structurally faithful: a long
+// key/value preamble, a turnover summary, an opening balance, the movements,
+// and a closing balance sharing the movements' width.
 const MBANK = [
 	'mBank S.A. Bankowość Detaliczna;',
 	'\t\tSkrytka Pocztowa 2108;',
@@ -116,16 +114,10 @@ describe('region detection', () => {
 	});
 
 	it('files the closing-balance row as evidence rather than as a movement', () => {
-		// mBank prints its closing balance in a row the same width as a movement
-		// and directly below them, which is why a width-based reader imports it as
-		// a transaction that does not exist.
-		//
-		// It used to be caught inside the transaction region and filtered out
-		// there, which kept it from being imported but also threw it away. Now the
-		// region split notices that it fills different columns and gives it a
-		// region of its own, where it is read for what it is — the statement's own
-		// closing balance, and therefore something the arithmetic can check the
-		// movements against.
+		// mBank prints its closing balance in a row the same width as a movement,
+		// directly below them, so a width-based reader would import it as a
+		// transaction that does not exist. The region split notices it fills
+		// different columns and gives it its own region instead.
 		const table = regions.find((r) => r.role === 'transactions')!;
 		expect(transactionRows(table)).toHaveLength(5);
 
@@ -155,9 +147,8 @@ describe('choosing between readings', () => {
 	});
 
 	it('reads ungrouped integer amounts, which is how Fio prints whole crowns', () => {
-		// Requiring a thousands separator dropped three of six real movements
-		// while a fixture using "240,00" passed — the amounts a bank writes
-		// plainly are still amounts.
+		// Guards against requiring a thousands separator, which dropped amounts
+		// a bank writes plainly with none.
 		const ungrouped = [
 			'"ID operace";"Datum";"Objem";"Měna"',
 			'"27737637241";"14.07.2026";"-20000";"CZK"',

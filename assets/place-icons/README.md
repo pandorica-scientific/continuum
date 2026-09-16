@@ -25,7 +25,7 @@ upscaling is the hatching.
 
 ## Naming
 
-The file name is the place id from `datasets/travel-places.json` —
+The file name is the place id from `assets/datasets/travel-places.json` —
 `ad-q1863.webp` is the place whose `id` is `ad-q1863`. That is the whole lookup:
 no manifest, and no database column that could claim an engraving exists when
 the file does not.

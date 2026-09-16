@@ -19,7 +19,7 @@
 	let typeFilter = $state<EnumValue<'bottle.type'> | null>(null);
 	let sort = $state<'producer' | 'score' | 'vintage' | 'drink'>('producer');
 	let adding = $state(false);
-	/** Only one shelf exists in v0.9.0, but the rail selects one all the same. */
+	/** Only one shelf exists currently, but the rail selects one all the same. */
 	let shelf = $state<string | null>(null);
 
 	$effect(() => {

@@ -2,19 +2,13 @@
 /**
  * How many of a bottling the household has, and how many are open.
  *
- * A `bottle` row is not one physical bottle — it is a bottling somebody owns
- * some number of. Two numbers say everything: `owned` and `opened`. The state
- * (sealed, open, finished) is read from them and is deliberately not a column,
- * because a stored state is a third number that can disagree with the other
- * two.
+ * A `bottle` row is a bottling owned some number of; `owned`/`opened` are the
+ * only two numbers, and state (sealed/open/finished) is derived rather than
+ * stored, since a stored state could disagree with them.
  *
- * Pure arithmetic, no DOM, no database: the three controls in the ownership row
- * call these, and the CHECK constraint on `bottle` is what happens when they
- * are wrong.
- *
- * Nothing here clamps for display. If the stored numbers are impossible, the
- * screen says so — a clamp hides the bug it is covering, and a cellar quietly
- * showing "2 sealed" over a row that says otherwise is worse than an odd label.
+ * Pure arithmetic, no DOM, no database — the CHECK constraint on `bottle` is
+ * what catches these being wrong. Nothing here clamps for display: an
+ * impossible stored count is shown as such, not hidden.
  */
 
 export interface Counts {
@@ -25,24 +19,13 @@ export interface Counts {
 /** Another sealed bottle. Buying one does not open it. */
 export const add = ({ owned, opened }: Counts): Counts => ({ owned: owned + 1, opened });
 
-/**
- * One fewer bottle — the open one first.
- *
- * Drinking the open bottle is what usually happens, so `−` finishes that before
- * it touches the sealed ones. Only once nothing is open does the sealed count
- * fall.
- */
+/** One fewer bottle — drains the open one first, before touching sealed count. */
 export function remove({ owned, opened }: Counts): Counts {
 	if (owned <= 0) return { owned: 0, opened: Math.max(0, opened) };
 	return { owned: owned - 1, opened: opened > 0 ? opened - 1 : opened };
 }
 
-/**
- * Open one of the sealed ones.
- *
- * The only control that raises the open count, and it cannot go past what is
- * owned — which is exactly the `opened <= owned` half of the CHECK.
- */
+/** Open one of the sealed ones; cannot exceed `owned` (the CHECK's other half). */
 export function openOne({ owned, opened }: Counts): Counts {
 	if (opened >= owned) return { owned, opened };
 	return { owned, opened: opened + 1 };
@@ -57,11 +40,8 @@ export interface BottleState {
 }
 
 /**
- * What the two numbers mean, said the way a person would.
- *
- * At one bottle the count is noise — "Sealed" is the whole story. Above one,
- * both numbers are worth saying, because "3 sealed, 1 open" is a different
- * evening from "4 sealed".
+ * What the two numbers mean, said the way a person would. At one bottle the
+ * count is noise ("Sealed"); above one, both numbers matter ("3 sealed, 1 open").
  */
 export function stateOf({ owned, opened }: Counts): BottleState {
 	if (opened > owned) return { kind: 'impossible', label: `${opened} open of ${owned}` };

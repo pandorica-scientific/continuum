@@ -7,9 +7,7 @@
 
 	let { data } = $props();
 
-	// The month the figures are actually about, not today's. A household that
-	// imports a statement in the second week of August is looking at July, and
-	// the old caption told them it was August.
+	// The month the figures are about, not today's — statements lag.
 	const caption = $derived(
 		data.dataMonth
 			? `${monthLabel(data.dataMonth)} · as of the latest statement`
@@ -17,8 +15,7 @@
 	);
 	const available = $derived((key: string) => panelAvailable(key, data.modules));
 
-	// The board's one mode, owned here so the button that flips it can sit in
-	// the header beside the title rather than in a bar of its own under it.
+	// Owned here so the toggle button can live in the header instead of its own bar.
 	let customising = $state(false);
 </script>
 
@@ -37,11 +34,8 @@
 </ScreenHeader>
 
 <!--
-	Deliberately not wrapped in {#key data.layout}: the loader builds a fresh
-	array every load, so keying on it remounted the board on every invalidation.
-	Adding a panel calls invalidateAll(), which then dropped the person out of
-	Customise mode and threw away the "not saved" notice along with the panel it
-	referred to. The board owns the arrangement once it is mounted.
+	Not wrapped in {#key data.layout}: the loader returns a fresh array each load,
+	and keying on it would remount the board (and drop Customise mode) on invalidation.
 -->
 <Board
 	layout={data.layout}

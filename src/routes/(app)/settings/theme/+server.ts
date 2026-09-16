@@ -8,15 +8,9 @@ import { THEME_COOKIE, themeCookieOptions } from '$lib/theme';
 import type { RequestHandler } from './$types';
 
 /**
- * Save this person's theme.
- *
- * Stored on the person, not in the browser: it used to live in `localStorage`,
- * which meant two people sharing a laptop shared a theme and one person on a
- * laptop and a phone silently had two.
- *
- * The cookie set alongside it is a mirror, not the record. `app.html` reads it
- * before paint — a database round trip cannot happen that early, and without it
- * every load flashes dark before correcting itself.
+ * Save this person's theme. Stored on the person, not only `localStorage`, so
+ * two people sharing a device do not share a theme. The cookie set alongside
+ * is a mirror only — `app.html` reads it before paint, avoiding a flash.
  */
 export const PUT: RequestHandler = async ({ request, locals, cookies }) => {
 	if (!locals.person) error(401, 'Sign in first.');

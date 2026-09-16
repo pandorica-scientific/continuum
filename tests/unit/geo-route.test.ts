@@ -11,12 +11,8 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 
 /**
- * Read as source rather than imported.
- *
- * The module reads `geodata/`, which a checkout may not have — the fetch runs
- * at image-build time. Asserting on the source is what `screen-frame.test.ts`
- * already does for the same reason: some rules can only be checked where they
- * are written.
+ * Read as source rather than imported: the module reads `geodata/`, which a checkout
+ * may not have — the fetch runs at image-build time.
  */
 const geodata = readFileSync('src/lib/server/life/geodata.ts', 'utf8');
 const route = readFileSync('src/routes/(app)/map/geo/[file]/+server.ts', 'utf8');
@@ -28,13 +24,8 @@ describe('the outlines module', () => {
 	});
 
 	it('joins the directory itself rather than taking a path', () => {
-		// Every PATH join starts from GEODATA_DIR and a literal, never from an
-		// argument that could carry a separator or a `..`.
-		//
-		// Not preceded by a dot: `Array.prototype.join` is a different function
-		// that happens to share a name, and `paths.join(' ')` is not a traversal
-		// risk. Matching bare `join(` caught those and failed for the wrong
-		// reason.
+		// Every PATH join starts from GEODATA_DIR, never from an argument that could carry a
+		// separator or `..`. The negative lookbehind excludes `Array.prototype.join` calls.
 		for (const call of geodata.match(/(?<![.\w])join\([^)]*\)/g) ?? []) {
 			expect(call, call).toMatch(/join\(GEODATA_DIR/);
 		}

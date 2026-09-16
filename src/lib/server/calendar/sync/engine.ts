@@ -43,11 +43,8 @@ const LEASE_MINUTES = 30;
 /**
  * How long a tombstone survives after the last link to it goes.
  *
- * Reaping in the same transaction that created the tombstone made a remote
- * deletion unrecoverable the instant it arrived: the row was tombstoned, its
- * link removed, and the reap — running a few lines later in the same
- * transaction — saw no link and hard-deleted it. With one account connected
- * there was nothing left to restore from. A week is long enough to notice.
+ * Must not be reaped in the same transaction that created it — a remote
+ * deletion needs a window to be noticed and restored from if wrong.
  */
 const TOMBSTONE_GRACE_DAYS = 7;
 
@@ -191,9 +188,8 @@ function dateOnlyDifference(
  * One synchronisation pass for one account: pull → reconcile → merge → push →
  * commit.
  *
- * Pull comes FIRST and that ordering is not stylistic. Pushing first overwrites
- * remote changes we have not fetched, and a conflict that was never fetched
- * cannot be detected — the edit is simply gone, with nothing to show for it.
+ * Pull comes FIRST: pushing first would overwrite remote changes we have not
+ * fetched yet, and a conflict never fetched cannot be detected.
  */
 export async function syncAccount(accountId: string, provider: CalendarProvider, handle: Db = db) {
 	const report: SyncReport = {
@@ -215,19 +211,10 @@ export async function syncAccount(accountId: string, provider: CalendarProvider,
 		.limit(1);
 	if (!account) throw new Error(`No calendar account ${accountId}`);
 
-	// One pass per account at a time.
-	//
-	// This used to be `pg_advisory_xact_lock` on the pool handle, OUTSIDE any
-	// transaction — so the statement's own implicit transaction committed as it
-	// returned and the xact-scoped lock was released before the pull even
-	// started. It excluded nothing at all. Every other advisory lock in this
-	// repository takes its lock inside a transaction; this one only looked like
-	// it did.
-	//
-	// A lease rather than a lock, because the middle of a pass is network I/O
-	// that can run for minutes, and no database lock belongs open across that.
-	// The claim itself is atomic under a real advisory lock, and it works across
-	// processes, which an in-memory guard would not.
+	// One pass per account at a time. A lease rather than a lock, because the
+	// middle of a pass is network I/O that can run for minutes, and no database
+	// lock belongs open across that; the claim itself is atomic under a real
+	// advisory lock and works across processes.
 	if (!(await claimAccount(handle, accountId))) {
 		report.skipped = true;
 		return report;
@@ -248,15 +235,9 @@ export async function syncAccount(accountId: string, provider: CalendarProvider,
 
 		const items = await localItems(handle);
 
-		// Every change filed under the LOCAL key it belongs to.
-		//
-		// A provider does not always know that key. CalDAV reports a deletion as a
-		// path and nothing else, because the resource is gone and there is no body
-		// left to read a UID from — so the resource name has to be turned back into
-		// a local key here. Filing those under the resource name instead meant every
-		// deletion made on a phone matched nothing, merged to a no-op, and the
-		// cursor advanced past it: the event stayed in Continuum for good, and a
-		// generated event the household had deliberately deleted came straight back.
+		// Every change filed under the LOCAL key it belongs to. A provider does not
+		// always know that key: CalDAV reports a deletion as a path and nothing
+		// else, so the resource name has to be turned back into a local key here.
 		const remoteByKey = new Map<string, RemoteChange>();
 		for (const change of pulled.changes) {
 			const key = localKeyFor(change, items, linkByKey, keyByRemoteId);
@@ -281,12 +262,9 @@ export async function syncAccount(accountId: string, provider: CalendarProvider,
 			if (link?.suppressedAt) continue; // deliberately deleted on the remote
 
 			const change = remoteByKey.get(key);
-			// The name the PROVIDER uses wins over the one we would have chosen.
-			// An event created on someone's phone lives at a resource name that
-			// server picked; addressing a push at toRemoteId(key) instead sent it
-			// to an address that does not exist, so the provider created a SECOND
-			// copy of an event we were only trying to update. The link's recorded
-			// name comes first because it is the one we last wrote to.
+			// The name the PROVIDER uses wins over the one we would have chosen: an
+			// event created remotely lives at a server-picked resource name, and
+			// addressing a push at toRemoteId(key) instead would create a duplicate.
 			const remoteId = link?.remoteId ?? change?.remoteId ?? toRemoteId(key);
 
 			const localSeries = item?.series ?? null;
@@ -294,22 +272,17 @@ export async function syncAccount(accountId: string, provider: CalendarProvider,
 
 			// On a full reset the pull carries everything the server holds, so absence
 			// means "not there"; on an incremental pull absence means "unchanged", and
-			// the last seen hash still stands.
-			//
-			// EXCEPT where the reset itself was windowed. A provider that lists only
-			// the last ninety days has said nothing whatsoever about what came before,
-			// and reading its silence as deletion is how one expired syncToken — a
-			// routine, documented event — destroyed every authored event older than
-			// that. Outside the window the event is treated as unchanged.
+			// the last seen hash still stands. EXCEPT where the reset itself was
+			// windowed — a provider listing only the last ninety days says nothing
+			// about what came before, so outside the window the event is unchanged.
 			const remoteSeries = change
 				? change.series
 				: pulled.reset && coveredByReset(localSeries, pulled.resetFrom ?? null)
 					? null
 					: undefined;
-			// Hashed with the SAME marker used on the way out. We push a decorated
-			// title and the remote hands it straight back; hashing the echo without
-			// stripping that decoration makes every event compare as changed on every
-			// pass — push, echo, push — silently, and forever.
+			// Hashed with the SAME marker used on the way out — hashing the echoed,
+			// still-decorated title without stripping it would compare as changed
+			// forever, on every pass.
 			const remoteHash =
 				remoteSeries === undefined
 					? (link?.seenHash ?? null)
@@ -328,12 +301,10 @@ export async function syncAccount(accountId: string, provider: CalendarProvider,
 				remoteHash,
 				localUpdatedAt: localSeries?.updatedAt ?? new Date(0).toISOString(),
 				remoteUpdatedAt: remoteSeries?.updatedAt ?? new Date(0).toISOString(),
-				// Read from the KEY when the event is not in hand. A generated event
-				// that has aged past the trailing horizon is simply absent, and taking
-				// that to mean "authored, and deleted here" sent a deletion for every
-				// past mortgage payment out to the household's own calendar — one per
-				// loan per month, forever, which is the exact opposite of what the
-				// header of this file promises.
+				// Read from the KEY when the event is not in hand: a generated event
+				// aged past the trailing horizon is simply absent, not "authored, and
+				// deleted here" — the latter would push a deletion for every past
+				// mortgage payment out to the household's own calendar.
 				generated: item?.generated ?? isGeneratedKey(key),
 				dateOnlyChange: dates.dateOnly,
 				newDate: dates.newDate,
@@ -342,16 +313,11 @@ export async function syncAccount(accountId: string, provider: CalendarProvider,
 
 			outcomes.set(key, outcome);
 
-			// The etag we just pulled beats the one stored from last time: when the
-			// remote has moved, writing against the stale value fails as a conflict and
-			// the correction is delayed a whole pass for no reason.
-			//
+			// The etag we just pulled beats the one stored from last time.
 			// `change ? change.etag : …` rather than `change?.etag ?? …`, because a
 			// DELETION arrives with a null etag and that null is the answer, not a
-			// missing value. Falling back to the stored one made the next write send
-			// `If-Match: <etag of a resource that no longer exists>`, which is a 412
-			// every time — so an event edited here and deleted there could never be
-			// re-created, and retried identically on every pass forever.
+			// missing value — falling back to the stored one would send `If-Match`
+			// against a resource that no longer exists, a 412 every time.
 			const currentEtag = change ? change.etag : (link?.remoteEtag ?? null);
 
 			if (outcome.kind === 'push' && localSeries) {
@@ -408,9 +374,8 @@ export async function syncAccount(accountId: string, provider: CalendarProvider,
 
 				if (!result?.ok) {
 					// A rejected write means the remote moved under us. Take the etag the
-					// pull just gave us so the NEXT pass can write; leaving the stale one
-					// in place makes every future attempt fail the same way, and a
-					// generated event retitled on someone's phone would never be corrected.
+					// pull just gave us so the NEXT pass can write, or every future attempt
+					// fails the same way.
 					const seen = remoteByKey.get(sent.localKey);
 					if (result?.conflict && seen?.etag) {
 						await tx
@@ -427,11 +392,8 @@ export async function syncAccount(accountId: string, provider: CalendarProvider,
 				}
 
 				if (sent.op.kind === 'delete') {
-					// The remote copy is gone, so the mapping to it is meaningless. This
-					// used to UPSERT the link instead, which left a row pointing at an
-					// event that no longer existed — and since reapTombstones only fires
-					// once no link mentions a row, tombstones and links then accumulated
-					// with nothing able to clear either.
+					// The remote copy is gone, so the mapping to it is meaningless — must
+					// be deleted, not upserted, or reapTombstones never fires for this row.
 					await tx
 						.delete(calendarSyncLink)
 						.where(
@@ -463,9 +425,7 @@ export async function syncAccount(accountId: string, provider: CalendarProvider,
 						localKey: key,
 						accountId,
 						// The name the provider actually uses, so a later deletion — which
-						// arrives as a path and nothing else — can be matched back to this
-						// key, and so the next push goes to the resource we just read
-						// rather than to the one we would have named ourselves.
+						// arrives as a path and nothing else — can be matched back to this key.
 						remoteId: change.remoteId ?? toRemoteId(key),
 						remoteEtag: change.etag,
 						pushedHash: hashSeries(change.series, item?.marker ?? null),
@@ -514,11 +474,9 @@ export async function syncAccount(accountId: string, provider: CalendarProvider,
 					});
 					if (outcome.winner === 'remote' && change?.series) {
 						await applyRemote(tx, key, change.series, item?.marker ?? null);
-						// The remote's version is now the agreed one, exactly as in the
-						// write-back branch below. Without this the base hash still
-						// described what we had pushed BEFORE the conflict, so the next
-						// pass saw both sides changed again and filed a SECOND conflict
-						// row for an edit that had already been resolved.
+						// The remote's version is now the agreed one — without recording it,
+						// the base hash still describes the pre-conflict push and the next
+						// pass files a second conflict row for the same resolved edit.
 						const agreed = hashSeries(change.series, item?.marker ?? null);
 						await upsertLink(tx, {
 							localKey: key,
@@ -549,10 +507,8 @@ export async function syncAccount(accountId: string, provider: CalendarProvider,
 					);
 					if (written.ok) {
 						report.writeBacks += 1;
-						// The remote's version is now the agreed one. Without this the base
-						// hash still described the date BEFORE the move, so the same move
-						// was rediscovered on every pass — writing the ledger again and
-						// filing another conflict row every fifteen minutes.
+						// The remote's version is now the agreed one — without recording it,
+						// the same move is rediscovered on every pass.
 						if (change?.series) {
 							const agreed = hashSeries(change.series, item?.marker ?? null);
 							await upsertLink(tx, {
@@ -570,9 +526,7 @@ export async function syncAccount(accountId: string, provider: CalendarProvider,
 
 			await reapTombstones(tx);
 
-			// Last, deliberately. The lease is given up in the same statement: a pass
-			// that reached here is finished, and holding the claim past that would
-			// stall the next one for no reason.
+			// Cursor advances last, deliberately: a pass that reached here is finished.
 			await tx
 				.update(calendarAccount)
 				.set({
@@ -583,16 +537,12 @@ export async function syncAccount(accountId: string, provider: CalendarProvider,
 						: null
 				})
 				.where(eq(calendarAccount.id, accountId));
-			// The lease is given up in the same transaction: a pass that reached here
-			// is finished, and holding the claim past that stalls the next one for no
-			// reason.
+			// The lease is given up in the same transaction, or it stalls the next pass.
 			await releaseAccount(tx, accountId);
 		});
 
 		return report;
 	} catch (error) {
-		// The claim is given up on the way out either way, or a pass that threw
-		// would lock the account out until the lease expired.
 		// Released on the way out either way, or a pass that threw would lock the
 		// account out until the lease expired.
 		await releaseAccount(handle, accountId, error instanceof Error ? error.message : String(error));
@@ -604,16 +554,7 @@ export async function syncAccount(accountId: string, provider: CalendarProvider,
  * Take this account's pass, or report that somebody else has it.
  *
  * The advisory lock is held only for the read-modify-write of the claim, which
- * is the part that has to be atomic; the pass itself then runs outside it. That
- * is the whole difference from what was here before, where the lock was taken on
- * the pool handle outside any transaction and released again immediately,
- * excluding nothing.
- *
- * Overlap was easy to reach: the tick in hooks.server.ts fires every sixty
- * seconds, an account that has never synced is due unconditionally, and a first
- * pass pushes hundreds of events one request at a time with a twenty-second
- * timeout on each. Two passes then pulled the same cursor, pushed the same
- * writes twice, and both ran the commit block.
+ * is the part that has to be atomic; the pass itself then runs outside it.
  */
 async function claimAccount(handle: Db, accountId: string): Promise<boolean> {
 	const staleBefore = new Date(Date.now() - LEASE_MINUTES * 60_000);
@@ -626,10 +567,9 @@ async function claimAccount(handle: Db, accountId: string): Promise<boolean> {
 		// belongs open across it.
 		await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`calendar-sync:${accountId}`}))`);
 
-		// The lease lives in `job` rather than on the account: it is the same
-		// take-it-and-stamp-it mechanism the import queue uses, and it was written
-		// twice before this. One row per account, reused, so a pass leaves no
-		// history to sweep up.
+		// The lease lives in `job` rather than on the account: the same
+		// take-it-and-stamp-it mechanism the import queue uses. One row per
+		// account, reused, so a pass leaves no history to sweep up.
 		const claimed = await tx
 			.insert(job)
 			.values({
@@ -711,20 +651,11 @@ function localKeyFor(
 /**
  * Remove tombstones whose deletion every account has now taken.
  *
- * deleteEvent tombstones rather than deleting, because sync must be able to tell
- * "deleted here, push it" from "never existed" — a vanished row says nothing and
- * the engine would pull the remote copy back. Once no sync link references the
- * row, the deletion has been carried everywhere it needed to go and the
- * tombstone is only taking up space.
- *
- * Deliberately conservative: a row is reaped only when NO link mentions it at
- * all, AND the tombstone has had time to be noticed. Without that second
- * condition a deletion arriving from a remote was unrecoverable the moment it
- * landed — apply-delete tombstoned the row and dropped its link, and this ran a
- * few lines later in the SAME transaction, saw no link, and hard-deleted it.
- *
- * An account added later starts from an empty cursor and reconciles from
- * scratch, so nothing is lost by having forgotten a deletion it never saw.
+ * deleteEvent tombstones rather than deletes, so sync can tell "deleted here,
+ * push it" from "never existed". A row is reaped only once NO sync link
+ * mentions it AND the tombstone has had time (TOMBSTONE_GRACE_DAYS) to be
+ * noticed — reaping it in the same transaction that created it would make a
+ * remote deletion unrecoverable the moment it landed.
  */
 async function reapTombstones(tx: Tx) {
 	await tx.execute(sql`
@@ -744,9 +675,8 @@ async function reapTombstones(tx: Tx) {
 /**
  * The series as it should appear remotely, marker and source tag included.
  *
- * Composed by markers.decorate, which is also what the ICS feed and the calendar
- * screen use. This file used to build the same string by hand, so "· Continuum"
- * lived in two places and only one of them had a matching `strip`.
+ * Composed by markers.decorate, the same function the ICS feed and the
+ * calendar screen use, so the marker is built in exactly one place.
  */
 function decorated(series: EventSeries, item: LocalItem): EventSeries {
 	return { ...series, title: decorate(series.title, item.marker, item.generated) };
@@ -780,12 +710,9 @@ async function upsertLink(
 /**
  * Write a remote series into our own tables.
  *
- * The marker comes off the title on the way IN, mirroring decorate() on the way
- * out. Storing the title as the remote returned it baked our own decoration
- * into the row — and since the calendar screen draws the marker separately from
- * the title, the event then showed two of them, with another added every time a
- * remote edit came back. markers.ts is explicit that decoration is composed at
- * the edge and never stored, for exactly this reason.
+ * The marker comes off the title on the way IN, mirroring decorate() on the
+ * way out: decoration is composed at the edge and never stored, or the
+ * calendar screen would draw it twice.
  */
 async function applyRemote(
 	tx: Parameters<Parameters<Db['transaction']>[0]>[0],

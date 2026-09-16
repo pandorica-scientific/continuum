@@ -18,11 +18,8 @@
 
 	let { data, form } = $props();
 
-	// Grouped rather than paged. A household grows dozens of rules, and the pager
-	// answered "show me twenty of them" when the question is "which of them is
-	// wrong" — which a collapsed group header answers without opening anything.
-	// Collapsing is what replaces the page size: seven closed groups are shorter
-	// than twenty rows.
+	// Grouped rather than paged: a collapsed group header answers "which rule is
+	// wrong?" without opening anything, which a page of twenty rows does not.
 	let query = $state('');
 	let filter = $state<RuleFilter>('all');
 	let open = new SvelteSet<string>();
@@ -39,9 +36,7 @@
 	const tableGroups = $derived<Group<RuleLine>[]>(
 		groups.map((g) => ({ key: g.key, open: open.has(g.key), rows: g.rules }))
 	);
-	// The handoff's grid: name, trust, kept · overridden, then the actions. A
-	// phone keeps the name and the trust bar; the counts are a detail behind a
-	// wider screen.
+	// A phone keeps the name and trust bar; counts and actions hide below 900px.
 	const COLUMNS: Column[] = [
 		{ key: 'name', label: 'Category · rule', width: 'minmax(0, 1.6fr)' },
 		{ key: 'trust', label: 'Trust (avg)', width: '170px' },
@@ -54,9 +49,7 @@
 		else open.add(key);
 	}
 
-	// Local, so the slider moves under the thumb rather than after a round trip;
-	// the server owns the record, and a writable derived re-seeds from it on the
-	// next load rather than stranding the thumb where this tab left it.
+	// Local so the slider moves under the thumb rather than after a round trip.
 	let floor = $derived(data.thresholdPct);
 
 	function saveFloor() {
@@ -89,9 +82,7 @@
 		editing = true;
 	}
 
-	// Arriving from a transaction's "Make a rule". Read once, at init, which is
-	// what untrack says: the draft belongs to the screen from here on, and a
-	// re-read on the next load would throw away whatever had been typed since.
+	// Read once at init: a re-read on the next load would discard whatever was typed since.
 	const prefill = untrack(() => data.prefill);
 	if (prefill) openEditor(prefill);
 
@@ -152,9 +143,7 @@
 	{/snippet}
 </ControlRow>
 
-<!-- The floor, which has been a stored setting with no way to change it since
-     rules existed. It sits above the table because it is the number every row
-     below is measured against. -->
+<!-- Sits above the table because it is the number every row below is measured against. -->
 <section class="card floor">
 	<div class="floor-head">
 		<IconTile hue="--yellow" icon="sliders" size={26} />
@@ -163,10 +152,7 @@
 	</div>
 	<div class="floor-body">
 		<span class="mono floor-end">0%</span>
-		<!-- A native range, restyled. The track is drawn on the input itself so the
-		     fill runs yellow to green up to the thumb: what a rule needs before it
-		     files on its own is a scale, not a switch, and the gradient says which
-		     end is "barely trusted". -->
+		<!-- Gradient track (yellow to green) says which end is "barely trusted". -->
 		<input
 			type="range"
 			min="5"
@@ -204,9 +190,6 @@
 		{#snippet head(group, visible)}
 			{@const g = groupByKey.get(group.key)!}
 			{@const note = groupNote(g)}
-			<!-- Collapsed by default. The header answers the question people come
-			     to this screen with — "is anything filing wrongly?" — so opening a
-			     group is for acting on an answer already given. -->
 			<span class="g-name">
 				<span class="chev" aria-hidden="true">{group.open ? '▾' : '▸'}</span>
 				<span class="swatch" style:background="var({g.color})"></span>
@@ -445,8 +428,7 @@
 		font-size: var(--text-xs);
 		color: var(--fg3);
 	}
-	/* Kept and never applied. Dimmed rather than hidden: a disabled rule is the
-	   explanation for something that stopped filing. */
+	/* Dimmed rather than hidden: a disabled rule explains why filing stopped. */
 	.off {
 		opacity: 0.55;
 	}

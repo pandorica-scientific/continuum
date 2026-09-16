@@ -70,17 +70,11 @@ export function parseXml(source: string): XmlNode {
 	// Declarations, comments and processing instructions carry nothing we need.
 	//
 	// Comments are removed to a FIXED POINT; everything else is one pass. A
-	// single pass leaves the opener behind on input the removal itself creates —
-	// `<!--<!-- -->` loses the inner comment and keeps a bare `<!--`, and the tag
-	// scanner below then reads the rest of the document as one unterminated
-	// element. Such a file is not valid XML, but this parser is handed whatever a
-	// bank exports, and the failure is silent: a statement that reads as empty
-	// rather than as broken.
-	//
-	// Only the comments loop, because comments are the only one of the four
-	// whose own removal can produce a fresh opener. Re-running the whole chain
-	// would additionally re-scan whatever a CDATA section unwrapped into, which
-	// is a behaviour change nothing here needs.
+	// single pass leaves an opener behind on input its own removal creates —
+	// `<!--<!-- -->` loses the inner comment and keeps a bare `<!--`, which the
+	// tag scanner then reads as one unterminated element to the end of the file.
+	// Only the comments loop needs this: it's the only one of the four whose
+	// removal can produce a fresh opener.
 	let text = source.replace(/<\?[\s\S]*?\?>/g, '');
 	for (;;) {
 		const stripped = text.replace(/<!--[\s\S]*?-->/g, '');

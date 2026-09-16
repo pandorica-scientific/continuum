@@ -2,16 +2,12 @@
 /**
  * What the Life tables refuse.
  *
- * Every assertion here is a rule the screens depend on being true. The
- * ownership rules in particular are enforced in two places on purpose: the
- * three controls on the bottle page keep `opened <= owned`, and this constraint
- * is what proves they do rather than trusting three event handlers to agree
- * forever.
+ * The ownership rule is enforced in two places on purpose: the bottle page's
+ * controls keep `opened <= owned`, and this constraint is what proves they
+ * still agree.
  *
- * Written against `harness.sql` rather than Drizzle, following the baseline
- * suite: Drizzle wraps a driver error so its message reads "Failed query …"
- * and the constraint name is buried in `cause`. Asserting on the raw message
- * is asserting on what Postgres actually said.
+ * Written against `harness.sql` rather than Drizzle: Drizzle wraps driver
+ * errors, burying the constraint name in `cause`.
  */
 import { uuidv7 } from 'uuidv7';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -168,13 +164,8 @@ describe('a trip', () => {
 });
 
 /**
- * A trip, a bottle and a recipe are entities.
- *
- * That is what lets a household file the hotel confirmation against the trip
- * and the receipt against the bottle through the ONE link table, rather than
- * each connector needing a table per pair. Without it the Documents screen
- * could not say what a PDF was filed against, because a direct `document_id`
- * on `trip_booking` answers "this flight's confirmation" and nothing else.
+ * A trip, a bottle and a recipe are entities, so a document can be filed
+ * against any of them through one link table rather than a table per pair.
  */
 describe('the Life records that can be linked to', () => {
 	const kinds: [string, () => Promise<string>][] = [

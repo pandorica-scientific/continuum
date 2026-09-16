@@ -4,4 +4,5 @@
 // pulls it out of a payslip PDF.
 export * from './entries';
 export * from './history';
+export * from './equity';
 export * from './reader';

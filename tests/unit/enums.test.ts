@@ -4,15 +4,8 @@ import { EXPIRY_VERBS } from '$lib/documents';
 import { DAY_COUNTS } from '$lib/loans';
 import { REVIEW_STATES } from '$lib/transactions/filter';
 
-/**
- * The lists the screens use are the lists the database enforces.
- *
- * Several of these were written out by hand beside the schema and had already
- * drifted from it — `REVIEW_STATES` was missing `filed`, which `ingest.ts`
- * treats as terminal, so the register could not filter for it. Deriving them
- * removes the drift; this suite is what stops it coming back through a list
- * that cannot be derived because it carries labels too.
- */
+// Guards against a hand-written list drifting from the schema, e.g.
+// REVIEW_STATES once missed 'filed' and silently broke register filtering.
 describe('the screens and the schema agree', () => {
 	it('the derived lists are the schema lists', () => {
 		expect(EXPIRY_VERBS).toEqual(ENUMS['document.expiry_verb']);
@@ -29,15 +22,8 @@ describe('the screens and the schema agree', () => {
 	});
 });
 
-/**
- * What a shelf IS, as data.
- *
- * Before v0.8.0 this lived in `src/lib/shelf-profiles.ts` as a hand-written
- * record keyed by shelf, so a shelf a household made could not have a layout at
- * all. Naming the template and the unit as enums is what lets the shelf row
- * carry them, and what puts them behind a CHECK constraint like every other
- * closed set in the schema.
- */
+// Template and unit are enums so a shelf row can carry them under a CHECK
+// constraint, rather than a hand-written record keyed by shelf.
 describe('the shelf enums', () => {
 	it('name seven templates and six units', () => {
 		expect(ENUMS['shelf.template']).toEqual([
@@ -106,9 +92,8 @@ describe('narrowing at a boundary', () => {
 
 describe('the documents-v2 registry', () => {
 	it('still names the types the app ships, and no longer constrains the column', () => {
-		// `document_type` is a table now — a household adds its own — so this list
-		// is what SHIPS rather than what is allowed. It stays because code reads
-		// these keys by name; the column is a foreign key, not a CHECK.
+		// document_type is a table now, so this list is what SHIPS, not what is
+		// allowed; the column is a foreign key, not a CHECK.
 		expect(ENUMS['document.type']).toContain('payslip');
 		expect(ENUMS['document.type']).toContain('bank_statement');
 		expect(ENUMS['document.type']).toContain('other');
@@ -117,8 +102,8 @@ describe('the documents-v2 registry', () => {
 	});
 
 	it('no longer knows about a shelf', () => {
-		// Shelves became rows. A closed set here would be a migration every time
-		// a household added one, which is the cost this file exists to avoid.
+		// A closed set here would require a migration every time a household
+		// added a shelf.
 		expect(ENUMS).not.toHaveProperty('document.shelf');
 		expect(ENUM_COLUMNS.some((c) => c.table === 'document' && c.column === 'shelf')).toBe(false);
 	});

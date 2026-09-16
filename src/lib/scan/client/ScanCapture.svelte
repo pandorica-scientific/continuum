@@ -33,28 +33,22 @@
 	/**
 	 * Where the video's picture actually lands inside its element.
 	 *
-	 * `object-fit: cover` fills the screen and crops — which is what a camera is
-	 * expected to look like — but it means the picture's box is NOT the
-	 * element's box. Relying on the SVG's own `preserveAspectRatio` to arrive at
-	 * the same rectangle only works while the stream's aspect ratio and the
-	 * screen's are close; on a portrait phone holding a 4:3 stream they are not,
-	 * and the outline drifts away from the page it is meant to be tracing.
-	 *
-	 * So the overlay is positioned from this measurement instead of being
-	 * inferred. Whatever the browser does with the video, the outline sits on it.
+	 * `object-fit: cover` crops, so the picture's box is not the element's box,
+	 * and `preserveAspectRatio` alone drifts from it once the stream and screen
+	 * ratios diverge (e.g. a 4:3 stream on a portrait phone). Measured instead
+	 * of inferred, so the overlay always sits on the actual picture.
 	 */
 	let picture = $state({ left: 0, top: 0, width: 0, height: 0 });
 
 	function measurePicture() {
 		if (!video?.videoWidth) return;
 		const box = video.getBoundingClientRect();
-		// `cover`: scale until BOTH axes are filled, so the larger factor wins.
+		// `cover`: scale until both axes are filled, so the larger factor wins.
 		const scale = Math.max(box.width / video.videoWidth, box.height / video.videoHeight);
 		const width = video.videoWidth * scale;
 		const height = video.videoHeight * scale;
 		const next = { left: (box.width - width) / 2, top: (box.height - height) / 2, width, height };
-		// A new object every tick would invalidate everything reading it, nine
-		// times a second, for a rectangle that almost never changes.
+		// Skip the update when unchanged: this runs nine times a second.
 		if (
 			next.left === picture.left &&
 			next.top === picture.top &&
@@ -70,42 +64,24 @@
 		if (!video || !camera.track || shooting) return;
 		shooting = true;
 		try {
-			// The photograph, as bytes, straight to the server. Nothing here
-			// decodes it, measures it or looks for a page in it — which also
-			// retires a whole class of bug: the crop used to be found on a frame
-			// the browser had decoded and possibly re-oriented, so a still whose
-			// aspect ratio disagreed with the viewfinder produced corners
-			// describing a region of some other picture. Detection now runs on the
-			// exact bytes that were uploaded, and there is nothing left to
-			// disagree.
+			// The photograph goes up as bytes, undecoded — detection runs
+			// server-side on the exact bytes uploaded, so there is nothing here
+			// that can disagree with the viewfinder about orientation or size.
 			oncapture(await stillFileFromTrack(camera.track, video));
 		} finally {
 			shooting = false;
 		}
 	}
 
-	/**
-	 * Attach the stream once and start it.
-	 *
-	 * The identity guard is the point: this effect may run again for reasons
-	 * that have nothing to do with the camera, and assigning the same stream a
-	 * second time would restart the element rather than being a no-op.
-	 *
-	 * `play()` is called by hand because `autoplay` is not reliable for a stream
-	 * attached through `srcObject` — the element can sit at readyState 0, paused,
-	 * with `videoWidth` still 0. The symptom is not "no video": the pipeline
-	 * draws that element to a canvas, reads pure black, and reports "Too dark —
-	 * try more light" about a camera that never started.
-	 */
-	/**
-	 * Re-measure when the window changes shape.
-	 *
-	 * The video's own `resize` event fires when the STREAM's intrinsic size
-	 * changes, not when its element does — so rotating the phone changes the box
-	 * the picture is drawn into while the stream stays 4:3, the measurement goes
-	 * stale, and the outline drifts off the page it is tracing. `orientationchange`
-	 * as well as `resize`, because iOS does not always fire the latter on a turn.
-	 */
+	// Identity guard: this effect can rerun for reasons unrelated to the
+	// camera, and reassigning the same stream would restart the element.
+	// `play()` is called by hand because `autoplay` is unreliable for a stream
+	// attached via `srcObject` — the element can sit at readyState 0 with
+	// `videoWidth` still 0, which reads downstream as a dark, unstarted camera.
+
+	// The video's own `resize` event fires on the STREAM's intrinsic size, not
+	// the element's, so a phone rotation (stream stays 4:3) needs `resize` and
+	// `orientationchange` both — iOS doesn't always fire the former on a turn.
 	$effect(() => {
 		const remeasure = () => measurePicture();
 		window.addEventListener('resize', remeasure);
@@ -136,14 +112,10 @@
 {#if camera.state.kind === 'live'}
 	<div class="capture" role="application" aria-label="Camera viewfinder">
 		<!--
-			`srcObject` is deliberately NOT bound here. Svelte groups template
-			bindings into one reactive effect, and this element sits beside values
-			the detection loop rewrites nine times a second — so the compiler put
-			the stream assignment in that same effect. Reassigning `srcObject`
-			invokes the media element's load algorithm, which resets it to
-			readyState 0 and pauses it: the camera was being torn down and
-			restarted nine times a second, rendering nothing but black while
-			reporting "too dark". It is attached once, imperatively, below.
+			`srcObject` is deliberately NOT bound here: Svelte would group it into
+			the same reactive effect as values rewritten nine times a second, and
+			reassigning `srcObject` invokes the media element's load algorithm,
+			resetting it to readyState 0 each time. It is attached once, imperatively, below.
 		-->
 		<video
 			bind:this={video}
@@ -155,19 +127,13 @@
 		></video>
 
 		<!--
-			A STATIC FRAME GUIDE, where the tracked outline used to be.
+			A static aiming guide only — detection runs server-side after the
+			shutter, and a wrong crop is fixed with the corner handles rather than
+			retaken.
 
-			The outline was OpenCV running nine times a second in the browser, and
-			taking it out is what lets the WebAssembly heap — the one an iPhone
-			could not always allocate — leave the browser altogether. Auto-capture
-			had already gone, so what is lost is an aiming aid rather than a
-			trigger: everything the detector has to say now arrives after the
-			shutter, from the server, where a crop that came out wrong is dragged
-			into place with the corner handles rather than retaken.
-
-			Still placed from the measurement above, so it sits on the PICTURE
-			rather than on the element — `object-fit: cover` means those are not
-			the same rectangle on a portrait phone holding a 4:3 stream.
+			Placed from the measurement above so it sits on the PICTURE rather than
+			the element — `object-fit: cover` means those are not the same
+			rectangle on a portrait phone holding a 4:3 stream.
 		-->
 		<div
 			class="guide"

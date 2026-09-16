@@ -2,16 +2,10 @@
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	/**
 	 * One country, filling the frame, under the same gold coating as the world.
+	 * Regions are drawn in colour underneath; scratching reveals it.
 	 *
-	 * The regions are drawn in colour underneath and the foil goes over the top;
-	 * scratching a region takes its coating off and reveals the colour that was
-	 * always there. Before this the country view had no coating at all, which
-	 * made opening a country the one place in the area where the scratch map
-	 * stopped being a scratch map.
-	 *
-	 * The provinces are fetched when this mounts rather than shipped with the
-	 * page: Russia's outlines are 2.2 MB and nobody opening the world map wants
-	 * to pay for them.
+	 * Provinces are fetched on mount rather than shipped with the page —
+	 * Russia's outlines alone are 2.2 MB.
 	 */
 	import { untrack } from 'svelte';
 	import { invalidate } from '$app/navigation';
@@ -107,13 +101,7 @@
 	let undoable = $state<{ index: number; name: string } | null>(null);
 	let layer = $state<ReturnType<typeof ScratchLayer> | null>(null);
 
-	/**
-	 * The names the household has been to, matched case-insensitively.
-	 *
-	 * Exact matching is all this can honestly do against Natural Earth's own
-	 * province names — which is why scratching is the better source of truth:
-	 * it writes the name the map actually uses.
-	 */
+	/** The names the household has been to, matched case-insensitively against Natural Earth's names. */
 	const been = $derived(new Set([...visited, ...scratched].map((name) => name.toLowerCase())));
 
 	/** Which regions start with no coating on them. */
@@ -124,26 +112,18 @@
 	);
 
 	/**
-	 * What the provinces are fetched from, held so an unchanged value is not a
-	 * change.
-	 *
-	 * Reading `slug` straight inside the effect below is not enough, and this is
-	 * the subtle half of the blink. A prop is a getter onto the parent's `data`,
-	 * so it reports a change whenever `data` is replaced — which `invalidate`
-	 * does after every scratch — even though the string is the same string. A
-	 * `$derived` compares, and a value equal to the last one stops here.
+	 * `slug`/`geoVersion` read through `$derived` rather than the prop directly
+	 * — a prop re-reports a change whenever the parent's `data` is replaced
+	 * (which `invalidate` does after every scratch), even if the string itself
+	 * is unchanged; `$derived` compares and stops here.
 	 */
 	const which = $derived(slug);
 	const build = $derived(geoVersion);
 
 	/**
-	 * Fetch and build the province cells — once per COUNTRY, not once per load.
-	 *
-	 * The outlines cannot have changed, because the country did not, and
-	 * refetching them threw the map back to the grey whole-country fallback and
-	 * rebuilt every foil canvas — once per region scratched. Two things keep
-	 * this effect still: the deriveds above, and `untrack` around `country`,
-	 * which the page's load does rebuild.
+	 * Fetch and build the province cells — once per country, not once per
+	 * load. `untrack` around `country` (which the page's load does rebuild)
+	 * keeps this effect from refetching outlines that haven't changed.
 	 */
 	$effect(() => {
 		// Read first, so the effect depends on these and on nothing else.
@@ -155,9 +135,8 @@
 
 		let live = true;
 		regions = null;
-		// Cleared with them: the panels belong to the country being left, and
-		// leaving them up drew Portugal's Azores and Madeira boxes over the grey
-		// fallback outline of whatever was opened next until the fetch returned.
+		// Cleared too — panels belong to the country being left, and leaving
+		// them up drew stale inset boxes over the next country's fallback outline.
 		insets = [];
 		failed = null;
 
@@ -167,27 +146,13 @@
 				if (!response.ok) throw new Error('Those outlines could not be read.');
 				const collection = (await response.json()) as FeatureCollection<Geometry>;
 				if (!live) return;
-				// Re-fit before anything is drawn: the country outline and the
-				// province outlines are different datasets and disagree about
-				// where a country ends, so a frame built from one leaves the
-				// other hanging off the edge.
-				/*
-				 * The far-flung groups get panels of their own rather than dragging
-				 * the frame out to hold them. Norway with Svalbard in the same box
-				 * is a sliver of coast at the bottom of an empty ocean; Portugal
-				 * with the Azores is the same picture. Each group is drawn at its
-				 * own scale in a labelled panel, which is what an atlas does and
-				 * what keeps every region reachable — there is no other way to
-				 * scratch one off.
-				 */
-				/*
-				 * Clustered from the RAW features, not from a pre-filtered set.
-				 * `refitToProvinces` used to drop far-flung provinces before the
-				 * frame was built, which is what this replaces: dropping them
-				 * makes them unreachable, and there is no other way to scratch a
-				 * region off. Portugal showed no Azores and no Madeira at all
-				 * until the filter came out.
-				 */
+				// Re-fit before drawing: the country and province datasets disagree
+				// on where the country ends.
+				//
+				// Far-flung groups (e.g. Svalbard, the Azores) get their own labelled
+				// panel rather than stretching the main frame to hold them. Clustered
+				// from the raw features, not a pre-filtered set, so they stay
+				// reachable to scratch — dropping them makes them unreachable.
 				const [main = [], ...far] = clusterRegions(collection.features);
 				const boxes = insetBoxes(far.length);
 
@@ -202,8 +167,7 @@
 				far.forEach((group, at) => {
 					const box = boxes[at];
 					if (!box) return;
-					// Its own projection, fitted to its own panel: the group is drawn
-					// at whatever scale makes it legible there, which is the point.
+					// Its own projection, fitted to its own panel, for legibility.
 					const inner = geoMercator().fitExtent(
 						[
 							[box.x + 6, box.y + 16],
@@ -216,13 +180,8 @@
 				});
 
 				insets = panels;
-				/*
-				 * Specks first, because a point is resolved to the FIRST cell that
-				 * contains it and every one of them sits inside a bigger region:
-				 * Jervis Bay is a hole in New South Wales, the District of Columbia
-				 * a hole in Maryland. Behind their neighbour in the list they could
-				 * never be reached, which is the whole point of drawing them.
-				 */
+				// Specks first — a hit point resolves to the FIRST cell that
+				// contains it, and every speck sits inside a bigger region.
 				built.sort((a, b) => Number(b.speck) - Number(a.speck));
 				regions = built;
 			} catch (error) {
@@ -235,13 +194,7 @@
 		};
 	});
 
-	/**
-	 * The smallest a region is allowed to be drawn, in frame units.
-	 *
-	 * The frame is 960 by 480 and renders at roughly that in CSS pixels, so this
-	 * is an eight-pixel disc: about the smallest thing a finger can be dragged
-	 * across on purpose.
-	 */
+	/** The smallest a region is drawn, in frame units — about the smallest an eight-pixel finger drag can hit. */
 	const TOUCH_RADIUS = 4;
 	const TOUCH_AREA = Math.PI * TOUCH_RADIUS * TOUCH_RADIUS;
 
@@ -251,25 +204,13 @@
 
 	/**
 	 * Turn the province outlines into drawable, scratchable cells.
+	 * `contains` inverts the projection to ask the real geometry rather than a
+	 * bounding box.
 	 *
-	 * `contains` inverts the projection and asks the real geometry, which is how
-	 * the coverage sampler knows which of its grid points are actually inside a
-	 * region rather than merely inside its bounding box.
-	 *
-	 * ## Specks
-	 *
-	 * A region whose true outline covers less than a touch is drawn as a disc at
-	 * its middle instead, and answers `contains` as that disc. Jervis Bay
-	 * Territory is 1.1 square units inside an Australia of four hundred thousand
-	 * — a shape a pixel across, which could be seen and could not be scratched,
-	 * and the same was true of every atoll in the Maldives, every district of
-	 * Seychelles, the District of Columbia, Moscow, Luxor and Chandigarh.
-	 *
-	 * Drawn rather than dropped. Dropping them was the other way out and it is
-	 * worse twice over: Maldives and Seychelles are made of nothing else, so they
-	 * would have emptied, and the ones big countries hide are capital cities —
-	 * the regions somebody is most likely to have actually been to. An atlas puts
-	 * a disc where a shape will not fit, and has done for two centuries.
+	 * A region too small to touch (a pixel across — a Pacific atoll, a capital
+	 * district) is drawn as a disc at its middle and answers `contains` as
+	 * that disc, rather than being dropped — dropping would make some
+	 * countries (Maldives, Seychelles) unscratchable entirely.
 	 */
 	function cellsFrom(features: Feature<Geometry>[], projection: GeoProjection): Region[] {
 		const draw = geoPath(projection);
@@ -281,16 +222,13 @@
 				const bounds = draw.bounds(one as never);
 				if (!bounds.flat().every(Number.isFinite)) return null;
 
-				// The label sits on the region's BIGGEST piece, not on the centroid
-				// of all of it: the centroid of a province with an island falls in
-				// the sea between them.
+				// Label sits on the region's biggest piece, not the centroid of all
+				// of it — that can fall in the sea between an island and the mainland.
 				const main = biggestPiece(one);
 				const at = draw.centroid(main as never);
 				const mainBounds = draw.bounds(main as never);
 
-				// `draw.area` is the projected area, which is the one that decides
-				// whether a shape can be hit — the area on the globe cannot, because
-				// every country is fitted to the frame at its own scale.
+				// Projected area, not globe area, since it decides whether a shape can be hit.
 				const speck =
 					draw.area(one as never) < TOUCH_AREA && at.every((one) => Number.isFinite(one));
 
@@ -323,9 +261,7 @@
 							[x0, y0],
 							[x1, y1]
 						],
-						// A disc is asked about in frame units. Inverting the
-						// projection and asking the real geometry would put the answer
-						// back inside the shape nobody can hit.
+						// A disc is asked about in frame units, not the real geometry.
 						contains: speck
 							? (x, y) => Math.hypot(x - at[0], y - at[1]) <= TOUCH_RADIUS
 							: (x, y) => {
@@ -339,12 +275,9 @@
 	}
 
 	/**
-	 * What to call a province.
-	 *
-	 * The trailing type word goes: Natural Earth files "Porto Province" and
-	 * "Kanagawa Prefecture", and a map of Japan reading "… Prefecture" fourteen
-	 * times says nothing fourteen times. Crimea and Sevastopol are named the way
-	 * a person would, as the handoff's prototype does.
+	 * What to call a province: the trailing type word is dropped (Natural
+	 * Earth files "Kanagawa Prefecture" — repeating "Prefecture" fourteen
+	 * times on one map says nothing). Crimea/Sevastopol are named plainly.
 	 */
 	const CRIMEAN: Record<string, string> = {
 		'Autonomous Republic of Crimea': 'Crimea',
@@ -384,22 +317,15 @@
 	}
 
 	/**
-	 * Held so its identity is stable.
-	 *
-	 * Passed inline it was a new array on every render — a toast appearing was
-	 * enough — and the scratch layer rebuilds its coating whenever the cells
-	 * change, which threw away half-finished scratching.
+	 * Held so its identity is stable — passed inline it was a new array on
+	 * every render, and the scratch layer rebuilds its coating (losing
+	 * half-finished scratching) whenever the cells array changes.
 	 */
 	const cells = $derived((regions ?? []).map((region) => region.cell));
 
 	/**
-	 * The same regions, in the order they are PAINTED.
-	 *
-	 * The reverse of the order they are hit in: SVG paints later on top, so a
-	 * speck has to come last to be seen, and it has to come first to be reached.
-	 * The index travels with it because the fill is picked by position, and
-	 * because everything else — the coating, the labels, what a scratch clears —
-	 * counts from `regions`.
+	 * The same regions, in paint order — the reverse of hit order, since SVG
+	 * paints later on top and a speck must be seen but hit first.
 	 */
 	const painted = $derived(
 		(regions ?? [])
@@ -436,17 +362,13 @@
 	}
 
 	/**
-	 * Record the scratch, then say so.
-	 *
-	 * Posted rather than only drawn: a scratch that changed nothing but a canvas
-	 * was a drawing. This is what makes the country colour in on the world map,
-	 * the tiles count it, and the foil stay off after a reload.
+	 * Record the scratch, then say so. Posted, not just drawn, so it persists
+	 * across a reload and counts on the world map and tiles.
 	 */
 	async function cleared(index: number, name: string) {
 		scratched = [...scratched, name];
 		onscratched?.(name);
-		// A region nobody could name cannot be taken back either: undo asks the
-		// server to remove a visit BY name, and there is no name to send.
+		// A region with no name can't be undone either — undo removes a visit by name.
 		say(
 			name ? `${name} — scratched off.` : 'A region — scratched off. Name it?',
 			name ? { index, name } : null
@@ -456,29 +378,22 @@
 		const body = new FormData();
 		body.set('region', name);
 		if (who) body.set('who', who);
-		// `submitAction` rather than a bare fetch, which is the repo's own helper
-		// for exactly this. The bare version only ever noticed a network error:
-		// `fetch` does not throw on 400 or 500, so an action that REFUSED the
-		// scratch — a missing region, a rejected `who` — went on to invalidate and
-		// left "scratched off" on screen for something the server had not kept.
+		// `submitAction`, not a bare fetch — fetch doesn't throw on 400/500, so a
+		// refused scratch would otherwise invalidate anyway.
 		const outcome = await submitAction('?/scratched', body, { updatePage: false });
 		if (outcome.type !== 'success') {
 			// The foil is off on screen either way; the next scratch tries again.
 			say(`${name} — scratched off, but it could not be saved.`);
 			return;
 		}
-		// Only the visit query, not every load on the route: reloading the layout
-		// as well is what made the page blink after each scratch.
+		// Only the visit query, not the whole route — else the page blinks after each scratch.
 		await invalidate(VISITS);
 	}
 
 	/**
-	 * Take the last scratch back: coating on, visit gone.
-	 *
-	 * The coating goes back first and unconditionally. A scratch is a gesture
-	 * somebody just made and undid on purpose, so the screen must obey
-	 * immediately rather than wait to hear whether a delete succeeded — and if it
-	 * did not, the pill says so and the next reload has the truth.
+	 * Take the last scratch back: coating restored immediately and
+	 * unconditionally (not waiting on the server), then the delete is sent —
+	 * if it fails, the pill says so and the next reload has the truth.
 	 */
 	async function undo() {
 		const taking = undoable;
@@ -492,10 +407,8 @@
 		body.set('region', taking.name);
 		const outcome = await submitAction('?/unscratched', body, { updatePage: false });
 		if (outcome.type !== 'success') {
-			// Put the screen back where the server says it is rather than leaving a
-			// recoated region over a visit that is still recorded. The server
-			// refuses an undo it cannot carry out — a visit a trip wrote — and says
-			// why, so that reason is what the pill shows.
+			// Roll back the optimistic recoat — the server refused (e.g. a visit
+			// a trip wrote) and says why, which the pill then shows.
 			layer?.uncoat(taking.index);
 			scratched = [...scratched, taking.name];
 			say(`${taking.name} — ${outcome.message}`);
@@ -509,16 +422,9 @@
 <div class="country">
 	<div class="stage">
 		<svg viewBox="0 0 {VIEW.width} {VIEW.height}" aria-hidden="true">
-			<!--
-				The panels first, under everything, so a group drawn inside one sits
-				on its own ground rather than on the sea.
-			-->
-			<!--
-				Keyed by position, not by label: two far-flung groups can carry the
-				same name — Madagascar has more than one offshore island filed under
-				the same province — and a duplicate key throws rather than renders,
-				which is why that country hung on "reading the province outlines".
-			-->
+			<!-- Panels first, under everything, so a group sits on its own ground. -->
+			<!-- Keyed by position, not label — two far-flung groups can share a
+			     name (e.g. Madagascar's offshore islands), and a duplicate key throws. -->
 			{#each insets as panel, at (at)}
 				<rect class="panel" x={panel.x} y={panel.y} width={panel.width} height={panel.height} rx="6"
 				></rect>
@@ -530,8 +436,7 @@
 					<path class="region" d={region.path} style:--fill={regionFill(colour, index)}></path>
 				{/each}
 			{:else if country}
-				<!-- The whole country while its provinces are on the way, so the shape
-				     is there to look at rather than an empty box. -->
+				<!-- Whole country while provinces load, so there's a shape to see. -->
 				<path class="whole" d={country.path}></path>
 			{/if}
 		</svg>
@@ -540,16 +445,10 @@
 			<ScratchLayer bind:this={layer} {cells} clear={alreadyClear} oncleared={cleared} />
 		{/if}
 
-		<!-- The names sit over the coating, dark on foil and white on a region
-		     that has been scratched — the same two treatments as the world map,
-		     because they are the same two materials. -->
-		<!--
-			Keyed by position, not by name. Natural Earth files four separate
-			Madagascan regions as "Antananarivo" and three as "Toamasina", so a
-			name is not unique — and a duplicate key throws before anything
-			renders, which is why that country sat for ever on "reading the
-			province outlines".
-		-->
+		<!-- Names over the coating: dark on foil, white on a scratched region —
+		     same treatment as the world map. -->
+		<!-- Keyed by position, not name — Natural Earth reuses province names
+		     (e.g. four Madagascan regions named "Antananarivo"). -->
 		{#each labels as label, at (at)}
 			<span
 				class="label"
@@ -691,8 +590,7 @@
 		color: var(--red);
 	}
 
-	/* The residue and the frame loop go; the scratch itself stays. It is the
-	   interaction, not decoration. */
+	/* Only decorative motion is removed — the scratch itself is the interaction. */
 	@media (prefers-reduced-motion: reduce) {
 		.toast {
 			transition: none;

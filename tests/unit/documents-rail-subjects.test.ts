@@ -1,12 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-/**
- * The SUBJECTS section of the Documents rail.
- *
- * There is no browser suite in this repository, so the two things the section
- * decides are reachable without a page: `railSubjects` says which rows are
- * drawn and in what order, and `SubjectRow` is rendered to a string and read
- * for the controls a person has to be able to reach.
- */
 import { describe, expect, it } from 'vitest';
 
 import { railSubjects, type RailSubject } from '$lib/documents/view';
@@ -40,8 +32,7 @@ describe('railSubjects', () => {
 	});
 
 	it('sorts by name, folded, so "dog" and "Dog" sort together', () => {
-		// Nothing leads any more: v0.8.0 seeds no catch-all "Household", so there
-		// is no subject for the sort to privilege.
+		// No catch-all subject leads the list; sort is purely alphabetical.
 		const { shown } = railSubjects([dog, car, house], false);
 		expect(shown.map((s) => s.id)).toEqual(['car', 'dog', 'house']);
 	});

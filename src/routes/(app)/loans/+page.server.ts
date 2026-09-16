@@ -61,9 +61,7 @@ const EVENT_LABELS: Record<string, string> = {
 
 export const load: PageServerLoad = async () => {
 	const baseCurrency = await getBaseCurrency();
-	// The rate table is loaded once for the whole screen rather than per loan.
-	// Converting inside the loop below meant three awaited round trips for every
-	// loan on the page; every other screen preloads, and this one now does too.
+	// Loaded once for the whole screen rather than converted per loan in the loop below.
 	const todayIso = today();
 	const [loans, allPeriods, properties, links, allEvents, rates] = await Promise.all([
 		db.select().from(loan).orderBy(loan.createdAt, loan.id),
@@ -91,13 +89,7 @@ export const load: PageServerLoad = async () => {
 	]);
 	const tagName = new Map(allTags.map((t) => [t.id, t.name]));
 
-	// The agreement and each re-fix letter, through the one query every
-	// documents card uses — `documentsAbout` stays one query per loan (it is
-	// narrow), but run concurrently for every loan up front rather than
-	// awaited one at a time inside the loop below. `candidateDocumentsFor`
-	// is the other half: ONE query for the whole visible library plus ONE for
-	// `document_link` across every loan, not the whole library fetched again
-	// for each loan's picker.
+	// Fetched once for all loans up front, not once per loan in the loop below.
 	const loanIds = loans.map((l) => l.id);
 	const [documentsByLoan, candidatesByLoan] = await Promise.all([
 		Promise.all(loanIds.map(async (id) => [id, await documentsAbout(id)] as const)).then(
@@ -118,9 +110,9 @@ export const load: PageServerLoad = async () => {
 			}));
 		const terms = {
 			owedMinor: l.owedMinor,
-			// Same rule the what-if preview uses, so the saved chart and the
-			// preview it was decided from cannot disagree: a balance observed
-			// after the payment day already reflects this month's instalment.
+			// Same rule the what-if preview uses, so the saved chart and preview
+			// can't disagree — a balance observed after the payment day already
+			// reflects this month's instalment.
 			owedAsOfMonth: anchorMonthFor(
 				l.owedOn ?? new Date().toISOString().slice(0, 10),
 				l.paymentDay
@@ -175,8 +167,6 @@ export const load: PageServerLoad = async () => {
 		const rate = currentPeriod?.annualRatePct ?? null;
 		const schedule = amortise(terms, periods, monthNow()).slice(0, 1);
 
-		// Full projected schedule, aggregated per year, for the interest vs
-		// principal chart.
 		const { rows: fullSchedule, years } = project(terms, periods);
 		const chart = years.map((y) => ({
 			year: y.year,
@@ -209,17 +199,12 @@ export const load: PageServerLoad = async () => {
 		cards.push({
 			id: l.id,
 			name: l.name,
-			// What the edit form starts from. A loan could be created but never
-			// corrected, so a mortgage entered without its second flat meant
-			// starting over.
 			edit: {
 				name: l.name,
 				lender: l.lender,
 				kind: l.kind,
 				paymentDay: l.paymentDay,
 				endsOn: l.endsOn,
-				// How the loan works, as opposed to what it has done. Reported as
-				// fixed and uncorrectable.
 				regime: l.regime,
 				accrualStyle: l.accrualStyle,
 				dayCount: l.dayCount,
@@ -240,16 +225,11 @@ export const load: PageServerLoad = async () => {
 				.filter(Boolean)
 				.join(' · '),
 			pill: fixationPill(l.regime, periods, l.owedMinor <= 0n, today()),
-			// The whole term as one band: which rate is behind you, which you are on,
-			// and how much of the loan runs past the last date anybody has agreed a
-			// rate for. See `fixationBand` — that last part is the point of it.
-			// A loan that never had an agreed end date still has one the schedule
-			// projects — `debtFreeYear` — and the band is about the SHAPE of the
-			// term, so a projected end is a truthful whole to take shares of.
+			// A loan with no agreed end date still gets one from the projected `debtFreeYear`,
+			// so the band always has a truthful whole to take shares of.
 			band: fixationBand(periods, bandEnd, today()),
-			// Earliest period first, whatever order the rows arrived in: the band
-			// sorts its own copy, and a caption reading a later year than the
-			// band's first segment would label it wrongly.
+			// Earliest period first: the band sorts its own copy, and a caption reading a
+			// later year than the band's first segment would label it wrongly.
 			bandRange:
 				periods.length > 0 && bandEnd
 					? `${[...periods].sort((a, b) => a.startsOn.localeCompare(b.startsOn))[0].startsOn.slice(0, 4)} → ${bandEnd.slice(0, 4)}`
@@ -279,7 +259,7 @@ export const load: PageServerLoad = async () => {
 			documentCandidates,
 			addDocumentHref: `/documents?add=1&addShelfKey=finance&targetKind=loan&targetId=${l.id}`,
 			currency: l.currency,
-			// raw inputs for the browser-side what-if engine (bigints as strings)
+			// Raw inputs for the browser-side what-if engine (bigints as strings).
 			sim: {
 				terms: {
 					owedMinor: String(terms.owedMinor),
@@ -306,12 +286,7 @@ export const load: PageServerLoad = async () => {
 			totalOwed: formatMinor(totalOwedBase, baseCurrency),
 			monthlyPayments: formatMinor(totalPaymentBase, baseCurrency),
 			interestThisYear: formatMinor(interestYearBase, baseCurrency),
-			// Honesty about the projection's blind spot: without booked history,
-			// interest is only visible from the balance anchor forward.
-			//
-			// This used to lead with a deductible total. Deductibility is Czech law
-			// stated as a general fact on a screen with no jurisdiction, and the tax
-			// statements carry the real figures from real documents.
+			// Without booked history, interest is only visible from the balance anchor forward.
 			interestNote: interestFromMonth ? `projected from ${interestFromMonth}` : undefined,
 			debtFree: latestDebtFree
 		},
@@ -360,12 +335,8 @@ export const actions: Actions = {
 		return result.ok ? result : fail(result.status, { message: result.message });
 	},
 
-	/**
-	 * Correct a loan's description and which properties secure it.
-	 *
-	 * Rate, payment and balance are not here: those are what `addFixation` and
-	 * `addRepayment` are for, and they understand the history they rewrite.
-	 */
+	/** Correct a loan's description and secured properties. Rate, payment and
+	 *  balance are not here — that's `addFixation` and `addRepayment`. */
 	editLoan: async ({ request }) => {
 		const form = await request.formData();
 		const id = asRowId(form.get('id'));
@@ -382,8 +353,6 @@ export const actions: Actions = {
 			paymentDay: paymentDayRaw ? Number(paymentDayRaw) : null,
 			endsOn: String(form.get('endsOn') ?? '').trim() || null,
 			secured,
-			// How the loan works. Reported as fixed and uncorrectable: a rate regime
-			// or accrual style entered wrongly meant starting the loan again.
 			regime: String(form.get('regime') ?? ''),
 			accrualStyle: String(form.get('accrualStyle') ?? ''),
 			dayCount: String(form.get('dayCount') ?? ''),
@@ -424,20 +393,16 @@ export const actions: Actions = {
 			fixedUntil: String(form.get('fixedUntil') ?? '') || null,
 			startsOn: String(form.get('startsOn') ?? '') || null,
 			endsOn: String(form.get('endsOn') ?? '') || null,
-			// The screen no longer asks: deductibility is Czech-specific and the tax
-			// statements carry the real figures. The column stays — the schema is
-			// additive-only — and createLoan still requires the field.
+			// Deductibility is Czech-specific and the tax statements carry the real figures;
+			// the column stays (schema is additive-only) and createLoan still requires it.
 			interestDeductible: false,
 			secured
 		});
 		return result.ok ? result : fail(result.status, { message: result.message });
 	},
 
-	/**
-	 * File an existing document against a loan — the "Attach" picker on its
-	 * `DocumentsCard`. Every loan's card posts here with its own `targetId`, so
-	 * one action serves all of them; the registry resolves which loan it was.
-	 */
+	/** The "Attach" picker on a loan's `DocumentsCard`; one action serves every
+	 *  loan, disambiguated by `targetId`. */
 	attachDocument: async ({ request }) => {
 		const form = await request.formData();
 		const targetId = asRowId(form.get('targetId'));
@@ -448,10 +413,7 @@ export const actions: Actions = {
 		return { ok: true };
 	},
 
-	/**
-	 * Unfile a document — the link only. The document stays on its shelf, so a
-	 * mis-click costs a re-attach rather than evidence.
-	 */
+	/** Unfile a document — the link only; the document stays on its shelf. */
 	detachDocument: async ({ request }) => {
 		const form = await request.formData();
 		const targetId = asRowId(form.get('targetId'));

@@ -1,13 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Colour mode has to come back the colour it went in.
 //
-// This is the test that was missing. Every document used to check the scanner
-// was a white page with black text, and on white paper the fault below is
-// invisible — so it shipped, and the first burgundy passport and teal identity
-// card put through it came back pale grey.
+// Regression: correction on a white page hid a fault that washed out coloured
+// documents (passports, ID cards) to pale grey.
 //
-// It loads a real OpenCV, like the child tests, because the fault lives in what
-// the arithmetic does to a colour rather than in any of the code around it.
+// Loads a real OpenCV, since the fault lives in the arithmetic itself.
 import { afterAll, describe, expect, it } from 'vitest';
 import { createRequire } from 'node:module';
 import { renderPage } from '$lib/scan/core/enhance';
@@ -35,16 +32,9 @@ afterAll(() => {
 /**
  * A strongly coloured card under a lamp, WITH THE PALE MARGIN A REAL CROP HAS.
  *
- * The margin is not decoration, it is the whole reproduction. A crop is never
- * exactly the document — there is always a band of desk or of the card's own
- * light border around it — and that band is what lifts the mean brightness of
- * the frame above the card's own. The old correction divided the L channel
- * towards that mean, which pulled a dark cover up and, because a and b were
- * left where they were, drained the colour out of it on the way.
- *
- * A card with no margin does not reproduce the fault at all: the field matches
- * the card, the gain comes out at one, and nothing happens. The first version
- * of this test made exactly that mistake and passed against the broken code.
+ * The margin (desk or the card's own light border) lifts the frame's mean
+ * brightness above the card's own, which is what reproduces the fault: a
+ * card with no margin doesn't trigger it at all.
  */
 function card(rgb: [number, number, number], width = 240, height = 320): Frame {
 	const data = new Uint8ClampedArray(width * height * 4);
@@ -90,8 +80,7 @@ const middleOf = (frame: Frame) =>
 
 describe('colour mode', () => {
 	it('keeps a burgundy passport burgundy', async () => {
-		// A Polish passport cover, roughly. The fault this catches turned it into
-		// pale mauve — the hue survived and most of the saturation did not.
+		// A passport cover, roughly. The fault turned this pale — hue survived, saturation didn't.
 		const source = card([104, 32, 58]);
 		const rendered = renderPage(await cv, source, null, 'color');
 
@@ -113,8 +102,7 @@ describe('colour mode', () => {
 	}, 60_000);
 
 	it('does not wash a dark cover towards the middle of the range', async () => {
-		// The specific failure: a large evenly coloured object was read as a
-		// shadow and "corrected" until it was pale. A dark card must stay dark.
+		// A large evenly coloured object must not be read as a shadow and paled.
 		const source = card([104, 32, 58]);
 		const rendered = renderPage(await cv, source, null, 'color');
 		const at = middleOf(rendered);
@@ -123,9 +111,7 @@ describe('colour mode', () => {
 	}, 60_000);
 
 	it('crops in Original mode but leaves the colours completely alone', async () => {
-		// The point of Original: the page straightened, and nothing judged. Someone
-		// scanning a passport or a bank card wants the crop AND the colours the
-		// camera recorded, and used to have to choose between them.
+		// Original mode: crop the page but leave the camera's colours untouched.
 		const source = card([104, 32, 58]);
 		const inset = {
 			corners: {
@@ -141,8 +127,7 @@ describe('colour mode', () => {
 		expect(rendered.width).toBeLessThan(source.width);
 		expect(rendered.height).toBeLessThan(source.height);
 
-		// And untouched: the lamp's gradient is still there, because removing it
-		// is exactly the judgement this mode declines to make.
+		// Untouched: removing the lamp's gradient is a judgement this mode declines to make.
 		const corner = (frame: Frame, x: number, y: number) => frame.data[(y * frame.width + x) * 4];
 		const spread =
 			corner(rendered, 4, 4) - corner(rendered, rendered.width - 5, rendered.height - 5);
@@ -151,8 +136,7 @@ describe('colour mode', () => {
 	}, 60_000);
 
 	it('hands back the whole photograph in Original when nothing was found', async () => {
-		// The escape hatch the upload path depends on: no boundary means there is
-		// nothing to crop to, and the picture comes back exactly as it went in.
+		// The upload path relies on this: no boundary means nothing to crop to.
 		const source = card([104, 32, 58]);
 		const rendered = renderPage(await cv, source, null, 'original');
 		expect(rendered.width).toBe(source.width);

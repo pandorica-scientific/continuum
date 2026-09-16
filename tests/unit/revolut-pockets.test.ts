@@ -4,16 +4,9 @@ import { readFileSync } from 'node:fs';
 import { parseRevolut } from '$lib/server/import/adapters/revolut';
 import { proveStatement } from '$lib/server/import/proof';
 
-// Revolut exports every POCKET into one file, keyed by the Product column. The
-// reporter's real export held 1798 Current rows and three Savings rows — the
-// Savings pocket carrying its own balance chain (0.17 -> 0.00) and its own
-// dates, two years before the rest. Read as one statement it proved P0, "the
-// running balance does not follow from the movements", because the chain of one
-// account was being checked against the balances of two. Removing only those
-// three rows took the same file to P3, chain closes on all 1798.
-//
-// This fixture is that shape, reduced: two pockets, a fee-bearing row, and a
-// REVERTED row which carries no balance at all.
+// Revolut keys every pocket by the Product column in one file; each pocket
+// must be its own statement with its own closing balance chain.
+// Fixture: two pockets, a fee-bearing row, and a REVERTED row with no balance.
 const text = readFileSync('tests/fixtures/revolut-pockets.csv', 'utf8');
 
 describe('a Revolut export with more than one pocket', () => {
@@ -41,9 +34,7 @@ describe('a Revolut export with more than one pocket', () => {
 		expect(current.periodEnd).toBe('2026-07-20');
 		expect(current.closingBalanceMinor).toBe(360000n);
 
-		// The Savings pocket kept its own dates rather than borrowing the file's.
-		// Reading them as one statement is what made the period read June 2024 and
-		// the closing balance read zero.
+		// The Savings pocket keeps its own dates rather than borrowing the file's.
 		expect(savings.periodEnd).toBe('2024-06-20');
 		expect(savings.closingBalanceMinor).toBe(0n);
 	});

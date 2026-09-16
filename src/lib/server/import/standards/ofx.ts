@@ -189,20 +189,12 @@ export function parseOfx(raw: string): ParsedStatement[] {
 			statement.periodStart ??= statement.rows[0].bookedAt;
 			statement.periodEnd ??= statement.rows[statement.rows.length - 1].bookedAt;
 		}
-		// The opening balance is NOT derived from the closing one.
-		//
-		// `closing - sum(movements)` was computed here so the endpoint check would
-		// have something to test, on the reasoning that it could not manufacture
-		// agreement because both sides come from the same movements. That is
-		// exactly backwards: because both sides come from the same movements,
-		// `opening + sum === closing` reduces to `closing === closing` and is true
-		// whatever was read. An OFX export missing a transaction passed it, and
-		// every OFX file was rated P1 on a check that could not fail.
-		//
-		// OFX prints no per-row balances, so with no stated opening figure there is
-		// genuinely nothing in the file to check the movements against. Leaving the
-		// endpoint evidence unavailable says so; the reading is then held rather
-		// than filed, which is the honest answer for it.
+		// The opening balance is NOT derived from the closing one: computing it as
+		// `closing - sum(movements)` makes `opening + sum === closing` trivially
+		// true regardless of what was actually read, so a missing transaction
+		// would pass silently. OFX prints no per-row balances, so with no stated
+		// opening figure there is genuinely nothing to check the movements
+		// against, and the reading is held rather than filed.
 	}
 
 	return statements.filter((statement) => statement.rows.length > 0);

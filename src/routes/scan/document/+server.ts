@@ -2,16 +2,10 @@
 /**
  * The kept pages, in the order given, as one PDF.
  *
- * Each page's artefact was rendered and encoded once when it was kept, so
- * colour and grayscale go into the document as the bytes already on disk —
- * `assemblePdf`'s `jpeg` shape — and are never decoded and re-encoded here.
- * Black-and-white is the exception and has to be: by the time it reaches the
- * document it is a 1-bit DeviceGray stream, and `packBilevel` needs the pixels
- * to build one.
- *
- * The mode is read from WHICH artefact exists rather than from the request. It
- * is the same fact either way, and taking it from the filesystem means a client
- * cannot ask for a page to be assembled as something it was never rendered as.
+ * Colour/grayscale pages go in as the bytes already on disk (never re-encoded);
+ * black-and-white must be decoded since `packBilevel` needs the raw pixels.
+ * Mode is read from which artefact exists on disk, not from the request, so a
+ * client can't ask for a page to be assembled as something it was never rendered as.
  */
 import { error } from '@sveltejs/kit';
 import { existsSync } from 'node:fs';
@@ -37,9 +31,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		error(400, `A document holds at most ${MAX_PAGES} pages.`);
 	}
 
-	// Checked before any of them is joined to a path, and checked HERE so a stale
-	// id is the 400 it is rather than a 500 raised from inside a page provider
-	// halfway through assembling a PDF.
+	// Validated before path-joining so a stale id is a 400, not a 500 mid-assembly.
 	const sessionId = scanId(body.sessionId, 'scan session');
 	const pageIds = body.pageIds.map((pageId) => scanId(pageId, 'scan page'));
 
@@ -53,9 +45,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			return { frame: await decodeToFrame(bytes), mode: 'bw' as const };
 		}
 		if (existsSync(colour)) {
-			// Straight through, unopened. This is the whole of the "one encode"
-			// claim: the bytes written when the page was kept are the bytes in the
-			// document.
+			// Straight through, unopened: the bytes written when the page was kept.
 			return { jpeg: new Uint8Array(await readFile(colour)), mode: 'color' as const };
 		}
 		error(409, 'A page was not finished before the document was made.');
@@ -64,15 +54,11 @@ export const POST: RequestHandler = async ({ request }) => {
 	const title = body.filename?.trim() || 'Scan';
 	const bytes = await assemblePdf(pages, {
 		title,
-		// Reached only by a black-and-white page that turned out not to be
-		// bilevel after all — `assemblePdf` checks before packing, and falls back
-		// rather than writing a broken stream.
+		// Fallback for a black-and-white page that turns out not to be bilevel after all.
 		encodeJpeg: (frame) => encodeFrame(frame, 'jpeg', 95)
 	});
 
-	// The originals were scratch and their job is done. Dropped HERE rather than
-	// left to the sweep, because the document now exists and every byte behind
-	// it is a copy of something already saved.
+	// The document now exists as a copy of everything, so drop the scratch originals now.
 	await dropScanSession(sessionId);
 
 	return new Response(bytes, {

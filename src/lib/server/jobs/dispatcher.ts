@@ -2,20 +2,19 @@
 /**
  * One CPU slot, shared by every kind of work that would fight for it.
  *
- * Reading a statement and reading a scanned document are the same problem: both
- * are CPU-bound, both run for seconds to minutes, and both are self-hosted on a
- * box — a NAS, a small VPS — whose web server has to stay responsive. Two
- * queues, one per kind, would let an import and an OCR run at the same time,
- * which is exactly the situation a queue exists to prevent. So there is ONE
- * claim across `import` and `extract_text`, under one advisory lock.
+ * Reading a statement and reading a scanned document are both CPU-bound and
+ * self-hosted on a box whose web server has to stay responsive, so there is
+ * ONE claim across `import` and `extract_text`, under one advisory lock — two
+ * queues, one per kind, would let both run at once, which is exactly what a
+ * queue exists to prevent.
  *
  * `calendar_sync` is deliberately absent: it is network-bound and is claimed by
  * the calendar engine on its own schedule.
  *
- * The claim is a LEASE rather than a lock, following `calendar/sync/engine.ts`:
- * the work in the middle runs for seconds and no database lock belongs open
- * across it. A worker that dies mid-job leaves a stale stamp, and the job
- * becomes claimable again instead of being stranded in `running`.
+ * The claim is a LEASE rather than a lock: the work in the middle runs for
+ * seconds and no database lock belongs open across it. A worker that dies
+ * mid-job leaves a stale stamp, and the job becomes claimable again instead of
+ * being stranded in `running`.
  */
 import { and, asc, eq, inArray, lt, or, sql } from 'drizzle-orm';
 import { db, type Db, type Queryable } from '$lib/server/db';
@@ -86,8 +85,8 @@ async function claimNext(handle: Queryable = db): Promise<JobRow | null> {
 			.from(job)
 			.where(
 				and(
-					// One claim across both kinds. Two claims, one per kind, would put
-					// two CPU-bound jobs on the box at once.
+					// One claim across both kinds, not two — else two CPU-bound jobs
+					// could run on the box at once.
 					inArray(job.kind, [...CPU_KINDS]),
 					or(
 						eq(job.state, 'queued'),
@@ -139,12 +138,9 @@ let scanning = 0;
 /**
  * Hold the CPU queue back while a scan is running.
  *
- * A scan is a button press someone is watching; an extraction is batch work
- * nobody is. This does NOT preempt a job already running — there is no way to,
- * and claiming otherwise in a comment would be worse than not having it. What
- * it prevents is a fresh one STARTING while someone is scanning, which is the
- * difference between a slow render and a render that waits ten minutes for a
- * hundred-page OCR to finish.
+ * This does NOT preempt a job already running. It prevents a fresh one
+ * STARTING while someone is scanning, so a render never waits behind a
+ * ten-minute OCR run.
  *
  * Returns the release, so a caller cannot forget which way round it goes.
  */
@@ -152,8 +148,8 @@ export function holdCpuQueueForScan(): () => void {
 	scanning++;
 	let released = false;
 	return () => {
-		// Idempotent: a route that releases in a `finally` and again on an error
-		// path must not take the count below zero and let a scan run unprotected.
+		// Idempotent: a release called twice (finally, then an error path) must
+		// not take the count below zero and let a scan run unprotected.
 		if (released) return;
 		released = true;
 		scanning--;
@@ -173,13 +169,12 @@ let sweep: Promise<number> | null = null;
  * Returns when the queue is empty. Safe to call concurrently: the second caller
  * joins the sweep already running rather than starting a second one.
  *
- * The in-process guard is not redundant with the advisory lock. The lock makes
- * one CLAIM atomic; it does nothing about two CALLERS, because the second finds
- * the NEXT job still queued and runs it in parallel — which is precisely the
- * burst of CPU-bound work this module exists to prevent, and there are two
- * independent callers: every upload, and a tick every five minutes. Worse,
- * since the lease is never renewed, a job running longer than LEASE_MS was
- * re-offered to that tick and run a second time while the first was inside it.
+ * The advisory lock makes one CLAIM atomic but does nothing about two
+ * CALLERS: the second would find the NEXT job still queued and run it in
+ * parallel, which is exactly the burst of CPU-bound work this module exists
+ * to prevent. Worse, since the lease is never renewed, a job running longer
+ * than `LEASE_MS` could be re-claimed and run a second time while the first
+ * was still inside it.
  */
 export function runCpuQueue(handle: Queryable = db): Promise<number> {
 	sweep ??= drain(handle).finally(() => {
@@ -193,9 +188,8 @@ async function drain(handle: Queryable = db): Promise<number> {
 	await clearFinished(KEEP_FINISHED_MS, handle);
 	let done = 0;
 	for (;;) {
-		// Someone is scanning. Stop claiming rather than start a fresh hundred-page
-		// OCR underneath a person photographing a stack of paper — see
-		// `holdCpuQueueForScan`.
+		// Someone is scanning — stop claiming rather than start a fresh OCR
+		// underneath them; see `holdCpuQueueForScan`.
 		if (scanning > 0) return done;
 
 		const claimed = await claimNext(handle);
@@ -204,16 +198,16 @@ async function drain(handle: Queryable = db): Promise<number> {
 		const handler = handlers.get(claimed.kind as CpuKind);
 		let outcome: JobOutcome;
 		if (!handler) {
-			// A kind nobody registered is a wiring defect, and leaving the job
-			// `running` would strand it until the lease expired and it was tried
-			// again, for ever. It fails once and says why.
+			// A kind nobody registered is a wiring defect — fail once and say why,
+			// rather than strand the job in `running` until the lease expires and
+			// it is retried forever.
 			outcome = { error: `No handler registered for job kind "${claimed.kind}".` };
 		} else {
 			try {
 				outcome = await handler(claimed, handle as Db);
 			} catch (error) {
-				// A handler that throws is a defect, not a rejected file — a rejection
-				// comes back as a `result` carrying an error. Either way the job stops
+				// A handler that throws is a defect, not a rejected file (that comes
+				// back as a `result` carrying an error). Either way the job stops
 				// here rather than being retried into the same failure.
 				outcome = { error: error instanceof Error ? error.message : String(error) };
 			}
