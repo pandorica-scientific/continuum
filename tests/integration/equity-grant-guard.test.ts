@@ -221,7 +221,11 @@ describe('a member and their own equity', () => {
 	it('refuses a sale against a forfeited tranche', async () => {
 		await post('addGrant', EVEN_GRANT, asPerson(PETRA, 'member'));
 		const [g] = await grants();
-		await post('forfeitGrant', { grantId: g.id, forfeitedOn: '2025-06-01' }, asPerson(PETRA, 'member'));
+		await post(
+			'forfeitGrant',
+			{ grantId: g.id, forfeitedOn: '2025-06-01' },
+			asPerson(PETRA, 'member')
+		);
 		const [t] = await tranches(g.id);
 		const outcome = await post(
 			'recordSale',

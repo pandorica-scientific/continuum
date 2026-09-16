@@ -35,8 +35,13 @@ export async function vestValues(
 	today = new Date().toISOString().slice(0, 10)
 ): Promise<VestValue[]> {
 	const grants = await grantsWithTranches(handle);
-	const vested: { personId: string; ticker: string; day: string; units: number; onPayslip: boolean }[] =
-		[];
+	const vested: {
+		personId: string;
+		ticker: string;
+		day: string;
+		units: number;
+		onPayslip: boolean;
+	}[] = [];
 	for (const { grant, tranches } of grants) {
 		for (const t of tranches) {
 			if (trancheState(t, today) !== 'vested') continue;
@@ -60,7 +65,12 @@ export async function vestValues(
 		out.push({
 			personId: v.personId,
 			year: Number(v.day.slice(0, 4)),
-			valueMinor: convert(vestValueMinor(v.units, close.closeMinor), close.currency, baseCurrency, v.day),
+			valueMinor: convert(
+				vestValueMinor(v.units, close.closeMinor),
+				close.currency,
+				baseCurrency,
+				v.day
+			),
 			onPayslip: v.onPayslip
 		});
 	}

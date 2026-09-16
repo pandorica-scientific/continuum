@@ -195,7 +195,9 @@ export async function recordSettlement(
 	if (row.vestsOn > fields.settledOn) {
 		throw new Error('The settlement date cannot be before the tranche vests.');
 	}
-	throw new Error(`Delivered and withheld units cannot exceed the ${row.units} units in this tranche.`);
+	throw new Error(
+		`Delivered and withheld units cannot exceed the ${row.units} units in this tranche.`
+	);
 }
 
 /**
