@@ -26,6 +26,19 @@
 	// Read once, not reactive: re-deriving would fight a change made since the re-render.
 	let openMode = $state(untrack(() => Boolean(entered?.openMode)));
 	const peopleCount = $derived(Math.max(enteredPeople.length, 2) + extraRows);
+
+	// Controlled (bind:value), not just printed from `entered`: an uncontrolled
+	// value={...} gets reapplied whenever any sibling in the row re-renders (e.g.
+	// toggling openMode below), wiping out whatever was typed since.
+	const initialRowCount = untrack(() => Math.max(enteredPeople.length, 2));
+	let peopleNames = $state(
+		untrack(() => Array.from({ length: initialRowCount }, (_, i) => enteredPeople[i]?.name ?? ''))
+	);
+	let peopleBirthYears = $state(
+		untrack(() =>
+			Array.from({ length: initialRowCount }, (_, i) => enteredPeople[i]?.birthYear ?? '')
+		)
+	);
 </script>
 
 <svelte:head><title>Set up Continuum</title></svelte:head>
@@ -80,13 +93,13 @@
 						name="personName"
 						placeholder="Name"
 						required={i === 0}
-						value={enteredPeople[i]?.name ?? ''}
+						bind:value={peopleNames[i]}
 					/>
 					<input
 						name="personBirthYear"
 						placeholder="Birth year"
 						inputmode="numeric"
-						value={enteredPeople[i]?.birthYear ?? ''}
+						bind:value={peopleBirthYears[i]}
 					/>
 					<input
 						name="personPassword"
@@ -107,7 +120,15 @@
 					/>
 				</div>
 			{/each}
-			<button type="button" class="btn" onclick={() => (extraRows += 1)}>➕ Add a person</button>
+			<button
+				type="button"
+				class="btn"
+				onclick={() => {
+					extraRows += 1;
+					peopleNames.push('');
+					peopleBirthYears.push('');
+				}}>➕ Add a person</button
+			>
 		</fieldset>
 
 		<fieldset>

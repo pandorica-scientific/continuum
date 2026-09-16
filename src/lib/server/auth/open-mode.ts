@@ -11,7 +11,7 @@
  * checks and are not routed around.
  */
 
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
 import { person } from '$lib/server/db/schema';
 import { verifyPassword } from '$lib/server/auth';
@@ -53,8 +53,27 @@ export async function enableOpenMode(
 	return { ok: true };
 }
 
-/** Turn it off. Deliberately needs no credential — see the note above. */
+/**
+ * Turn it off. Deliberately needs no credential — see the note above — but
+ * still refuses to strand anyone: a password set while open only exists
+ * because open mode never demanded one, and closing without one leaves that
+ * account unable to sign back in at all (the login picker itself excludes
+ * anyone with no password once open mode is off).
+ */
 export async function disableOpenMode(handle: Queryable = db): Promise<OpenModeResult> {
+	const stragglers = await handle
+		.select({ name: person.name })
+		.from(person)
+		.where(and(isNull(person.deactivatedAt), isNull(person.passwordHash)));
+	if (stragglers.length > 0) {
+		const names = stragglers.map((p) => p.name).join(', ');
+		const verb = stragglers.length === 1 ? 'has' : 'have';
+		return {
+			ok: false,
+			status: 400,
+			message: `${names} ${verb} no password yet — set one for each (or deactivate them) before closing, or they will be locked out.`
+		};
+	}
 	await setSetting(KEY, false, handle);
 	return { ok: true };
 }

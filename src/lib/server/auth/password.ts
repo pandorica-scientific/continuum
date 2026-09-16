@@ -3,7 +3,7 @@
 // changing a password after a scare should actually eject the other device,
 // which is the entire point of changing it.
 
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { person } from '$lib/server/db/schema';
 import { passwordMinLength } from '$lib/server/system/policy';
@@ -29,17 +29,22 @@ export async function changeOwnPassword(
 		.from(person)
 		.where(eq(person.id, personId));
 	const row = rows[0];
-	const correct = await verifyPassword(row?.passwordHash ?? null, current);
-	if (!row || row.passwordHash === null || !correct) {
+	if (!row) return { ok: false, message: 'Current password is wrong.' };
+	const previousHash = row.passwordHash;
+	// No password yet — open mode, or still pending enrollment — so there is
+	// nothing to check `current` against: setting one is a grant, not a change.
+	if (previousHash !== null && !(await verifyPassword(previousHash, current))) {
 		return { ok: false, message: 'Current password is wrong.' };
 	}
-	const previousHash = row.passwordHash;
 	const nextHash = await hashPassword(next);
 	const changed = await db.transaction(async (tx) => {
+		// eq(col, null) compiles to "= NULL", which never matches; isNull is required here.
+		const matchesPrevious =
+			previousHash === null ? isNull(person.passwordHash) : eq(person.passwordHash, previousHash);
 		const updated = await tx
 			.update(person)
 			.set({ passwordHash: nextHash })
-			.where(and(eq(person.id, personId), eq(person.passwordHash, previousHash)))
+			.where(and(eq(person.id, personId), matchesPrevious))
 			.returning({ id: person.id });
 		if (!updated[0]) return false;
 		await revokeAuthenticationGeneration(tx, personId, keepSessionId);

@@ -444,6 +444,7 @@
 			<PeopleSettings
 				people={data.people}
 				me={data.me}
+				openMode={data.openMode}
 				enrollmentLink={form?.enrollmentLink ?? null}
 				enrollmentLinkDays={data.enrollmentLinkDays}
 			/>
@@ -453,13 +454,21 @@
 				action="?/changePassword"
 				use:enhance={() =>
 					async ({ update }) => {
-						// reset:true clears the three password fields on success, which is
+						// reset:true clears the password fields on success, which is
 						// half the confirmation that anything happened.
 						await update({ reset: true });
 					}}
 				class="card password-form"
 			>
-				<input name="currentPassword" type="password" placeholder="Current password" required />
+				{#if !data.hasPassword}
+					<p class="note">
+						{data.openMode
+							? "You haven't needed a password while the instance is open — set one now so you can still sign in after it's closed."
+							: "You don't have a password yet."}
+					</p>
+				{:else}
+					<input name="currentPassword" type="password" placeholder="Current password" required />
+				{/if}
 				<input
 					name="newPassword"
 					type="password"
@@ -467,10 +476,12 @@
 					required
 				/>
 				<input name="confirmPassword" type="password" placeholder="Repeat new password" required />
-				<button type="submit" class="btn">Change password</button>
+				<button type="submit" class="btn"
+					>{data.hasPassword ? 'Change password' : 'Set password'}</button
+				>
 			</form>
 			{#if form?.passwordChanged}
-				<p class="ok-note">Password changed. Every other signed-in device has been signed out.</p>
+				<p class="ok-note">Password saved. Every other signed-in device has been signed out.</p>
 			{/if}
 		</section>
 

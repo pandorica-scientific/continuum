@@ -89,6 +89,9 @@ describe('open mode', () => {
 
 	it('can always be turned off, by anyone, with no credential', async () => {
 		await enableOpenMode(ADMIN, 'correct-horse-battery', testDb);
+		// ADMIN and MEMBER both have passwords; NO_PASSWORD would block this
+		// (see below), so it's deactivated here — not what this test is about.
+		await harness.sql`update person set deactivated_at = now() where id = ${NO_PASSWORD}`;
 		// Requiring a credential to close it would only stop the honest.
 		expect((await disableOpenMode(testDb)).ok).toBe(true);
 		expect(await isOpenMode(testDb)).toBe(false);
@@ -96,8 +99,21 @@ describe('open mode', () => {
 
 	it('leaves every password intact, so turning it off restores normal sign-in', async () => {
 		await enableOpenMode(ADMIN, 'correct-horse-battery', testDb);
+		await harness.sql`update person set deactivated_at = now() where id = ${NO_PASSWORD}`;
 		await disableOpenMode(testDb);
 		const people = await testDb.select().from(schema.person);
 		expect(people.every((p) => p.id === NO_PASSWORD || p.passwordHash !== null)).toBe(true);
+	});
+
+	it('refuses to close while an active person has no password — they would be locked out', async () => {
+		await enableOpenMode(ADMIN, 'correct-horse-battery', testDb);
+		const result = await disableOpenMode(testDb);
+		expect(result).toEqual({
+			ok: false,
+			status: 400,
+			message:
+				'Pending has no password yet — set one for each (or deactivate them) before closing, or they will be locked out.'
+		});
+		expect(await isOpenMode(testDb)).toBe(true);
 	});
 });

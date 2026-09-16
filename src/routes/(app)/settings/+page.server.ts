@@ -184,8 +184,18 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const groups = await loadCategoryGroups();
 	const leaves = await loadCategories();
 
+	// The people query above only reports pending-enrollment for an admin (see
+	// its comment); a member still needs to know their own state to pick
+	// between "Set password" and "Change password" below.
+	const [self] = await db
+		.select({ passwordHash: person.passwordHash })
+		.from(person)
+		.where(eq(person.id, locals.person!.id));
+	const hasPassword = self?.passwordHash != null;
+
 	return {
 		isAdmin,
+		hasPassword,
 		taxonomy: groups.map((group) => ({
 			key: group.key,
 			label: group.label,
@@ -514,7 +524,8 @@ export const actions = administered({
 
 	/** Close it again. Deliberately asks for nothing — the door is already open. */
 	disableOpenMode: async () => {
-		await disableOpenMode();
+		const result = await disableOpenMode();
+		if (!result.ok) return fail(result.status, { message: result.message });
 		return { ok: true };
 	},
 

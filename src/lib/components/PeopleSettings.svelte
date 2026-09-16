@@ -17,11 +17,13 @@
 	let {
 		people,
 		me,
+		openMode = false,
 		enrollmentLink = null,
 		enrollmentLinkDays = DEFAULT_ENROLLMENT_LINK_DAYS
 	}: {
 		people: PersonRow[];
 		me: { id: string; role: 'admin' | 'member' } | null;
+		openMode?: boolean;
 		enrollmentLink?: string | null;
 		enrollmentLinkDays?: number;
 	} = $props();
@@ -33,7 +35,8 @@
 		if (!p.role) return '';
 		const bits: string[] = [p.role];
 		if (p.birthYear) bits.push(`born ${p.birthYear}`);
-		if (p.pending) bits.push('not enrolled yet');
+		// Meaningless while the instance is open — nobody needs a password to sign in.
+		if (p.pending && !openMode) bits.push('not enrolled yet');
 		if (p.deactivatedAt) bits.push('deactivated');
 		return bits.join(' · ');
 	}

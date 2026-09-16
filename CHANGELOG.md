@@ -2,7 +2,18 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security
 
-## 0.9.2 — Unreleased
+## 0.9.3 — Unreleased
+
+> Open mode you can actually close, and a setup wizard that keeps what you typed.
+
+### 🐛 Fixed
+
+- 🔒 **Closing open mode can no longer strand anyone** — it now refuses while someone still has no password, naming them, instead of silently leaving them unable to sign back in.
+- 🔑 **A first password, not just a changed one** — anyone with no password yet (open mode, or still pending enrollment) gets a "Set password" form instead of one demanding a current password that was never set.
+- ✍️ **The setup wizard stopped erasing names and birth years** — toggling "No password" no longer wipes what had already been typed for each person.
+- 🙈 **"Not enrolled yet" only shows when it means something** — hidden while the instance is in open mode, where nobody needs a password.
+
+## 0.9.2 — 2026-09-16
 
 > Shares an employer grants, vesting on their own calendar, priced every day.
 
