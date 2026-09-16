@@ -177,6 +177,59 @@ describe('a member and their own equity', () => {
 		expect(ts[0].settledOn).toBe('2026-03-01');
 		expect(ts.slice(1).map((t) => Number(t.units))).toEqual([150, 150]);
 	});
+	it('refuses a settlement that delivers or withholds more than the tranche vested', async () => {
+		await post('addGrant', EVEN_GRANT, asPerson(PETRA, 'member'));
+		const [g] = await grants();
+		const [t] = await tranches(g.id);
+		const outcome = await post(
+			'recordSettlement',
+			{ trancheId: t.id, settledOn: '2026-03-01', deliveredUnits: '90', withheldUnits: '20' },
+			asPerson(PETRA, 'member')
+		);
+		expect(outcome.status).toBe(400);
+		expect((await tranches(g.id))[0].settledOn).toBeNull();
+	});
+	it('refuses to settle the same tranche twice', async () => {
+		await post('addGrant', EVEN_GRANT, asPerson(PETRA, 'member'));
+		const [g] = await grants();
+		const [t] = await tranches(g.id);
+		await post(
+			'recordSettlement',
+			{ trancheId: t.id, settledOn: '2026-03-01', deliveredUnits: '62', withheldUnits: '38' },
+			asPerson(PETRA, 'member')
+		);
+		const again = await post(
+			'recordSettlement',
+			{ trancheId: t.id, settledOn: '2026-03-01', deliveredUnits: '50', withheldUnits: '0' },
+			asPerson(PETRA, 'member')
+		);
+		expect(again.status).toBe(400);
+		expect(Number((await tranches(g.id))[0].deliveredUnits)).toBe(62);
+	});
+	it('refuses to settle a tranche before it vests', async () => {
+		await post('addGrant', EVEN_GRANT, asPerson(PETRA, 'member'));
+		const [g] = await grants();
+		const [, second] = await tranches(g.id);
+		const outcome = await post(
+			'recordSettlement',
+			{ trancheId: second.id, settledOn: '2026-06-01', deliveredUnits: '100', withheldUnits: '0' },
+			asPerson(PETRA, 'member')
+		);
+		expect(outcome.status).toBe(400);
+		expect((await tranches(g.id))[1].settledOn).toBeNull();
+	});
+	it('refuses a sale against a forfeited tranche', async () => {
+		await post('addGrant', EVEN_GRANT, asPerson(PETRA, 'member'));
+		const [g] = await grants();
+		await post('forfeitGrant', { grantId: g.id, forfeitedOn: '2025-06-01' }, asPerson(PETRA, 'member'));
+		const [t] = await tranches(g.id);
+		const outcome = await post(
+			'recordSale',
+			{ trancheId: t.id, soldUnits: '10' },
+			asPerson(PETRA, 'member')
+		);
+		expect(outcome.status).toBe(400);
+	});
 	it('forfeits every pending tranche and leaves vested ones', async () => {
 		await post('addGrant', EVEN_GRANT, asPerson(PETRA, 'member'));
 		const [g] = await grants();

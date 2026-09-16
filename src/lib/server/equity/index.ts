@@ -7,7 +7,7 @@
  * date. Replacing keeps any tranche that has settled: what was delivered
  * happened, whatever the new schedule says.
  */
-import { and, eq, gt, isNull, sql } from 'drizzle-orm';
+import { and, eq, gt, isNull, lte, sql } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { db, type Db, type Queryable } from '$lib/server/db';
 import { engagement, equityGrant, equityTranche } from '$lib/server/db/schema';
@@ -152,20 +152,50 @@ export async function replaceSchedule(
 	});
 }
 
+/**
+ * Settle a tranche once: it must not already be settled or forfeited, and
+ * delivered plus withheld can never exceed what was scheduled to vest — a
+ * looser check would let `heldUnits()`, grant summaries and net worth count
+ * more shares than the tranche ever held. Guarded in SQL, atomically, the
+ * same way `recordSale` guards against overselling.
+ */
 export async function recordSettlement(
 	trancheId: string,
 	fields: { settledOn: string; deliveredUnits: number; withheldUnits: number; onPayslip: boolean },
 	handle: Db = db
 ): Promise<void> {
-	await handle
+	if (!(fields.deliveredUnits >= 0) || !(fields.withheldUnits >= 0)) {
+		throw new Error('Delivered and withheld units cannot be negative.');
+	}
+	const delivered = String(fields.deliveredUnits);
+	const withheld = String(fields.withheldUnits);
+	const updated = await handle
 		.update(equityTranche)
 		.set({
 			settledOn: fields.settledOn,
-			deliveredUnits: String(fields.deliveredUnits),
-			withheldUnits: String(fields.withheldUnits),
+			deliveredUnits: delivered,
+			withheldUnits: withheld,
 			onPayslip: fields.onPayslip
 		})
-		.where(eq(equityTranche.id, trancheId));
+		.where(
+			and(
+				eq(equityTranche.id, trancheId),
+				isNull(equityTranche.settledOn),
+				isNull(equityTranche.forfeitedOn),
+				lte(equityTranche.vestsOn, fields.settledOn),
+				sql`${delivered}::numeric + ${withheld}::numeric <= ${equityTranche.units}`
+			)
+		)
+		.returning({ id: equityTranche.id });
+	if (updated.length === 1) return;
+	const [row] = await handle.select().from(equityTranche).where(eq(equityTranche.id, trancheId));
+	if (!row) throw new Error('That tranche is no longer here.');
+	if (row.settledOn) throw new Error('That tranche has already been settled.');
+	if (row.forfeitedOn) throw new Error('That tranche was forfeited and cannot be settled.');
+	if (row.vestsOn > fields.settledOn) {
+		throw new Error('The settlement date cannot be before the tranche vests.');
+	}
+	throw new Error(`Delivered and withheld units cannot exceed the ${row.units} units in this tranche.`);
 }
 
 /**
@@ -187,6 +217,7 @@ export async function recordSale(
 		.where(
 			and(
 				eq(equityTranche.id, trancheId),
+				isNull(equityTranche.forfeitedOn),
 				sql`coalesce(${equityTranche.deliveredUnits}, ${equityTranche.units}) - ${equityTranche.soldUnits} >= ${sold}::numeric`
 			)
 		)
@@ -194,6 +225,7 @@ export async function recordSale(
 	if (updated.length === 1) return;
 	const [row] = await handle.select().from(equityTranche).where(eq(equityTranche.id, trancheId));
 	if (!row) throw new Error('That tranche is no longer here.');
+	if (row.forfeitedOn) throw new Error('That tranche was forfeited; there is nothing to sell.');
 	throw new Error(`Only ${heldUnits(trancheFigures(row))} units are held from this tranche.`);
 }
 

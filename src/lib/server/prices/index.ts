@@ -174,3 +174,32 @@ export async function closeOnOrBefore(
 	const row = rows[0];
 	return row ? { day: row.day, closeMinor: row.closeMinor, currency: row.currency } : null;
 }
+
+/**
+ * `closeOnOrBefore` for many (ticker, day) pairs in one query, for valuing a
+ * batch of vests without a round trip per tranche. Keyed by `${ticker}|${day}`.
+ */
+export async function closesOnOrBefore(
+	requests: { ticker: string; day: string }[],
+	handle: Queryable = db
+): Promise<Map<string, LatestPrice>> {
+	const out = new Map<string, LatestPrice>();
+	if (requests.length === 0) return out;
+	const tickers = [...new Set(requests.map((r) => r.ticker))];
+	const rows = await handle
+		.select()
+		.from(securityPrice)
+		.where(inArray(securityPrice.ticker, tickers))
+		.orderBy(securityPrice.ticker, desc(securityPrice.day));
+	const byTicker = new Map<string, LatestPrice[]>();
+	for (const row of rows) {
+		const list = byTicker.get(row.ticker) ?? [];
+		list.push({ day: row.day, closeMinor: row.closeMinor, currency: row.currency });
+		byTicker.set(row.ticker, list);
+	}
+	for (const { ticker, day } of requests) {
+		const close = byTicker.get(ticker)?.find((p) => p.day <= day);
+		if (close) out.set(`${ticker}|${day}`, close);
+	}
+	return out;
+}

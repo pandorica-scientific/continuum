@@ -7,7 +7,7 @@
  */
 import { db, type Queryable } from '$lib/server/db';
 import { grantsWithTranches } from '$lib/server/equity';
-import { closeOnOrBefore } from '$lib/server/prices';
+import { closesOnOrBefore } from '$lib/server/prices';
 import { trancheState, type TrancheFigures } from '$lib/equity';
 import type { ConvertMinor } from './history';
 
@@ -35,25 +35,34 @@ export async function vestValues(
 	today = new Date().toISOString().slice(0, 10)
 ): Promise<VestValue[]> {
 	const grants = await grantsWithTranches(handle);
-	const out: VestValue[] = [];
+	const vested: { personId: string; ticker: string; day: string; units: number; onPayslip: boolean }[] =
+		[];
 	for (const { grant, tranches } of grants) {
 		for (const t of tranches) {
 			if (trancheState(t, today) !== 'vested') continue;
-			const day = vestDay(t);
-			const close = await closeOnOrBefore(grant.ticker, day, handle);
-			if (!close) continue;
-			out.push({
+			vested.push({
 				personId: grant.personId,
-				year: Number(day.slice(0, 4)),
-				valueMinor: convert(
-					vestValueMinor(t.units, close.closeMinor),
-					close.currency,
-					baseCurrency,
-					day
-				),
+				ticker: grant.ticker,
+				day: vestDay(t),
+				units: t.units,
 				onPayslip: t.onPayslip
 			});
 		}
+	}
+	const closes = await closesOnOrBefore(
+		vested.map(({ ticker, day }) => ({ ticker, day })),
+		handle
+	);
+	const out: VestValue[] = [];
+	for (const v of vested) {
+		const close = closes.get(`${v.ticker}|${v.day}`);
+		if (!close) continue;
+		out.push({
+			personId: v.personId,
+			year: Number(v.day.slice(0, 4)),
+			valueMinor: convert(vestValueMinor(v.units, close.closeMinor), close.currency, baseCurrency, v.day),
+			onPayslip: v.onPayslip
+		});
 	}
 	return out;
 }

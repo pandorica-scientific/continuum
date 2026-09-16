@@ -96,12 +96,14 @@
 									{#if Number(t.sold) > 0}<span class="muted">{t.sold} sold</span>{/if}
 									{#if t.state === 'vested'}
 										<span class="actions">
-											<button
-												type="button"
-												class="btn"
-												onclick={() => (settling = settling === t.id ? null : t.id)}
-												>Record settlement</button
-											>
+											{#if t.delivered === null}
+												<button
+													type="button"
+													class="btn"
+													onclick={() => (settling = settling === t.id ? null : t.id)}
+													>Record settlement</button
+												>
+											{/if}
 											<button
 												type="button"
 												class="btn"
