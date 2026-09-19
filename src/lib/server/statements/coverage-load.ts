@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * The Statements shelf as coverage: one row per account, one year at a time.
+ * The Statements shelf as coverage: one row per account or loan, one year at a
+ * time.
  *
  * Its own module because it asks a question no other shelf asks — not "what is
  * filed?" but "which months are accounted for?" — and answering it needs the
@@ -8,13 +9,16 @@
  * that it existed, even in a month whose statement nobody kept, and without
  * that the ribbon would call an account's whole first year missing.
  */
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
+import { activeAccount } from '$lib/server/accounts';
 import {
 	account,
 	document,
 	documentLink,
 	documentType,
+	entity,
+	loan,
 	shelf,
 	transaction
 } from '$lib/server/db/schema';
@@ -123,7 +127,7 @@ const tail = (numbers: string[]): string =>
  * belongs to.
  */
 async function readCoverage(handle: Queryable) {
-	const [accounts, filed, yearly, firstTxn] = await Promise.all([
+	const [accounts, loans, filed, yearly, firstTxn] = await Promise.all([
 		handle
 			.select({
 				id: account.id,
@@ -132,7 +136,15 @@ async function readCoverage(handle: Queryable) {
 				numbers: account.numbers
 			})
 			.from(account)
+			.where(activeAccount())
 			.orderBy(account.name),
+		// A loan is a thing a bank numbers and sends statements about, so it gets
+		// the same ribbon. Its first evidence is its own start rather than a first
+		// movement: a mortgage has no transactions of its own here.
+		handle
+			.select({ id: loan.id, name: loan.name, startsOn: loan.startsOn })
+			.from(loan)
+			.orderBy(loan.name),
 		handle
 			.select({
 				accountId: documentLink.targetId,
@@ -148,11 +160,15 @@ async function readCoverage(handle: Queryable) {
 			.innerJoin(shelf, eq(shelf.id, document.shelfId))
 			.innerJoin(documentType, eq(documentType.key, document.type))
 			.innerJoin(documentLink, eq(documentLink.documentId, document.id))
-			.innerJoin(account, eq(account.id, documentLink.targetId))
+			// Through the supertype rather than straight into `account`: a loan is a
+			// thing a bank numbers and sends statements about too, and joining one
+			// concrete table is what kept a mortgage's paper off this ribbon.
+			.innerJoin(entity, eq(entity.id, documentLink.targetId))
 			.where(
 				and(
 					eq(shelf.key, 'statements'),
 					eq(document.type, 'bank_statement'),
+					inArray(entity.kind, ['account', 'loan']),
 					sql`${document.periodOn} is not null`
 				)
 			),
@@ -171,11 +187,15 @@ async function readCoverage(handle: Queryable) {
 			.innerJoin(shelf, eq(shelf.id, document.shelfId))
 			.innerJoin(documentType, eq(documentType.key, document.type))
 			.innerJoin(documentLink, eq(documentLink.documentId, document.id))
-			.innerJoin(account, eq(account.id, documentLink.targetId))
+			// Through the supertype rather than straight into `account`: a loan is a
+			// thing a bank numbers and sends statements about too, and joining one
+			// concrete table is what kept a mortgage's paper off this ribbon.
+			.innerJoin(entity, eq(entity.id, documentLink.targetId))
 			.where(
 				and(
 					eq(shelf.key, 'statements'),
 					eq(document.type, 'broker_report'),
+					inArray(entity.kind, ['account', 'loan']),
 					sql`${document.periodOn} is not null`
 				)
 			),
@@ -205,7 +225,19 @@ async function readCoverage(handle: Queryable) {
 		return { ...a, firstEvidence: candidates.sort()[0] ?? null };
 	});
 
-	return { accounts: withEvidence, filed, yearly };
+	// `starts_on` is nullable — a loan whose start nobody recorded — so it falls
+	// back to the earliest statement filed against it, the same fallback a card
+	// with no `since` already makes in `buildLane`. `numbers` is empty: a loan
+	// has no account number to tell two apart by, and its name does that job.
+	const loanRows = loans.map((l) => ({
+		id: l.id,
+		name: l.name,
+		kind: 'loan' as const,
+		numbers: [] as string[],
+		firstEvidence: l.startsOn ?? earliestFiled.get(l.id) ?? null
+	}));
+
+	return { accounts: [...withEvidence, ...loanRows], filed, yearly };
 }
 
 /**
@@ -246,8 +278,8 @@ export async function loadCoverage(
 			and(
 				eq(shelf.key, 'statements'),
 				sql`(${document.periodOn} is null or not exists (
-					select 1 from document_link l join account a on a.id = l.target_id
-					 where l.document_id = ${document.id}
+					select 1 from document_link l join entity e on e.id = l.target_id
+					 where l.document_id = ${document.id} and e.kind in ('account', 'loan')
 				))`
 			)
 		);

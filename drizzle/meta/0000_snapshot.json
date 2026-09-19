@@ -1,5 +1,5 @@
 {
-  "id": "49f1f47c-1039-4a9c-8fc6-529bd281387d",
+  "id": "97835426-b546-415c-9f3b-bf79b0677f01",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -569,6 +569,12 @@
         "period_end_on": {
           "name": "period_end_on",
           "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "country": {
+          "name": "country",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -1635,6 +1641,12 @@
           "notNull": true,
           "default": "'🏛️'"
         },
+        "country": {
+          "name": "country",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "notes": {
           "name": "notes",
           "type": "text",
@@ -2077,6 +2089,12 @@
         "balance_on": {
           "name": "balance_on",
           "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "archived_at": {
+          "name": "archived_at",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },
@@ -3009,6 +3027,13 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
+        },
+        "transfer_to_untracked": {
+          "name": "transfer_to_untracked",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         },
         "transfer_pair_id": {
           "name": "transfer_pair_id",
@@ -6325,6 +6350,13 @@
           "notNull": true,
           "default": "'0'"
         },
+        "moved_units": {
+          "name": "moved_units",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
         "forfeited_on": {
           "name": "forfeited_on",
           "type": "date",
@@ -6481,6 +6513,79 @@
           ]
         }
       },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tax_filing_override": {
+      "name": "tax_filing_override",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "year": {
+          "name": "year",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "country": {
+          "name": "country",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "person_id": {
+          "name": "person_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expected": {
+          "name": "expected",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "tax_filing_override_person_idx": {
+          "name": "tax_filing_override_person_idx",
+          "columns": [
+            {
+              "expression": "person_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "tax_filing_override_person_id_person_id_fk": {
+          "name": "tax_filing_override_person_id_person_id_fk",
+          "tableFrom": "tax_filing_override",
+          "tableTo": "person",
+          "columnsFrom": [
+            "person_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},

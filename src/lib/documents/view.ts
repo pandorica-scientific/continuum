@@ -9,6 +9,7 @@
  * to verify by looking at it.
  */
 import { daysBetween } from '$lib/dates';
+import { flagEmoji } from '$lib/countries';
 
 /**
  * How an expiry reads on a row.
@@ -306,9 +307,16 @@ export function sortDocuments<T extends DocRow>(docs: T[], sort: SortKey): T[] {
 	return copy.sort((a, b) => b.addedOn.localeCompare(a.addedOn));
 }
 
-/** The row's second line: where it is filed, and what it is about. */
+/**
+ * The row's second line: where it is filed, and nothing else.
+ *
+ * What a document is ABOUT used to be joined on here as grey text. It is a chip
+ * now — see `documentChips` — because a name that can be clicked to filter is
+ * worth more than a name that cannot, and because the same line had to carry
+ * the type, the period and the country beside it.
+ */
 export function subLine(doc: DocRow): string {
-	return [doc.shelfLabel, ...doc.entities].filter(Boolean).join(' · ');
+	return doc.shelfLabel;
 }
 
 /**
@@ -513,4 +521,111 @@ export function railSubjects<T extends { archived: boolean; name: string }>(
 		.filter((s) => includeArchived || !s.archived)
 		.sort((a, b) => Number(a.archived) - Number(b.archived) || a.name.localeCompare(b.name));
 	return { shown, hidden: includeArchived ? 0 : hidden };
+}
+
+/**
+ * One derived fact about a document, drawn as a chip on its row.
+ *
+ * Derived and never stored. A tag is a phrase somebody chose; a chip is
+ * something the document already says, and writing those down as tags would
+ * mint a row per employer, per year and per country — each of them stale the
+ * moment the fact under it changed, and each of them carrying a running total
+ * nobody asked for.
+ *
+ * `filter` is the search parameter the chip sets when it is clicked, or null
+ * where the fact cannot narrow a list.
+ */
+export interface DocChip {
+	kind: 'type' | 'period' | 'link' | 'country';
+	text: string;
+	filter: { key: string; value: string } | null;
+}
+
+/** The five fields a chip is derived from, and deliberately not the whole row. */
+export interface ChipRow {
+	type: string;
+	periodOn: string | null;
+	periodEndOn: string | null;
+	country: string | null;
+	about: { id: string; name: string }[];
+}
+
+/**
+ * What a covered span reads as, and what filtering by it means.
+ *
+ * A null `period_end_on` means the SINGLE month of `period_on` — the schema's
+ * own contract — so `2025-01-01` alone is January and not the year. Only a span
+ * running January to December is a year, which is why anything filing a yearly
+ * document writes both ends.
+ */
+export function periodLabel(
+	periodOn: string | null,
+	periodEndOn: string | null
+): { text: string; filter: string } | null {
+	if (!periodOn) return null;
+	const [y, m] = periodOn.split('-');
+	const startMonth = MONTHS[Number(m) - 1] ?? m;
+	const start = `${startMonth} ${y}`;
+	const startFilter = `${y}-${m}`;
+	if (!periodEndOn) return { text: start, filter: startFilter };
+
+	const [ey, em] = periodEndOn.split('-');
+	const endMonth = MONTHS[Number(em) - 1] ?? em;
+	if (y === ey && m === em) return { text: start, filter: startFilter };
+	if (y === ey && m === '01' && em === '12') return { text: y, filter: y };
+	if (y === ey) return { text: `${startMonth}–${endMonth} ${y}`, filter: startFilter };
+	return { text: `${start} – ${endMonth} ${ey}`, filter: startFilter };
+}
+
+/**
+ * Whether a document's covered span meets a `?period=` filter.
+ *
+ * `2025` means the year, `2025-03` one month. A document with no period meets
+ * neither: an undated document is not every period, it is no period.
+ */
+export function coversPeriod(
+	doc: { periodOn: string | null; periodEndOn: string | null },
+	filter: string
+): boolean {
+	if (!doc.periodOn) return false;
+	const start = doc.periodOn.slice(0, 7);
+	const end = (doc.periodEndOn ?? doc.periodOn).slice(0, 7);
+	if (/^\d{4}$/.test(filter)) return start.slice(0, 4) <= filter && filter <= end.slice(0, 4);
+	return start <= filter && filter <= end;
+}
+
+/**
+ * What a row says about itself, beyond its name.
+ *
+ * Order is fixed and not configurable: what it is, when it is about, what it is
+ * about, and where it is from. A column whose chips arrive in a different order
+ * on every row is a column nobody can scan.
+ */
+export function documentChips(
+	row: ChipRow,
+	labels: Record<string, string> = TYPE_LABELS
+): DocChip[] {
+	const chips: DocChip[] = [
+		{ kind: 'type', text: typeLabel(row.type, labels), filter: { key: 'type', value: row.type } }
+	];
+
+	const period = periodLabel(row.periodOn, row.periodEndOn);
+	if (period)
+		chips.push({
+			kind: 'period',
+			text: period.text,
+			filter: { key: 'period', value: period.filter }
+		});
+
+	for (const link of row.about)
+		chips.push({ kind: 'link', text: link.name, filter: { key: 'entity', value: link.id } });
+
+	if (row.country)
+		chips.push({
+			kind: 'country',
+			text: `${flagEmoji(row.country)} ${row.country}`,
+			filter: { key: 'country', value: row.country }
+		});
+
+	return chips;
 }

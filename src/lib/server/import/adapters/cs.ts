@@ -115,12 +115,59 @@ export function parseCsLines(lines: PdfLine[]): ParsedStatement {
 			? undefined
 			: middle.find((c) => /^\d{1,10}$/.test(c) && c !== compactValueDate);
 
+		// The first detail line is sometimes the KIND of payment rather than who
+		// it was with: "okamžitá" (instant) under a domestic transfer, "úvěru"
+		// (of the loan) under a direct debit. Taken as the counterparty it made
+		// twenty-three unrelated payments to nine different accounts all read as
+		// "okamžitá", and the line that actually says what the payment was —
+		// "Nájemné za 04.2026" — sat one position further along.
+		//
+		// A single lowercase word is what separates them. Every real party this
+		// statement prints is capitalised, carries digits, or is more than one
+		// word; across every ČS row imported here the rule caught those two
+		// modifiers and nothing else.
+		//
+		// It is a heuristic, and a lowercase merchant would fall foul of it —
+		// "aliexpress" appears in this very statement. That one is safe because
+		// a card row takes its party from the card line above, which this never
+		// reaches, and because the fallback keeps the line visible in
+		// `description` either way. A transfer whose detail line is a single
+		// lowercase merchant name would read as its type instead, which is
+		// vague rather than wrong.
+		// Only the row's OWN first two continuation lines, which is exactly what
+		// `description` below prints. Searching the whole of `detail` reached
+		// into text belonging further down the statement and made one transfer
+		// read "25.02.2026 Ceny za služby", a line from the fee schedule.
+		const named = detail.slice(0, 2).find((line) => {
+			const text = line.trim();
+			// A modifier, as above.
+			if (/^[\p{Ll}]+$/u.test(text)) return false;
+			// Or the row's own date repeated, which some transfers print where a
+			// party would go. Taken as the counterparty it read "13.02.2026",
+			// which identifies the payment even less than the modifier did.
+			if (/^\d{1,2}\.\d{1,2}\.\d{4}$/.test(text)) return false;
+			// Or a bare code: a constant symbol, a variable symbol, a card
+			// number. ČS prints the constant symbol on its own line directly
+			// before the message, so three Alza orders were named "0308" while
+			// "OBJEDNAVKA 590111449 NA ALZA.CZ" sat one line further along. A
+			// payee is never written as digits alone, so skipping these reaches
+			// the line that does name it.
+			if (/^\d+$/.test(text)) return false;
+			return text.length > 0;
+		});
+
 		rows.push({
 			bookedAt,
 			valueDate,
 			amountMinor,
 			currency,
-			counterparty: counterparty ?? (detail[0] || undefined),
+			// Falling back to `type · modifier` rather than the bare modifier: on a
+			// row with nothing but a kind, "Inkaso · úvěru" at least says what
+			// happened, where "úvěru" alone says nothing.
+			counterparty:
+				counterparty ??
+				named ??
+				(detail[0] ? [type, detail[0]].filter(Boolean).join(' · ') : undefined),
 			counterpartyAccount,
 			variableSymbol: vs,
 			description: [type, ...detail.slice(0, 2)].filter(Boolean).join(' · ') || undefined,

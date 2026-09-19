@@ -23,6 +23,7 @@ import {
 	document,
 	documentLink,
 	documentType,
+	loan,
 	organisation,
 	person,
 	property,
@@ -37,7 +38,11 @@ import {
 } from '$lib/documents/dossier-cells';
 import { coverageRow } from '$lib/statements/coverage';
 import { templateDefaults, unitMakesCards, type ShelfUnit } from '$lib/documents/templates';
-import { currentRole, engagementSpan, engagementsFor } from '$lib/server/organisations/engagements';
+import {
+	currentEngagement,
+	engagementSpan,
+	engagementsFor
+} from '$lib/server/organisations/engagements';
 import { lanesFor, type LaneRow } from '$lib/server/organisations/mutations';
 import type { ShelfRow } from './shelves';
 
@@ -51,6 +56,14 @@ export interface CardDocument {
 	periodEndOn: string | null;
 	expiresOn: string | null;
 	laneId: string | null;
+	/**
+	 * The tax year card this document already sits on, or null.
+	 *
+	 * Paper with a year and a country is placed — a return or the report behind
+	 * one — whether or not it names an employer. Under "Not assigned yet" it is
+	 * a link to where it lives, not an orphan.
+	 */
+	onTaxYear: { year: number; country: string } | null;
 }
 
 export interface DossierLane {
@@ -69,6 +82,15 @@ export interface DossierLane {
 	documents: CardDocument[];
 }
 
+export interface DossierCardRole {
+	id: string;
+	personId: string;
+	personName: string;
+	role: string | null;
+	startsOn: string | null;
+	endsOn: string | null;
+}
+
 export interface DossierCard {
 	/** Null on the implicit "Not assigned yet" card, which has no record. */
 	id: string | null;
@@ -76,10 +98,14 @@ export interface DossierCard {
 	emoji: string;
 	/** An organisation's kind, or the unit's own word. */
 	kind: string;
+	/** An organisation's country, where the household has said. Null elsewhere. */
+	country: string | null;
 	/** A relationship line: "Senior analytik · since 2022", or null. */
 	meta: string | null;
 	/** The document the relationship rests on, where there is one. */
 	pinned: CardDocument | null;
+	/** Every role period on this card, oldest first. Empty off an organisation shelf. */
+	roles: DossierCardRole[];
 	lanes: DossierLane[];
 	/** Paper with no rhythm, in the template's order. */
 	history: CardDocument[];
@@ -105,6 +131,8 @@ interface CardRecord {
 	name: string;
 	emoji: string;
 	kind: string;
+	/** Organisations only: which country it is in, or null. */
+	country: string | null;
 	/** When the relationship began, where the record says. */
 	since: string | null;
 }
@@ -132,21 +160,43 @@ async function cardsFor(shelfRow: ShelfRow, handle: Queryable): Promise<CardReco
 				.select({ id: person.id, name: person.name })
 				.from(person)
 				.orderBy(person.name);
-			return rows.map((r) => ({ ...r, emoji: UNIT_EMOJI.person, kind: 'person', since: null }));
+			return rows.map((r) => ({
+				...r,
+				emoji: UNIT_EMOJI.person,
+				kind: 'person',
+				country: null,
+				since: null
+			}));
 		}
 		case 'property': {
 			const rows = await handle
 				.select({ id: property.id, name: property.name })
 				.from(property)
 				.orderBy(property.name);
-			return rows.map((r) => ({ ...r, emoji: UNIT_EMOJI.property, kind: 'property', since: null }));
+			return rows.map((r) => ({
+				...r,
+				emoji: UNIT_EMOJI.property,
+				kind: 'property',
+				country: null,
+				since: null
+			}));
 		}
 		case 'account': {
-			const rows = await handle
-				.select({ id: account.id, name: account.name })
-				.from(account)
-				.orderBy(account.name);
-			return rows.map((r) => ({ ...r, emoji: UNIT_EMOJI.account, kind: 'account', since: null }));
+			// An account OR a loan: `unit: 'account'` means anything a bank numbers
+			// and sends statements about, so a mortgage statement has a card of its
+			// own rather than living out its life under "Not assigned yet". See the
+			// note on `shelf.unit` in `$lib/enums`.
+			const [accounts, loans] = await Promise.all([
+				handle.select({ id: account.id, name: account.name }).from(account).orderBy(account.name),
+				handle.select({ id: loan.id, name: loan.name }).from(loan).orderBy(loan.name)
+			]);
+			return [...accounts, ...loans].map((r) => ({
+				...r,
+				emoji: UNIT_EMOJI.account,
+				kind: 'account',
+				country: null,
+				since: null
+			}));
 		}
 		case 'organisation': {
 			const rows = await handle
@@ -154,7 +204,8 @@ async function cardsFor(shelfRow: ShelfRow, handle: Queryable): Promise<CardReco
 					id: organisation.id,
 					name: organisation.name,
 					emoji: organisation.emoji,
-					kind: organisation.kind
+					kind: organisation.kind,
+					country: organisation.country
 				})
 				.from(organisation)
 				.where(eq(organisation.shelfId, shelfRow.id))
@@ -172,7 +223,7 @@ async function cardsFor(shelfRow: ShelfRow, handle: Queryable): Promise<CardReco
 				.from(subject)
 				.where(and(eq(subject.shelfId, shelfRow.id), isNull(subject.archivedAt)))
 				.orderBy(subject.name);
-			return rows.map((r) => ({ ...r, kind: 'subject' }));
+			return rows.map((r) => ({ ...r, kind: 'subject', country: null }));
 		}
 		default:
 			return [];
@@ -196,7 +247,8 @@ async function shelfDocuments(
 			periodOn: document.periodOn,
 			periodEndOn: document.periodEndOn,
 			expiresOn: document.expiresOn,
-			laneId: document.laneId
+			laneId: document.laneId,
+			country: document.country
 		})
 		.from(document)
 		.innerJoin(shelf, eq(shelf.id, document.shelfId))
@@ -237,7 +289,11 @@ async function shelfDocuments(
 			periodOn: row.periodOn,
 			periodEndOn: row.periodEndOn,
 			expiresOn: row.expiresOn,
-			laneId: row.laneId
+			laneId: row.laneId,
+			onTaxYear:
+				row.country && row.periodOn
+					? { year: Number(row.periodOn.slice(0, 4)), country: row.country }
+					: null
 		};
 		const cards = cardOf.get(row.id);
 		if (!cards || cards.length === 0) {
@@ -254,6 +310,24 @@ async function shelfDocuments(
 	return { byCard, loose };
 }
 
+/** Every role period on the card has closed — same rule as `engagementSpan`. */
+function cardEnded(card: DossierCard): boolean {
+	return card.roles.length > 0 && card.roles.every((r) => r.endsOn !== null);
+}
+
+/**
+ * The date an organisation card sorts by: the latest of every start and end
+ * its role periods carry. For a job still held that is its start (there is no
+ * end yet); for one left it is the day it ended, which is later than when it
+ * began. One rule reads both.
+ */
+function cardRecency(card: DossierCard): string {
+	const dates = card.roles.flatMap((r) =>
+		[r.startsOn, r.endsOn].filter((d): d is string => d !== null)
+	);
+	return dates.length > 0 ? [...dates].sort().pop()! : '';
+}
+
 /** One lane, drawn. */
 function buildLane(
 	laneRow: LaneRow,
@@ -261,7 +335,18 @@ function buildLane(
 	personName: string | null,
 	since: string | null,
 	year: number,
-	today: string
+	today: string,
+	/**
+	 * When a role period closed, its last day — monthly paper stops being
+	 * expected the month after, so switching employer mid-year does not leave
+	 * the one just left "missing" payslips nobody will ever send. Null while
+	 * the relationship is still open, or for a card with no such notion.
+	 * A yearly lane ignores it for the year it falls in — a declaration is
+	 * still owed for a partial year worked, however early the relationship
+	 * ended — but still caps its last drawn year there, so a job left in
+	 * 2023 does not keep reading as a missing 2024 and 2025 declaration.
+	 */
+	until: string | null = null
 ): DossierLane {
 	const base = {
 		id: laneRow.id,
@@ -302,7 +387,8 @@ function buildLane(
 				})),
 				year,
 				evidence,
-				today
+				today,
+				until
 			),
 			year
 		);
@@ -316,10 +402,13 @@ function buildLane(
 		// the wrong frame for a lane that may run every two years from 2021.
 		const earliest = evidence ? Number(evidence.slice(0, 4)) : thisYear;
 		const firstYear = Math.min(earliest, ...[...filedYears.keys(), thisYear]);
+		// A closed relationship still owes a declaration for the partial year it
+		// ended in, but nothing after — capped at that year, not run to today.
+		const lastYear = until ? Math.max(Number(until.slice(0, 4)), firstYear) : thisYear;
 		cells = yearlyCells({
 			filedYears,
 			firstYear,
-			lastYear: thisYear,
+			lastYear,
 			every: laneRow.every,
 			firstEvidenceYear: evidence ? Number(evidence.slice(0, 4)) : null,
 			thisYear
@@ -365,6 +454,16 @@ export async function loadDossier(
 		])
 	);
 
+	const thisYear = Number(today.slice(0, 4));
+	// How far back year navigation can go — the earliest a card's own relationship
+	// started, or the earliest paper actually filed, whichever is earlier. NOT the
+	// cells `buildLane` draws: those are generated fresh for whichever `year` is
+	// currently on screen, so every cell key carries that same year regardless of
+	// what is actually filed — computing the bound from them would always yield the
+	// year already being viewed, permanently disabling "Previous year" the moment
+	// any card has a monthly lane.
+	let earliestYear = thisYear;
+
 	const cards: DossierCard[] = [];
 	for (const record of records) {
 		const held = byCard.get(record.id) ?? [];
@@ -374,15 +473,36 @@ export async function loadDossier(
 		// a subject's from its own active period. Both answer the same question —
 		// when did we start expecting paper — which is what a lane needs.
 		let since = record.since;
+		// Set only when every role period on the card has closed — see
+		// `engagementSpan`. A still-open period means the relationship
+		// continues, so nothing bounds a monthly lane's far end.
+		let until: string | null = null;
 		let meta: string | null = null;
 		let pinned: CardDocument | null = null;
+		let cardRoles: DossierCardRole[] = [];
 		if (record.kind !== 'person' && record.kind !== 'property' && record.kind !== 'account') {
 			const roles = await engagementsFor(record.id, handle);
+			cardRoles = roles.map((r) => ({
+				id: r.id,
+				personId: r.personId,
+				personName: people.get(r.personId) ?? '',
+				role: r.role,
+				startsOn: r.startsOn,
+				endsOn: r.endsOn
+			}));
 			if (roles.length > 0) {
 				const span = engagementSpan(roles);
 				since = span.startsOn ?? since;
-				const role = currentRole(roles, today);
-				meta = [role, since ? `since ${since.slice(0, 4)}` : null].filter(Boolean).join(' · ');
+				until = span.endsOn;
+				// Whoever the card is currently for, or was for last — so a
+				// household with more than one person can tell whose employer
+				// this is without opening a payslip to read the name off it.
+				const live = currentEngagement(roles, today);
+				const relevant = live ?? roles[roles.length - 1];
+				const personName = people.get(relevant.personId) ?? null;
+				meta = [personName, live?.role ?? null, since ? `since ${since.slice(0, 4)}` : null]
+					.filter(Boolean)
+					.join(' · ');
 				const pinnedId = roles.find((r) => r.documentId)?.documentId ?? null;
 				pinned = held.find((d) => d.id === pinnedId) ?? null;
 			}
@@ -399,7 +519,7 @@ export async function loadDossier(
 		if (!meta && since) meta = `since ${since.slice(0, 4)}`;
 
 		const inLane = new Set<string>();
-		const lanes = laneRows.map((laneRow) => {
+		const builtLanes = laneRows.map((laneRow) => {
 			const mine = held.filter((doc) => doc.laneId === laneRow.id);
 			for (const doc of mine) inLane.add(doc.id);
 			return buildLane(
@@ -408,9 +528,18 @@ export async function loadDossier(
 				laneRow.personId ? (people.get(laneRow.personId) ?? null) : null,
 				since,
 				year,
-				today
+				today,
+				until
 			);
 		});
+		// Nothing filed and nothing missing is nothing to say — for a SCHEDULE.
+		// A seeded monthly or yearly lane a household never uses is not a blank
+		// grid worth scrolling past; it simply does not draw until it has either.
+		// A cadence-less lane is different: it is not tracking a schedule at
+		// all, it is the card's one general place for paper that isn't a
+		// payslip or a declaration, and hiding it the moment it empties out
+		// would hide the only sign that place exists.
+		const lanes = builtLanes.filter((l) => l.cadence === 'none' || l.filed > 0 || l.gaps > 0);
 
 		// Everything not in a lane, plus everything in a lane with no rhythm.
 		const history = held
@@ -424,14 +553,21 @@ export async function loadDossier(
 				return historyOrder === 'newest' ? right.localeCompare(left) : left.localeCompare(right);
 			});
 
+		if (since) earliestYear = Math.min(earliestYear, Number(since.slice(0, 4)));
+		for (const doc of held) {
+			if (doc.periodOn) earliestYear = Math.min(earliestYear, Number(doc.periodOn.slice(0, 4)));
+		}
+
 		const lapsed = held.filter((d) => d.expiresOn !== null && d.expiresOn < today).length;
 		cards.push({
 			id: record.id,
 			name: record.name,
 			emoji: record.emoji,
 			kind: record.kind,
+			country: record.country,
 			meta,
 			pinned,
+			roles: cardRoles,
 			lanes,
 			history,
 			documentCount: held.length,
@@ -439,13 +575,29 @@ export async function loadDossier(
 		});
 	}
 
-	// Findings first, then by how much paper a card holds: the card with a hole
-	// in it is what the shelf exists to show, and the busiest card is what a
-	// person is most likely to be looking for.
-	cards.sort(
-		(a, b) =>
-			b.findings - a.findings || b.documentCount - a.documentCount || a.name.localeCompare(b.name)
-	);
+	if (shelfRow.unit === 'organisation') {
+		// A household's own employment history, read the way it was lived: the
+		// job it holds now (or has no recorded period for at all) above every
+		// one it has left, and each of those two groups newest first. Findings
+		// do not lead here — a gap in a job left three years ago is not more
+		// urgent than knowing which employer is current.
+		cards.sort(
+			(a, b) =>
+				Number(cardEnded(a)) - Number(cardEnded(b)) || cardRecency(b).localeCompare(cardRecency(a))
+		);
+	} else {
+		// Findings first, then by how much paper a card holds: the card with a
+		// hole in it is what the shelf exists to show, and the busiest card is
+		// what a person is most likely to be looking for.
+		cards.sort(
+			(a, b) =>
+				b.findings - a.findings || b.documentCount - a.documentCount || a.name.localeCompare(b.name)
+		);
+	}
+
+	for (const doc of loose) {
+		if (doc.periodOn) earliestYear = Math.min(earliestYear, Number(doc.periodOn.slice(0, 4)));
+	}
 
 	// Last, and only when it holds something.
 	if (loose.length > 0) {
@@ -454,8 +606,10 @@ export async function loadDossier(
 			name: 'Not assigned yet',
 			emoji: '📎',
 			kind: shelfRow.unit,
+			country: null,
 			meta: null,
 			pinned: null,
+			roles: [],
 			lanes: [],
 			history: loose.sort((a, b) =>
 				(b.periodOn ?? b.addedOn).localeCompare(a.periodOn ?? a.addedOn)
@@ -465,13 +619,9 @@ export async function loadDossier(
 		});
 	}
 
-	const thisYear = Number(today.slice(0, 4));
-	const firstYears = cards
-		.flatMap((c) => c.lanes.flatMap((l) => l.cells.map((cell) => Number(cell.key.slice(0, 4)))))
-		.filter((n) => Number.isFinite(n));
 	return {
 		year,
-		firstYear: firstYears.length > 0 ? Math.min(...firstYears) : thisYear,
+		firstYear: earliestYear,
 		lastYear: thisYear,
 		historyOrder,
 		unit: shelfRow.unit,

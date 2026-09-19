@@ -127,6 +127,19 @@ export const document = pgTable(
 		 * covers the single month of `period_on`.
 		 */
 		periodEndOn: date('period_end_on'),
+		/**
+		 * Which country's paper this is, where that is a fact about the document.
+		 *
+		 * `text` with a CHECK rather than `char(2)`, matching
+		 * `document_identity.country` below: the same shape for the same thing, so
+		 * one folding rule serves both. Null is the ordinary case — a warranty has
+		 * no country worth recording.
+		 *
+		 * A FIELD and not a substring of `name`, which is where a tax attachment's
+		 * country used to live: the tax year card groups by it, and grouping by a
+		 * slice of a title is grouping by a typo waiting to happen.
+		 */
+		country: text('country'),
 		// SHA-256 of the stored file's bytes, so the same file uploaded twice is
 		// recognised as the same file — see `payslipMatchingContent`. Null on a
 		// metadata-only document, or one filed before this column existed.
@@ -395,6 +408,12 @@ ALTER TABLE document ADD CONSTRAINT document_period_end_last_of_month
 -- negative width. period_end_on without period_on is an end to nothing.
 ALTER TABLE document ADD CONSTRAINT document_period_order_check
 	CHECK (period_end_on IS NULL OR (period_on IS NOT NULL AND period_end_on >= period_on));
+--> statement-breakpoint
+-- The same shape as document_identity.country below, for the same reason: the
+-- field feeds a flag and a country name from Intl, and both need a code rather
+-- than whatever somebody typed.
+ALTER TABLE document ADD CONSTRAINT document_country_check
+	CHECK (country IS NULL OR country ~ '^[A-Z]{2}$');
 --> statement-breakpoint
 -- Two upper-case letters or nothing. The field is a picker, so this is not
 -- defending against a typist; it is what keeps the artwork lookup and the flag

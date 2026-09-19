@@ -4,11 +4,12 @@ import type { DocumentTypeKey, EnumValue } from '$lib/enums';
 import { eq } from 'drizzle-orm';
 import { db, type Db, type Queryable } from '$lib/server/db';
 import { and } from 'drizzle-orm';
-import { document, documentLink, documentText, lane, tagLink } from '$lib/server/db/schema';
+import { document, documentLink, documentText, lane, tag, tagLink } from '$lib/server/db/schema';
 import { upsertTag } from '$lib/server/tags';
 import { upsertSubjectByName } from './subjects';
 import { hashBytes, removeUpload } from '$lib/server/system/files';
 import { cancelQueuedExtraction, enqueueExtraction } from './extract/queue';
+import { matchesLane } from '$lib/organisations/lane-match';
 
 /**
  * Postgres codes for a delete blocked by a foreign key: `23503` for a plain
@@ -69,6 +70,8 @@ interface CreateDocumentInput {
 	periodOn?: string | null;
 	/** The last day it covers, for a document that covers a span. See `period_end_on`. */
 	periodEndOn?: string | null;
+	/** Which country's paper this is, upper case. See `document.country`. */
+	country?: string | null;
 }
 
 export async function createDocument(input: CreateDocumentInput, handle: Db = db): Promise<void> {
@@ -110,6 +113,7 @@ export async function insertDocumentAggregate(
 		expiryVerb: input.expiryVerb,
 		periodOn: input.periodOn ?? null,
 		periodEndOn: input.periodEndOn ?? null,
+		country: input.country ?? null,
 		contentHash: input.contentHash ?? null
 	});
 
@@ -269,4 +273,51 @@ export async function assignLane(
 		if (!link) throw new Error('The document is not linked to the card that lane is on.');
 	}
 	await handle.update(document).set({ laneId }).where(eq(document.id, documentId));
+}
+
+/**
+ * Slot a freshly-filed document into a lane on its own, when there is only
+ * one honest answer.
+ *
+ * Filing a document against a card and picking its lane are two different
+ * moments in the inspector — the lane picker only exists once the card link
+ * is already saved, which otherwise means every first filing sits in History
+ * until a second, separate edit moves it. This closes that gap the moment
+ * conditions are unambiguous, the same restraint `proposeFor` applies across
+ * cards: a lane with no conditions never claims anything, and two lanes on
+ * this card matching at once means only a person can say which one holds it,
+ * so neither is touched and it stays in History.
+ */
+export async function autoAssignLane(
+	targetId: string,
+	documentId: string,
+	handle: Queryable = db
+): Promise<void> {
+	const lanes = await handle
+		.select({ id: lane.id, conditions: lane.conditions })
+		.from(lane)
+		.where(eq(lane.entityId, targetId));
+	const usable = lanes.filter((l) => Array.isArray(l.conditions) && l.conditions.length > 0);
+	if (usable.length === 0) return;
+
+	const [doc] = await handle
+		.select({ type: document.type, name: document.name })
+		.from(document)
+		.where(eq(document.id, documentId));
+	if (!doc) return;
+	const tagRows = await handle
+		.select({ name: tag.name })
+		.from(tagLink)
+		.innerJoin(tag, eq(tag.id, tagLink.tagId))
+		.where(eq(tagLink.targetId, documentId));
+
+	const candidate = {
+		id: documentId,
+		name: doc.name,
+		type: doc.type,
+		tags: tagRows.map((t) => t.name)
+	};
+	const hits = usable.filter((l) => matchesLane(candidate, l.conditions));
+	if (hits.length !== 1) return;
+	await assignLane(documentId, hits[0].id, handle);
 }

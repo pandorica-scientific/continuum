@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { eq, isNull } from 'drizzle-orm';
+import { and, eq, gte, isNull } from 'drizzle-orm';
 import { rowId } from '../row-id';
 import { importFile } from '$lib/server/db/schema';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
@@ -61,6 +61,36 @@ describe('acknowledging a recent import', () => {
 		expect(row.contentHash).toBe('abc123');
 		expect(row.rowsRead).toBe(5);
 		expect(row.acknowledgedAt).toBeInstanceOf(Date);
+	});
+
+	it('ages a statement out of the list once it is old, without acknowledging it', async () => {
+		// The list is the recent few and what each was checked against, not a
+		// permanent ledger — a household that never presses ✕ should not end up
+		// with one. Ageing out hides the row and nothing else.
+		const CUTOFF_MS = 7 * 24 * 60 * 60 * 1000;
+		const listed = () =>
+			testDb
+				.select()
+				.from(importFile)
+				.where(
+					and(
+						isNull(importFile.acknowledgedAt),
+						gte(importFile.uploadedAt, new Date(Date.now() - CUTOFF_MS))
+					)
+				);
+
+		expect(await listed()).toHaveLength(1);
+
+		// Eight days ago: past the cutoff, still unacknowledged.
+		await testDb
+			.update(importFile)
+			.set({ uploadedAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000) })
+			.where(eq(importFile.id, FILE));
+
+		expect(await listed()).toHaveLength(0);
+		const [row] = await testDb.select().from(importFile).where(eq(importFile.id, FILE));
+		expect(row.acknowledgedAt).toBeNull();
+		expect(row.contentHash).toBe('abc123');
 	});
 
 	it('leaves the duplicate check working, so the file cannot be imported twice', async () => {

@@ -30,6 +30,7 @@ import { getBaseCurrency } from '$lib/server/settings';
 import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
 import { availableCurrencies } from '$lib/server/fx/currencies';
 import { removeUpload, saveUploadAndHash } from '$lib/server/system/files';
+import { foldCountry } from '$lib/countries';
 import { displayCurrency, formatMinor, parseAmountToMinor } from '$lib/money';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -76,15 +77,39 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			salaryRows.filter((r) => r.grossMinor !== null).map((r) => Number(r.periodMonth.slice(0, 4)))
 		)
 	];
+	/*
+	 * Keyed by currency as well as person and year.
+	 *
+	 * The figure is dropped into a form whose currency field the filer can
+	 * change, and it used to be computed in the household's own currency and
+	 * nothing else — so choosing CZK on a Czech statement put a EUR number in
+	 * the box under a CZK label. That is not a display preference, it is a wrong
+	 * number in a tax return.
+	 *
+	 * Computed for every currency the form OFFERS, so the box is never blank
+	 * merely because nobody has filed in that currency before — filing a Polish
+	 * statement for a year of Czech income is exactly when a converted figure is
+	 * wanted. The currencies the income is already in cost nothing to include
+	 * and convert nothing at all: a year of Czech payslips read in CZK is the
+	 * sum of what the payslips said, not a round trip through the base currency
+	 * and back.
+	 *
+	 * A few hundred small sums, none of which touches the database.
+	 */
+	const prefillCurrencies = [
+		...new Set([base, ...currencies, ...salaryRows.map((r) => r.currency)])
+	];
 	const prefillTotals: Record<string, { amount: string; months: number }> = {};
 	for (const p of people) {
 		for (const year of payslipYears) {
-			const t = salaryYearGrossTotalConverted(salaryRows, p.id, year, base, convert);
-			if (t.months > 0)
-				prefillTotals[`${p.id}|${year}`] = {
-					amount: formatMinor(t.totalMinor, base),
-					months: t.months
-				};
+			for (const code of prefillCurrencies) {
+				const t = salaryYearGrossTotalConverted(salaryRows, p.id, year, code, convert);
+				if (t.months > 0)
+					prefillTotals[`${p.id}|${year}|${code}`] = {
+						amount: formatMinor(t.totalMinor, code),
+						months: t.months
+					};
+			}
 		}
 	}
 
@@ -105,9 +130,14 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 	// The household's own currency, plus the ones actually filed in — not
 	// availableCurrencies(), which is every code the rate table quotes.
-	const displayCurrencies = [base, ...statements.map((s) => s.currency)].filter(
-		(code, i, all) => all.indexOf(code) === i
-	);
+	// Payslip currencies count too: a year of Czech income is worth reading in
+	// CZK before any statement has been filed for it, and that is exactly when
+	// the screen is used.
+	const displayCurrencies = [
+		base,
+		...statements.map((s) => s.currency),
+		...salaryRows.map((r) => r.currency)
+	].filter((code, i, all) => all.indexOf(code) === i);
 
 	return {
 		// ?add=1 opens the statement dialog on arrival — the same convention the
@@ -202,12 +232,35 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 async function takeUploads(
 	form: FormData
 ): Promise<{ attachments: StatementAttachment[] } | { message: string }> {
-	const kind = attachmentKind(String(form.get('fileKind') ?? 'statement')).key;
-	const files = form.getAll('file').filter((f): f is File => f instanceof File && f.size > 0);
+	/*
+	 * One kind per file, paired by position.
+	 *
+	 * A year's filing is several papers and they are rarely the same paper: the
+	 * statement, the employer's earnings report, the broker's. One kind for the
+	 * whole batch meant either a mixed batch saved twice or — what actually
+	 * happened — every document filed under whatever the first one was.
+	 *
+	 * Paired against the UNFILTERED list so an empty file picked by accident
+	 * cannot shift every kind after it onto the wrong document. A form sending a
+	 * single kind (or none) still works: every file falls back to it.
+	 */
+	const picked = form.getAll('file').filter((f): f is File => f instanceof File);
+	const kinds = form.getAll('fileKind').map((v) => attachmentKind(String(v)).key);
+	// Same pairing for the country each paper came from. Blank means "the
+	// statement's own", so a filing whose papers are all from one place carries
+	// nothing extra.
+	const countries = form.getAll('fileCountry').map((v) => String(v).trim().toUpperCase());
+	// A code or blank, nothing else: the document's country column refuses
+	// prose, and it would do so as a 500 after the files were already saved.
+	if (countries.some((c) => c !== '' && !foldCountry(c)))
+		return { message: "Name each paper's country as a two-letter code, like CZ." };
 	const addedOn = new Date().toISOString().slice(0, 10);
 
 	const attachments: StatementAttachment[] = [];
-	for (const file of files) {
+	for (const [index, file] of picked.entries()) {
+		if (file.size === 0) continue;
+		const kind = kinds[index] ?? kinds[0] ?? 'statement';
+		const from = countries[index] ?? countries[0] ?? '';
 		try {
 			const { storedName, contentHash } = await saveUploadAndHash(file);
 			attachments.push({
@@ -215,6 +268,7 @@ async function takeUploads(
 				ext: extname(file.name).replace('.', '').toUpperCase() || 'PDF',
 				addedOn,
 				kind,
+				...(from ? { country: from } : {}),
 				original: file.name,
 				contentHash
 			});
@@ -341,6 +395,13 @@ export const actions: Actions = {
 		const found = await statementFor(statementId, locals.person);
 		if (!found.ok) return fail(found.status, { message: found.message });
 		const { statement } = found;
+		// A statement filed before countries were codes cannot take paper: its
+		// documents would carry its country, and that column refuses prose.
+		if (!foldCountry(statement.country))
+			return fail(400, {
+				message:
+					"Set this statement's country to a two-letter code, like CZ, before filing paper under it."
+			});
 
 		const uploaded = await takeUploads(form);
 		if ('message' in uploaded) return fail(400, { message: uploaded.message });

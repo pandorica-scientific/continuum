@@ -83,11 +83,9 @@ describe('making a card', () => {
 		);
 		expect(card.unit).toBe('organisation');
 		const lanes = await lanesFor(card.id, testDb);
-		expect(lanes.map((l) => l.label)).toEqual([
-			'Payslips',
-			'Once a year · declaration, annual settlement',
-			'Changes to pay'
-		]);
+		// Two, not three: the yearly declaration moved to the tax year card, which
+		// is keyed by the year rather than by whoever happened to be paying.
+		expect(lanes.map((l) => l.label)).toEqual(['Payslips', 'Contract & HR']);
 	});
 
 	it('refuses a unit that has a screen of its own', async () => {

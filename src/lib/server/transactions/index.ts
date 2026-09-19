@@ -24,24 +24,50 @@ import {
 	pairingWindowAround
 } from '$lib/server/import/pairing-run';
 import { applyScores, autoThreshold, loadRules } from '$lib/server/rules';
+import { addTagsToTransaction } from '$lib/server/tags';
 import { decideWithRules, scoreChanges } from '$lib/rules/match';
 import { minorDigits } from '$lib/money';
 import { attributeSalary, recordSalary, rememberAttribution } from '$lib/server/salary';
 import { monthAfter, UNCATEGORISED, type RegisterFilter } from '$lib/transactions/filter';
+import { parseAmountSearch } from '$lib/transactions/amount-search';
 import type { EnumValue } from '$lib/enums';
 import { notOwnTransfer } from '$lib/server/transactions/transfers';
 
-/** Text the search box matches against — what a person actually remembers. */
-function searchable(term: string): SQL {
+/**
+ * What the search box matches against — what a person actually remembers.
+ *
+ * Text, and the amount. "That twelve hundred crown thing" is how a payment is
+ * remembered at least as often as by who it was to, and the Filters panel's
+ * Min and Max are a poor fit for it: two fields to fill in and empty again for
+ * a question that is one word long.
+ *
+ * OR, not instead of: a term that reads as an amount is still matched as text,
+ * so an invoice number that happens to look like a sum still finds its row.
+ * `magnitude` is the same converted, base-currency figure Min and Max compare
+ * against, so the two agree about what "1100" means on a foreign-currency row.
+ */
+function searchable(term: string, currency: string, magnitude: SQL): SQL {
 	const like = `%${term}%`;
-	return or(
+	const clauses: SQL[] = [
 		sql`${transaction.counterparty} ilike ${like}`,
 		sql`${transaction.description} ilike ${like}`,
 		sql`${transaction.counterpartyAccount} ilike ${like}`,
 		sql`${transaction.variableSymbol} ilike ${like}`,
 		sql`${transaction.constantSymbol} ilike ${like}`,
 		sql`${transaction.specificSymbol} ilike ${like}`
-	) as SQL;
+	];
+
+	const bounds = parseAmountSearch(term, currency);
+	if (bounds) {
+		const within: SQL[] = [];
+		if (bounds.minMinor !== null)
+			within.push(sql`${magnitude} >= ${bounds.minMinor.toString()}::numeric`);
+		if (bounds.maxMinor !== null)
+			within.push(sql`${magnitude} <= ${bounds.maxMinor.toString()}::numeric`);
+		if (within.length > 0) clauses.push(and(...within) as SQL);
+	}
+
+	return or(...clauses) as SQL;
 }
 
 /**
@@ -258,6 +284,24 @@ function datedCzkRate(currency: SQL, day: SQL): SQL {
 	end`;
 }
 
+/**
+ * The row's amount as PRINTED, restated in base-currency minor units.
+ *
+ * No exchange rate anywhere: only the decimal places are reconciled, so 1 100
+ * CZK and 1 100 EUR and 1 100 JPY all come out as the same figure. That is the
+ * point — somebody searching for "1100" is remembering the number on the
+ * statement, not what it converts to. `convertedMagnitude` answers the other
+ * question, and the Min and Max fields, which say which currency they are in,
+ * go on asking that one.
+ */
+function faceMagnitude(filter: RegisterFilter, rowFactor?: SQL): SQL {
+	const baseFactor = (10 ** minorDigits(filter.baseCurrency.toUpperCase())).toString();
+	const sourceFactor = rowFactor ?? sql`${baseFactor}::numeric`;
+	return sql`round(
+		abs(${transaction.amountMinor})::numeric * ${baseFactor}::numeric / (${sourceFactor})::numeric
+	)`;
+}
+
 /** Magnitude of the parent transaction, rounded to base-currency minor units. */
 function convertedMagnitude(filter: RegisterFilter, rowFactor?: SQL): SQL {
 	const baseCurrency = filter.baseCurrency.toUpperCase();
@@ -288,7 +332,17 @@ function convertedMagnitude(filter: RegisterFilter, rowFactor?: SQL): SQL {
 function registerTransactionWhere(filter: RegisterFilter, rowFactor?: SQL): SQL | undefined {
 	const clauses: SQL[] = [];
 
-	if (filter.search) clauses.push(searchable(filter.search));
+	// Built before the search clause, because the search box can ask an amount
+	// question too and must compare on the same converted figure.
+	const magnitude = convertedMagnitude(filter, rowFactor);
+	// The search box asks about the amount AS PRINTED; Min and Max, which name
+	// their currency, ask about the converted one. Matching both here looked
+	// like a bug on screen: searching 1100-1200 with a EUR base returned a
+	// 28'000 Kč row, correctly worth €1'150, while the amount column said
+	// 28'000. A search whose results visibly disagree with the search is worse
+	// than one that finds less.
+	if (filter.search)
+		clauses.push(searchable(filter.search, filter.baseCurrency, faceMagnitude(filter, rowFactor)));
 	// Measured on the effective date, not the booking date — see `effectiveDate`.
 	// The bounds arrive from the chart, which sums on that day, so a window that
 	// meant one thing on the chart and another here is a band whose own link
@@ -304,7 +358,6 @@ function registerTransactionWhere(filter: RegisterFilter, rowFactor?: SQL): SQL 
 	// uses value date (falling back to booking date), like every other dated
 	// ledger total. When no fixing exists, face-value scaling matches the
 	// application's visible, explicitly-labelled FX fallback.
-	const magnitude = convertedMagnitude(filter, rowFactor);
 	if (filter.minMinor !== null)
 		clauses.push(sql`${magnitude} >= ${filter.minMinor.toString()}::numeric`);
 	if (filter.maxMinor !== null)
@@ -404,12 +457,27 @@ async function currencyRowFactor(handle: Queryable): Promise<SQL> {
 	return sql`case ${transaction.currency} ${sql.join(whens, sql` `)} else 100::bigint end`;
 }
 
+/**
+ * Whether the query compares amounts, and so needs per-currency scaling.
+ *
+ * The search box counts: a term that reads as an amount compares against the
+ * same converted magnitude Min and Max do, and without the row factor that
+ * comparison is wrong for every row not in the base currency. Asked in one
+ * place so the two callers below cannot answer it differently.
+ */
+function comparesAmounts(filter: RegisterFilter): boolean {
+	return (
+		filter.minMinor !== null ||
+		filter.maxMinor !== null ||
+		(filter.search !== null && parseAmountSearch(filter.search, filter.baseCurrency) !== null)
+	);
+}
+
 export async function registerPage(
 	filter: RegisterFilter,
 	handle: Queryable = db
 ): Promise<RegisterPage> {
-	const needsScale = filter.minMinor !== null || filter.maxMinor !== null;
-	const rowFactor = needsScale ? await currencyRowFactor(handle) : undefined;
+	const rowFactor = comparesAmounts(filter) ? await currencyRowFactor(handle) : undefined;
 	const transactionWhere = registerTransactionWhere(filter, rowFactor);
 	const where = registerWhere(filter, rowFactor);
 	const selectedLines = selectedEffectiveLines(filter);
@@ -431,6 +499,7 @@ export async function registerPage(
 				accountName: account.name,
 				transferPairId: transaction.transferPairId,
 				transferToAccountId: transaction.transferToAccountId,
+				transferToUntracked: transaction.transferToUntracked,
 				sourceMethod: transaction.sourceMethod,
 				proofClass: transaction.proofClass
 			})
@@ -477,14 +546,21 @@ export async function registerPage(
 			accountName: r.accountName,
 			sourceMethod: r.sourceMethod,
 			proofClass: r.proofClass,
-			isTransfer: r.transferPairId !== null || r.transferToAccountId !== null,
+			isTransfer:
+				r.transferPairId !== null || r.transferToAccountId !== null || r.transferToUntracked,
 			// A matched pair is proved by two statements; a one-sided transfer is
 			// asserted by a person. The register says which, because only one of
 			// them is evidence.
+			//
+			// `transferToUntracked` counts as one-sided and was missed when it was
+			// added: a row marked "moved to an account that is closed or not
+			// tracked" showed as an ordinary uncategorised row here, so it was
+			// left out of spending with no way on any screen to take that back —
+			// which is the exact failure the chip below exists to prevent.
 			transferKind:
 				r.transferPairId !== null
 					? ('paired' as const)
-					: r.transferToAccountId !== null
+					: r.transferToAccountId !== null || r.transferToUntracked
 						? ('one-sided' as const)
 						: null
 		})),
@@ -513,8 +589,7 @@ export async function registerMonths(
 	handle: Queryable = db
 ): Promise<RegisterMonth[]> {
 	const scope: RegisterFilter = { ...filter, month: null };
-	const needsScale = scope.minMinor !== null || scope.maxMinor !== null;
-	const rowFactor = needsScale ? await currencyRowFactor(handle) : undefined;
+	const rowFactor = comparesAmounts(scope) ? await currencyRowFactor(handle) : undefined;
 	// The month the money moved in, not the month the bank booked it — the same
 	// day `filter.month` narrows on above, so opening a month row lists exactly
 	// the transactions that row counted.
@@ -600,6 +675,21 @@ export async function fileTransaction(
 		const row = rows[0];
 		if (!row) return { ok: false, status: 404, message: 'Transaction not found.' };
 
+		// A matched pair is not spending and carries no category. Every path
+		// that MAKES a pair clears the category — both pairing sites and
+		// `confirmTransferProposal` — but nothing stopped one being put back
+		// afterwards, and the register offers "File it…" on every row. A 380 000
+		// transfer between two of the household's own accounts ended up shown as
+		// "Money set aside" on one leg and as a transfer on the other, with
+		// nothing on any screen able to take it off again.
+		if (row.transferPairId)
+			return {
+				ok: false,
+				status: 409,
+				message:
+					'This row is matched to another statement as a transfer between your own accounts, so it is neither income nor spending. Undo the match first if that is wrong.'
+			};
+
 		// Score the rules that had an opinion about this row before anything is
 		// written. The lock prevents two corrections from scoring and teaching
 		// independently against the same stale transaction state.
@@ -617,6 +707,18 @@ export async function fileTransaction(
 			threshold
 		);
 		await applyScores(scoreChanges(decision.matched, categoryId), tx);
+
+		// The tags the matching rules carry, applied here as `pairAndCategorise`
+		// already applies them when a row files itself. Filing by hand went
+		// through the same matcher but used only its verdict, so a rule that
+		// added a tag did so for rows nobody touched and not for rows somebody
+		// confirmed — the same rule behaving differently depending on who agreed
+		// with it.
+		//
+		// A tag is not a verdict: a rule may carry tags and no category at all
+		// ("No category, tags only"), so they are applied whatever category the
+		// person chose, rather than only when the rule guessed right.
+		if (decision.tagIds.length > 0) await addTagsToTransaction(id, decision.tagIds, tx);
 
 		await tx
 			.update(transaction)

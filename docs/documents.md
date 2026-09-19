@@ -149,6 +149,45 @@ _proposes_ one and a person confirms; matching alone cannot say which of two
 lanes on one card holds a payslip when both match it. The Lane picker in the
 inspector is where that is changed afterwards.
 
+### Tax years
+
+Income & Tax has two tabs, because it answers two questions. **Employers** is
+the cards above: which payslip never arrived, and what HR has sent. **Tax
+years** is one card per year and country — _2025 · Czech Republic_ — with a row
+per person who owes a return that year.
+
+**An annual return is one filing per person per year, not one per employer.** A
+year worked at two companies is filed once, so the year owns the card and the
+employer does not. An employer's card carries payslips and HR paper and nothing
+yearly at all.
+
+**A card is drawn, never stored.** The years run from the earliest job or
+payslip to this one. The countries are the ones this household has already
+filed in — from a tax statement, or from a document that says which country it
+is from. Nothing is guessed: with no country known anywhere, the tab offers to
+add the first year by hand and draws nothing.
+
+**A person is on a year they earned in**, by a job overlapping it or a payslip
+inside it. A row is green once a tax document for that year and country names
+that person, red once the year has ended with nothing filed, and quiet grey for
+the year still running — a return for a year that has not finished is not late.
+
+**A joint return fills both rows.** It is one document naming two people, which
+is exactly what happened, so it is filed once and counts twice.
+
+**Supporting paper** is everything else with that year and country: the
+employer's earnings report, the broker's report. It has no rhythm, so it is
+listed rather than celled.
+
+**Dragging a document onto a row** types it, dates it to the whole year, gives
+it the card's country and links it to that person, in one gesture. Dropping it
+on Supporting paper sets the year and country only — an employer's report is
+not a return, and calling it one would close a gap that is still open.
+
+**Add and Dismiss are for when the derivation is wrong.** Add a year for a
+country nothing points at yet; Dismiss a card for a year you do not file there.
+Remove takes one person off a return. None of the three touches a document.
+
 ### The Inbox is a queue
 
 Opening Inbox shows the oldest unfiled document: the file on the left, the
@@ -171,6 +210,12 @@ is where a search always lands — a match is explained by the line it was found
 in, and a card face has nowhere to put one.
 
 **Everything** is that list with no shelf.
+
+Each row says what the document already is, as quiet chips under its name: its
+type, the months it covers, what it is about, and which country it is from.
+They are derived every time the row is drawn rather than written down, so none
+of them can go stale, and your own tags keep their colour beside them. Clicking
+a chip narrows the list to everything sharing that fact.
 
 ### Who a document was with
 

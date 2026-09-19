@@ -17,8 +17,8 @@ import { mkdir, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 // Czech, Polish, German, Spanish and English: the languages the sampled
-// statements are actually written in.
-const LANGUAGES = ['eng', 'ces', 'pol', 'deu', 'spa'];
+// statements are actually written in. Ukrainian added on request.
+const LANGUAGES = ['eng', 'ces', 'pol', 'deu', 'spa', 'ukr'];
 /**
  * The "fast" models, not the full ones — measured, not assumed.
  *

@@ -20,6 +20,7 @@ import {
 	person
 } from '$lib/server/db/schema';
 import type { EnumValue } from '$lib/enums';
+import { foldCountry } from '$lib/countries';
 
 export const ORGANISATION_NAME_TAKEN = 'An organisation with that name already exists.';
 export const ORGANISATION_IN_USE =
@@ -69,6 +70,8 @@ export interface OrganisationRow {
 	name: string;
 	kind: EnumValue<'organisation.kind'>;
 	emoji: string;
+	/** Upper-case ISO 3166-1 alpha-2, or null where the household has not said. */
+	country: string | null;
 	documentCount: number;
 	/** How many people have ever had a role period here. */
 	peopleCount: number;
@@ -87,7 +90,8 @@ export async function listOrganisations(handle: Queryable = db): Promise<Organis
 				id: organisation.id,
 				name: organisation.name,
 				kind: organisation.kind,
-				emoji: organisation.emoji
+				emoji: organisation.emoji,
+				country: organisation.country
 			})
 			.from(organisation)
 			.orderBy(organisation.name),
@@ -159,14 +163,17 @@ export const LANE_PRESETS: Record<EnumValue<'organisation.kind'>, LanePreset[]> 
 			cadence: 'monthly',
 			conditions: [{ field: 'type', op: 'is', value: 'payslip' }]
 		},
-		{
-			label: 'Once a year · declaration, annual settlement',
-			cadence: 'yearly',
-			conditions: [{ field: 'type', op: 'is', value: 'tax_document' }]
-		},
 		// Last and matching everything: lanes are tried in order, so this catches
-		// whatever the others didn't claim.
-		{ label: 'Changes to pay', cadence: 'none', conditions: [] }
+		// whatever the others didn't claim — the contract itself, its
+		// amendments, a raise or bonus letter, anything from HR.
+		//
+		// No yearly lane, deliberately. A declaration is one per person per year
+		// and not one per employer: a year worked at two companies is filed once,
+		// and two cards each drawing a missing 2025 were two alarms for one
+		// obligation. It lives on the tax year card, which is keyed by the year
+		// rather than by whoever happened to be paying. `authority` keeps its
+		// yearly lane — a tax office really does expect one filing a year.
+		{ label: 'Contract & HR', cadence: 'none', conditions: [] }
 	],
 	authority: [
 		{
@@ -284,7 +291,14 @@ export async function addLane(
  * two devices have agreed, not collided.
  */
 export async function addOrganisation(
-	input: { name: string; shelfId: string; kind?: EnumValue<'organisation.kind'>; emoji?: string },
+	input: {
+		name: string;
+		shelfId: string;
+		kind?: EnumValue<'organisation.kind'>;
+		emoji?: string;
+		/** Folded here: a code, or nothing. */
+		country?: string | null;
+	},
 	handle: Queryable = db
 ): Promise<OrganisationRow> {
 	const name = normalise(input.name);
@@ -298,7 +312,8 @@ export async function addOrganisation(
 			name,
 			kind,
 			shelfId: input.shelfId,
-			emoji: input.emoji?.trim() || DEFAULT_ORGANISATION_EMOJI
+			emoji: input.emoji?.trim() || DEFAULT_ORGANISATION_EMOJI,
+			country: foldCountry(input.country)
 		})
 		.onConflictDoNothing()
 		.returning({ id: organisation.id });
@@ -313,12 +328,15 @@ export async function addOrganisation(
 		}
 	}
 
+	// Read back rather than echoed from the input: on the reuse path the row's
+	// country is whatever the household already set, not what this call said.
 	const [row] = await handle
 		.select({
 			id: organisation.id,
 			name: organisation.name,
 			kind: organisation.kind,
-			emoji: organisation.emoji
+			emoji: organisation.emoji,
+			country: organisation.country
 		})
 		.from(organisation)
 		.where(sql`lower(${organisation.name}) = ${name.toLowerCase()}`);
@@ -343,6 +361,21 @@ export async function setOrganisationKind(
 	handle: Queryable = db
 ): Promise<void> {
 	await handle.update(organisation).set({ kind }).where(eq(organisation.id, id));
+}
+
+/**
+ * Which country an organisation is in — what puts its role periods on a tax
+ * year card. Clearing it is legal and means "not said", not "nowhere".
+ */
+export async function setOrganisationCountry(
+	id: string,
+	country: string | null,
+	handle: Queryable = db
+): Promise<void> {
+	await handle
+		.update(organisation)
+		.set({ country: foldCountry(country) })
+		.where(eq(organisation.id, id));
 }
 
 export async function setOrganisationEmoji(
@@ -394,6 +427,23 @@ export async function addEngagement(
 		documentId: input.documentId || null
 	});
 	return { id };
+}
+
+/**
+ * Correct a role period entered without a start date, a title, or the wrong
+ * one of either — the fields a person fills in once and, unlike `endsOn`,
+ * might not have to hand at the moment they first record the period.
+ */
+export async function updateEngagement(
+	id: string,
+	input: { role?: string | null; startsOn?: string | null },
+	handle: Queryable = db
+): Promise<void> {
+	const set: { role?: string | null; startsOn?: string | null } = {};
+	if ('role' in input) set.role = input.role?.trim() || null;
+	if ('startsOn' in input) set.startsOn = input.startsOn || null;
+	if (Object.keys(set).length === 0) return;
+	await handle.update(engagement).set(set).where(eq(engagement.id, id));
 }
 
 /**

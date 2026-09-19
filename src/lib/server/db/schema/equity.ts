@@ -97,6 +97,13 @@ export const equityTranche = pgTable(
 		withheldUnits: numeric('withheld_units', { precision: 18, scale: 6 }),
 		/** Later disposals, so net worth stops counting them. */
 		soldUnits: numeric('sold_units', { precision: 18, scale: 6 }).notNull().default('0'),
+		/**
+		 * Units transferred into a brokerage account the household already
+		 * tracks. Still owned — this is not a sale and no money changed hands —
+		 * but counted from the broker's report from here on, so the grant must
+		 * stop counting them or the same shares are worth double.
+		 */
+		movedUnits: numeric('moved_units', { precision: 18, scale: 6 }).notNull().default('0'),
 		/** Left the employer before vesting: excluded everywhere. */
 		forfeitedOn: date('forfeited_on'),
 		/** The employer itemised this vest on a payslip, so salary must not add it again. */

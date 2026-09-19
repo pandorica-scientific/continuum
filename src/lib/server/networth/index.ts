@@ -2,12 +2,14 @@
 import { asc, desc, lt, sql } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
 import {
+	holding,
 	loanProperty,
 	netWorthComponent,
 	netWorthSnapshot,
 	portfolioSnapshot
 } from '$lib/server/db/schema';
-import { convertOrFace, loadRateTable } from '$lib/server/fx/table';
+import { convertMinorSync, convertOrFace, loadRateTable } from '$lib/server/fx/table';
+import { latestPrices } from '$lib/server/prices';
 import { getBaseCurrency } from '$lib/server/settings';
 import { deltaShareOfBiggest, deltaSinceMonthStart, monthlyDeltas } from '$lib/networth/history';
 
@@ -47,13 +49,14 @@ export interface NetWorth {
  */
 export async function computeNetWorth(handle: Queryable = db): Promise<NetWorth> {
 	const baseCurrency = await getBaseCurrency(handle);
-	const [rates, components, links, snapshots] = await Promise.all([
+	const [rates, components, links, snapshots, holdings] = await Promise.all([
 		// One table load, not per-holding.
 		loadRateTable(handle),
 		// One read of the view; a new asset type is a UNION branch in the migration.
 		handle.select().from(netWorthComponent),
 		handle.select({ loanId: loanProperty.loanId }).from(loanProperty),
-		handle.select().from(portfolioSnapshot).orderBy(desc(portfolioSnapshot.day)).limit(1)
+		handle.select().from(portfolioSnapshot).orderBy(desc(portfolioSnapshot.day)).limit(1),
+		handle.select().from(holding)
 	]);
 	const securedLoanIds = new Set(links.map((l) => l.loanId));
 
@@ -111,8 +114,67 @@ export async function computeNetWorth(handle: Queryable = db): Promise<NetWorth>
 	}
 
 	let portfolio = 0n;
+	let portfolioDetail = '';
 	if (snapshots[0]) {
 		portfolio = toBase(snapshots[0].valueMinor, snapshots[0].currency);
+		portfolioDetail = `broker report of ${snapshots[0].day}`;
+
+		// Between reports, prices still move every day. Add each holding's price
+		// drift since the report (units × close now, minus the value the report
+		// stated) on top of the reported total, rather than replacing it — the
+		// report's total also carries broker cash and fees, which no feed prices.
+		// All-or-nothing: one holding with no usable close would make a partial
+		// drift read as a fall, so it is skipped entirely.
+		//
+		// A close from the report's OWN day counts. `markedTail` starts a day
+		// later, but only because it plots a series and a same-day point would
+		// land on top of the report's own — a charting concern, not a valuation
+		// one. A report is generated at some moment in the day and the day's
+		// close is fetched after it, so the close is the fresher mark. Requiring
+		// a strictly later one left this figure frozen until the day AFTER a
+		// report, which is the "+0 this month" it exists to stop reporting.
+		if (holdings.length > 0) {
+			const latest = await latestPrices(
+				holdings.map((h) => h.ticker),
+				handle
+			);
+			let driftBase = 0n;
+			let complete = true;
+			for (const h of holdings) {
+				const price = latest.get(h.ticker);
+				if (!price || price.day < snapshots[0].day) {
+					complete = false;
+					break;
+				}
+				// The close is in whatever the feed quotes it in (often not the
+				// holding's own currency — a broker ticker traded in EUR can still
+				// be priced in USD), so each side converts to base on its own.
+				const marketValue = BigInt(Math.round(Number(price.closeMinor) * Number(h.units)));
+				const marketValueBase = convertMinorSync(
+					rates,
+					marketValue,
+					price.currency,
+					baseCurrency,
+					today
+				);
+				const reportedValueBase = convertMinorSync(
+					rates,
+					h.valueMinor,
+					h.currency,
+					baseCurrency,
+					today
+				);
+				if (marketValueBase === null || reportedValueBase === null) {
+					complete = false;
+					break;
+				}
+				driftBase += marketValueBase - reportedValueBase;
+			}
+			if (complete) {
+				portfolio += driftBase;
+				portfolioDetail = `broker report of ${snapshots[0].day}, marked to market`;
+			}
+		}
 	}
 
 	const groups: NetWorthGroup[] = [];
@@ -133,7 +195,7 @@ export async function computeNetWorth(handle: Queryable = db): Promise<NetWorth>
 			assetMinor: portfolio,
 			liabilityMinor: 0n,
 			colorVar: '--teal',
-			detail: `broker report of ${snapshots[0].day}`
+			detail: portfolioDetail
 		});
 	}
 	if (equity > 0n) {

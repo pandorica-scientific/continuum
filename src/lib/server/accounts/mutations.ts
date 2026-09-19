@@ -111,3 +111,64 @@ export function parseAccountNumbers(raw: string): string[] {
 		.map((entry) => entry.trim())
 		.filter(Boolean);
 }
+
+/**
+ * Close an account without losing what it held.
+ *
+ * Archiving, not deleting, because `transaction.account_id` cascades: removing
+ * an account that carried history would take every row with it, and money
+ * spent from an account you have since closed was still spent. The rows stay
+ * in the ledger and in cash-flow history; the account leaves the places that
+ * ask what you have NOW — the pickers, net worth, the cash donut.
+ */
+export async function archiveAccount(id: string, handle: Db = db): Promise<AccountMutationResult> {
+	const [row] = await handle.select().from(account).where(eq(account.id, id));
+	if (!row) return { ok: false, status: 404, message: 'That account is not there.' };
+	if (row.archivedAt) return { ok: false, status: 409, message: 'That account is already closed.' };
+	await handle.update(account).set({ archivedAt: new Date() }).where(eq(account.id, id));
+	return { ok: true };
+}
+
+/** Put it back in use. Its history never went anywhere. */
+export async function unarchiveAccount(
+	id: string,
+	handle: Db = db
+): Promise<AccountMutationResult> {
+	const [row] = await handle.select().from(account).where(eq(account.id, id));
+	if (!row) return { ok: false, status: 404, message: 'That account is not there.' };
+	await handle.update(account).set({ archivedAt: null }).where(eq(account.id, id));
+	return { ok: true };
+}
+
+/**
+ * Delete an account outright — only one that never held anything.
+ *
+ * For the account added by mistake, where there is nothing to preserve. The
+ * moment it has carried a single transaction this refuses and says to close it
+ * instead: the foreign key cascades, so allowing it here would quietly delete
+ * a statement's worth of history to tidy up a list.
+ *
+ * Counted inside the transaction that does the delete, so a row imported
+ * between the check and the delete cannot slip through.
+ */
+export async function deleteAccount(id: string, handle: Db = db): Promise<AccountMutationResult> {
+	return handle.transaction(async (tx) => {
+		const [row] = await tx.select().from(account).where(eq(account.id, id)).for('update');
+		if (!row) return { ok: false, status: 404, message: 'That account is not there.' };
+
+		const [held] = await tx
+			.select({ n: count() })
+			.from(transaction)
+			.where(eq(transaction.accountId, id));
+		if ((held?.n ?? 0) > 0) {
+			return {
+				ok: false,
+				status: 409,
+				message: `${row.name} holds ${held.n} transaction${held.n === 1 ? '' : 's'}. Close it instead — deleting would take them with it.`
+			};
+		}
+
+		await tx.delete(account).where(eq(account.id, id));
+		return { ok: true };
+	});
+}

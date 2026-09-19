@@ -94,6 +94,20 @@ export function fromMajor(major: number, currency: string): bigint {
 	return BigInt(Math.round(major * 10 ** minorDigits(currency)));
 }
 
+/**
+ * What separates thousands everywhere an amount is shown.
+ *
+ * An apostrophe, the Swiss convention. A space — narrow, non-breaking or
+ * otherwise — is what this used to print, and at a glance "103 055.29" reads as
+ * two numbers rather than one. The apostrophe cannot be mistaken for a gap
+ * between figures, and it is not the decimal mark in any locale this app
+ * formats for, so it can never be read as one.
+ *
+ * `parseAmountToMinor` and `parsePrintedAmount` both strip it, so an amount
+ * printed here still parses when it comes back out of an input.
+ */
+const GROUP = "'";
+
 interface FormatOptions {
 	/** Always print the fraction digits, even when zero. */
 	exact?: boolean;
@@ -113,7 +127,7 @@ export function formatMinor(
 	const whole = abs / divisor;
 	const fraction = abs % divisor;
 
-	const wholeStr = whole.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' '); // narrow no-break space
+	const wholeStr = whole.toString().replace(/\B(?=(\d{3})+(?!\d))/g, GROUP);
 
 	let out = wholeStr;
 	// A currency with no minor unit has no fraction to print, not even when
@@ -137,7 +151,10 @@ export function formatMinor(
 export function parseAmountToMinor(raw: string, currency: string): bigint {
 	const digits = minorDigits(currency);
 	const cleaned = raw
-		.replace(/[\s\u00a0\u202f]/gu, '')
+		// Our own separator included, or a formatted amount could not be read
+		// back out of an input. The apostrophe is also Switzerland's, so a Swiss
+		// statement's "1'234.56" parses for the same reason.
+		.replace(/[\s\u00a0\u202f'\u2019]/gu, '')
 		.replace(/\u2212/g, '-')
 		.replace(',', '.')
 		.trim();

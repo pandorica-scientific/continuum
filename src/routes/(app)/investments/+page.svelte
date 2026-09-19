@@ -1,5 +1,6 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
+	import { enhance } from '$app/forms';
 	import { submitAction } from '$lib/actions/result';
 	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
@@ -115,6 +116,34 @@
 			axis
 		};
 	});
+
+	/**
+	 * Which point the pointer is nearest, or null when it is not over the plot.
+	 *
+	 * Index rather than a pixel: the series is what gets read out, and snapping
+	 * to a real point is the only honest thing a line between monthly readings
+	 * can say. The plot is drawn with `preserveAspectRatio="none"`, so the x
+	 * mapping is a straight proportion of the element's own width.
+	 */
+	let hover = $state<number | null>(null);
+	let plot = $state<HTMLElement | null>(null);
+
+	function track(event: PointerEvent) {
+		if (!plot || !chart) return;
+		const box = plot.getBoundingClientRect();
+		if (box.width === 0) return;
+		const fraction = (event.clientX - box.left) / box.width;
+		const last = data.series.length - 1;
+		hover = Math.max(0, Math.min(last, Math.round(fraction * last)));
+	}
+
+	const reading = $derived(hover === null ? null : (data.series[hover] ?? null));
+	/** Percent across the plot, for the guide line and the readout box. */
+	const hoverLeft = $derived(
+		hover === null || data.series.length < 2 ? 0 : (hover / (data.series.length - 1)) * 100
+	);
+	const money = (value: number) =>
+		value.toLocaleString('en-GB', { maximumFractionDigits: 0 }).replace(/,/g, "'");
 </script>
 
 <ScreenHeader
@@ -158,15 +187,22 @@
 					: undefined,
 				wash: 'purple'
 			},
-			...(data.metrics.withEquity || data.metrics.equityUnpriced
+			...(data.metrics.withEquity || data.metrics.equityAbsence
 				? [
 						{
 							label: 'With equity',
 							value: data.metrics.withEquity?.value ?? '—',
 							unit: data.metrics.withEquity ? data.accountUnit : undefined,
+							// Says which of the reasons it is. "No price" sent somebody
+							// looking for a broken feed when the grant simply had not
+							// vested yet.
 							note: data.metrics.withEquity
-								? `portfolio + ${data.metrics.withEquity.equity} vested shares`
-								: 'no price for the grant yet',
+								? `portfolio + ${data.metrics.withEquity.equity} in grants · ${data.metrics.withEquity.units} units, vested and not`
+								: data.metrics.equityAbsence === 'unpriced'
+									? 'no price for the grant yet'
+									: data.metrics.equityAbsence === 'unconverted'
+										? 'no rate to convert the grant yet'
+										: 'nothing left in the grant',
 							wash: 'purple'
 						}
 					]
@@ -216,102 +252,154 @@
 			{#each chart.axis as a (a.top)}
 				<span class="axis mono" style:top={a.top}>{a.label}</span>
 			{/each}
-			<svg viewBox="0 0 800 200" preserveAspectRatio="none">
-				{#each [0, 50, 100, 150] as gy (gy)}
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<div
+				class="plot"
+				bind:this={plot}
+				onpointermove={track}
+				onpointerleave={() => (hover = null)}
+			>
+				<svg viewBox="0 0 800 200" preserveAspectRatio="none">
+					{#each [0, 50, 100, 150] as gy (gy)}
+						<line
+							x1="0"
+							y1={gy}
+							x2="800"
+							y2={gy}
+							stroke="var(--bd)"
+							stroke-width="1"
+							vector-effect="non-scaling-stroke"
+						/>
+					{/each}
+					<!-- Where each year begins. Structure rather than data, so it is drawn
+				     at the weight the horizontal gridlines already use. -->
+					{#each chart.yearLines as gx (gx)}
+						<line
+							x1={gx}
+							y1="0"
+							x2={gx}
+							y2="200"
+							stroke="var(--bd)"
+							stroke-width="1"
+							vector-effect="non-scaling-stroke"
+						/>
+					{/each}
 					<line
 						x1="0"
-						y1={gy}
+						y1="200"
 						x2="800"
-						y2={gy}
-						stroke="var(--bd)"
-						stroke-width="1"
-						vector-effect="non-scaling-stroke"
-					/>
-				{/each}
-				<!-- Where each year begins. Structure rather than data, so it is drawn
-				     at the weight the horizontal gridlines already use. -->
-				{#each chart.yearLines as gx (gx)}
-					<line
-						x1={gx}
-						y1="0"
-						x2={gx}
 						y2="200"
-						stroke="var(--bd)"
+						stroke="var(--bd2)"
 						stroke-width="1"
 						vector-effect="non-scaling-stroke"
 					/>
-				{/each}
-				<line
-					x1="0"
-					y1="200"
-					x2="800"
-					y2="200"
-					stroke="var(--bd2)"
-					stroke-width="1"
-					vector-effect="non-scaling-stroke"
-				/>
-				<polyline
-					points={chart.bench5}
-					fill="none"
-					stroke="var(--orange)"
-					stroke-width="2"
-					stroke-dasharray="3 4"
-					vector-effect="non-scaling-stroke"
-				/>
-				<polyline
-					points={chart.bench10}
-					fill="none"
-					stroke="var(--purple)"
-					stroke-width="2"
-					stroke-dasharray="3 4"
-					vector-effect="non-scaling-stroke"
-				/>
-				<polyline
-					points={chart.moneyIn}
-					fill="none"
-					stroke="var(--fg3)"
-					stroke-width="2"
-					stroke-dasharray="6 4"
-					vector-effect="non-scaling-stroke"
-				/>
-				{#if chart.actualPoints.length > 0}
-					<!-- The area under the actual line, teal fading to nothing. The
+					<polyline
+						points={chart.bench5}
+						fill="none"
+						stroke="var(--orange)"
+						stroke-width="2"
+						stroke-dasharray="3 4"
+						vector-effect="non-scaling-stroke"
+					/>
+					<polyline
+						points={chart.bench10}
+						fill="none"
+						stroke="var(--purple)"
+						stroke-width="2"
+						stroke-dasharray="3 4"
+						vector-effect="non-scaling-stroke"
+					/>
+					<polyline
+						points={chart.moneyIn}
+						fill="none"
+						stroke="var(--fg3)"
+						stroke-width="2"
+						stroke-dasharray="6 4"
+						vector-effect="non-scaling-stroke"
+					/>
+					{#if chart.actualPoints.length > 0}
+						<!-- The area under the actual line, teal fading to nothing. The
 					     benchmarks stay bare strokes: a fill says "this is what you
 					     have", and only one of these four lines is that. -->
-					<defs>
-						<linearGradient id="inv-actual" x1="0" y1="0" x2="0" y2="1">
-							<stop offset="0" style="stop-color: var(--teal); stop-opacity: 0.35" />
-							<stop offset="1" style="stop-color: var(--teal); stop-opacity: 0" />
-						</linearGradient>
-					</defs>
-					<polygon
-						points="{chart.actual} {chart.actualSpan.x1},200 {chart.actualSpan.x0},200"
-						fill="url(#inv-actual)"
-						stroke="none"
-					/>
-					<polyline
-						points={chart.actual}
-						fill="none"
-						stroke="var(--teal)"
-						stroke-width="2.5"
-						stroke-linejoin="round"
-						vector-effect="non-scaling-stroke"
-					/>
-				{/if}
-				{#if chart.marked}
-					<polyline
-						points={chart.marked}
-						fill="none"
-						stroke="var(--teal)"
-						stroke-width="2.5"
-						stroke-dasharray="6 4"
-						stroke-linejoin="round"
-						vector-effect="non-scaling-stroke"
+						<defs>
+							<linearGradient id="inv-actual" x1="0" y1="0" x2="0" y2="1">
+								<stop offset="0" style="stop-color: var(--teal); stop-opacity: 0.35" />
+								<stop offset="1" style="stop-color: var(--teal); stop-opacity: 0" />
+							</linearGradient>
+						</defs>
+						<polygon
+							points="{chart.actual} {chart.actualSpan.x1},200 {chart.actualSpan.x0},200"
+							fill="url(#inv-actual)"
+							stroke="none"
+						/>
+						<polyline
+							points={chart.actual}
+							fill="none"
+							stroke="var(--teal)"
+							stroke-width="2.5"
+							stroke-linejoin="round"
+							vector-effect="non-scaling-stroke"
+						/>
+					{/if}
+					{#if chart.marked}
+						<polyline
+							points={chart.marked}
+							fill="none"
+							stroke="var(--teal)"
+							stroke-width="2.5"
+							stroke-dasharray="6 4"
+							stroke-linejoin="round"
+							vector-effect="non-scaling-stroke"
+						>
+							<title>marked to market</title>
+						</polyline>
+					{/if}
+					{#if hover !== null}
+						<line
+							x1={(hoverLeft / 100) * 800}
+							y1="0"
+							x2={(hoverLeft / 100) * 800}
+							y2="200"
+							stroke="var(--fg3)"
+							stroke-width="1"
+							vector-effect="non-scaling-stroke"
+						/>
+					{/if}
+				</svg>
+				{#if reading}
+					<!-- Positioned in percent so it follows the same proportion the
+				     stretched viewBox uses; flipped to the left near the right edge
+				     so it never runs off the card. -->
+					<div
+						class="readout"
+						class:flip={hoverLeft > 60}
+						style:left="{hoverLeft}%"
+						role="status"
+						aria-live="polite"
 					>
-						<title>marked to market</title>
-					</polyline>
+						<span class="r-month mono">{reading.month}</span>
+						{#if reading.actual !== null}
+							<span class="r-line">
+								<span class="r-dot" style="background: var(--teal)"></span>
+								<span class="r-name">{reading.isMarked ? 'marked to market' : 'value'}</span>
+								<span class="mono r-value">{money(reading.actual)}</span>
+							</span>
+						{/if}
+						<span class="r-line">
+							<span class="r-dot" style="background: var(--fg3)"></span>
+							<span class="r-name">money in</span>
+							<span class="mono r-value">{money(reading.moneyIn)}</span>
+						</span>
+						{#if reading.actual !== null}
+							<span class="r-gain" class:down={reading.actual < reading.moneyIn}>
+								{reading.actual >= reading.moneyIn ? '+' : '−'}{money(
+									Math.abs(reading.actual - reading.moneyIn)
+								)}
+							</span>
+						{/if}
+					</div>
 				{/if}
-			</svg>
+			</div>
 		</div>
 		<div class="years mono">
 			{#each chart.years as y (y.year)}<span style:left="{y.left}%" class:end={y.end}>{y.year}</span
@@ -338,6 +426,46 @@
 			>
 			<span class="l-note">market value at report dates · at cost + realised between</span>
 		</div>
+		{#if data.unpricedTickers.length > 0}
+			<!-- No feed has ever priced this one — often because the broker's own
+			     ticker for it isn't what a feed calls the same security (Tesla on
+			     Xetra trades as "TL0", not "TSLA"). The dashed tail above stays
+			     undrawn until every holding has at least one close on file. -->
+			<div class="unpriced">
+				{#each data.unpricedTickers as u (u.ticker)}
+					<form method="POST" action="?/setPrice" use:enhance class="price-prompt">
+						<input type="hidden" name="ticker" value={u.ticker} />
+						<input type="hidden" name="currency" value={u.currency} />
+						<span class="quiet"
+							>No feed prices {u.ticker} · type today's close to start the tail</span
+						>
+						<input
+							name="close"
+							inputmode="decimal"
+							placeholder="close in {u.currency}"
+							aria-label="Close price for {u.ticker} in {u.currency}"
+							required
+						/>
+						<button type="submit" class="btn small">Save</button>
+					</form>
+					<!-- The one-time fix, beside the every-time one: a feed usually
+					     just calls the same security something else, not nothing —
+					     Tesla on Xetra is "TL0", not "TSLA". Saved once, tried right
+					     away, and the prompts above stop as soon as it works. -->
+					<form method="POST" action="?/setPriceAlias" use:enhance class="price-prompt">
+						<input type="hidden" name="ticker" value={u.ticker} />
+						<span class="quiet">or if a feed calls it something else</span>
+						<input
+							name="overrideBase"
+							placeholder="e.g. TL0"
+							aria-label="What a feed calls {u.ticker}"
+							required
+						/>
+						<button type="submit" class="btn small">Fetch automatically</button>
+					</form>
+				{/each}
+			</div>
+		{/if}
 	</section>
 {/if}
 
@@ -463,6 +591,67 @@
 		position: relative;
 		padding-left: 46px;
 	}
+	/* Holds the svg and the hover readout in one coordinate space, so a percent
+	   position means the same thing to both. */
+	.plot {
+		position: relative;
+		touch-action: pan-y;
+	}
+	.readout {
+		position: absolute;
+		top: 6px;
+		z-index: 2;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+		/* Clear of the guide line rather than under the pointer. */
+		margin-left: 10px;
+		padding: var(--space-4) var(--space-5);
+		border: 1px solid var(--bd2);
+		border-radius: var(--radius-md);
+		background: var(--bg2);
+		box-shadow: var(--shadow-float);
+		font-size: var(--text-sm);
+		white-space: nowrap;
+		/* The pointer is tracked on the plot beneath; the box must never eat the
+		   move events or it would flicker as it follows. */
+		pointer-events: none;
+	}
+	.readout.flip {
+		margin-left: 0;
+		transform: translateX(-100%) translateX(-10px);
+	}
+	.r-month {
+		font-size: var(--text-xs);
+		color: var(--fg3);
+	}
+	.r-line {
+		display: grid;
+		grid-template-columns: 8px auto 1fr;
+		align-items: center;
+		gap: var(--space-3);
+	}
+	.r-dot {
+		width: 8px;
+		height: 2px;
+		border-radius: 1px;
+	}
+	.r-name {
+		color: var(--fg3);
+	}
+	.r-value {
+		text-align: right;
+	}
+	.r-gain {
+		margin-top: 2px;
+		padding-top: 3px;
+		border-top: 1px solid var(--bd);
+		text-align: right;
+		color: var(--green);
+	}
+	.r-gain.down {
+		color: var(--red);
+	}
 	.axis {
 		position: absolute;
 		left: 0;
@@ -510,6 +699,22 @@
 		display: flex;
 		align-items: center;
 		gap: 7px;
+	}
+	.unpriced {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+		padding-top: 12px;
+	}
+	.price-prompt {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-4);
+	}
+	.price-prompt input {
+		height: 36px;
+		max-width: 180px;
 	}
 	/* A line sample, not the holdings' colour bar below — must not share that class name. */
 	.legend .swatch {

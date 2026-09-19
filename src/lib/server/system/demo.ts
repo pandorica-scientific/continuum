@@ -185,6 +185,8 @@ async function fileDemoPdf(input: {
 	periodOn?: string;
 	/** The last day it covers. Statements span months; the coverage ribbon reads both. */
 	periodEndOn?: string;
+	/** Which country's paper it is. What puts a filing on a tax year card. */
+	country?: string;
 	/** What the face says, for the wallet to draw. Hand-entered in a real install. */
 	identity?: IdentityFields;
 	/** The lane on its card this document sits in, where the card has one. */
@@ -208,7 +210,8 @@ async function fileDemoPdf(input: {
 		tagNames: input.tagNames ?? [],
 		contentHash: hashBytes(bytes),
 		periodOn: input.periodOn ?? null,
-		periodEndOn: input.periodEndOn ?? null
+		periodEndOn: input.periodEndOn ?? null,
+		country: input.country ?? null
 	});
 	if (input.identity) await upsertIdentity(id, input.identity);
 	// After the links, because a lane may only hold paper on its own card.
@@ -426,7 +429,7 @@ export async function seedDemo(): Promise<void> {
 		add(m, '22', -274000n, 'groceries', 'Kaufland');
 		add(m, '10', -240000n, 'energy', 'ČEZ Prodej');
 		add(m, '11', -64900n, 'phone', 'O2 Czech Republic');
-		add(m, '12', -182000n, 'fuel-tolls', 'Shell');
+		add(m, '12', -32000n, 'taxi', 'Bolt');
 		add(m, '18', -245000n, 'eating-out', 'Restaurace U Nováků');
 		add(m, '20', -119000n, 'everything-else', 'Alza.cz');
 		add(m, '25', -1000000n, 'brokerage', 'XTB deposit');
@@ -968,20 +971,22 @@ export async function seedDemo(): Promise<void> {
 		if (payslipLane) await assignLane(documentId, payslipLane, db);
 	}
 
-	// One year's declaration and not the next, so the employer's yearly lane
-	// shows a filed year beside a missing one. An all-green fixture demonstrates
-	// nothing: the whole claim of this shelf is that it can show the year that
-	// never arrived.
+	// One year's declaration and not the next, so the Tax years tab shows a filed
+	// year beside a missing one. An all-green fixture demonstrates nothing: the
+	// whole claim of this shelf is that it can show the year that never arrived.
+	//
+	// No lane: an annual return is one per person per year, not one per employer,
+	// so it sits on the `(year, country)` card its own period and country name.
 	const declaredYear = thisYear - 2;
 	await fileDemoPdf({
 		name: `Prohlášení poplatníka ${declaredYear}`,
 		shelfKey: 'income_tax',
 		type: 'tax_document',
 		targetIds: [employer.id, jana],
-		laneId: laneNamed('Once a year · declaration, annual settlement') ?? undefined,
 		tagNames: [String(declaredYear)],
 		periodOn: `${declaredYear}-01-01`,
 		periodEndOn: `${declaredYear}-12-31`,
+		country: 'CZ',
 		lines: [
 			`Employer: ${DEMO_EMPLOYER}`,
 			`Employee: ${JANA}`,
@@ -1172,7 +1177,7 @@ export async function seedDemo(): Promise<void> {
 		// now carries every connector the ledger has.
 		{ row: alza, shelfKey: 'inventory', tags: ['Renovation 2026'] },
 		{ row: latestTo('Albert'), shelfKey: 'inbox', tags: [] },
-		{ row: latestTo('Shell'), shelfKey: 'inbox', tags: [] }
+		{ row: latestTo('Bolt'), shelfKey: 'inbox', tags: [] }
 	].filter(
 		(r): r is { row: typeof transaction.$inferInsert; shelfKey: string; tags: string[] } =>
 			r.row !== undefined

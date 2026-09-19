@@ -97,6 +97,25 @@ describe('coverageRow', () => {
 		expect(boxes[4].state).toBe('gap');
 	});
 
+	it('leaves the months after a relationship ended alone too, given a last day', () => {
+		// A job left in June: July onward is not a missing payslip, it is a
+		// relationship that is over. May is still owed one.
+		const boxes = coverageRow([], 2026, '2026-01-01', TODAY, '2026-06-15');
+		expect(boxes[4].state).toBe('gap');
+		expect(boxes.slice(6).every((b) => b.state === 'before-account')).toBe(true);
+	});
+
+	it('still counts a document actually filed after the last day — paper beats the date', () => {
+		const boxes = coverageRow(
+			[stmt('late', '2026-07-01')],
+			2026,
+			'2026-01-01',
+			TODAY,
+			'2026-06-15'
+		);
+		expect(boxes[6].state).toBe('filed');
+	});
+
 	it('clips a statement that crosses New Year into the year being drawn', () => {
 		const boxes = coverageRow([stmt('x', '2025-12-01', '2026-01-31')], 2026, '2025-12-01', TODAY);
 		expect(boxes[0]).toEqual({ state: 'filed', startMonth: 0, months: 1, documentIds: ['x'] });

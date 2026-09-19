@@ -1,12 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { asOptionalRowId, asRowId } from '$lib/ids';
 import { fail } from '@sveltejs/kit';
-import { desc, eq, gte, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNotNull, isNull, not, or, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { loadCategories } from '$lib/server/categorize/leaves';
 import { account, importFile, person, transaction, transferPair } from '$lib/server/db/schema';
 import { fileTransaction } from '$lib/server/transactions';
 import { dismissJob, enqueue, jobBytes, queueStatus } from '$lib/server/import/queue';
+import { logoHref } from '$lib/server/banks/logos';
+import { activeAccount } from '$lib/server/accounts';
+import { UNTRACKED_ACCOUNT } from '$lib/import/transfer-target';
+import { identifyingDetail } from '$lib/import/row-detail';
+import { matchAttribution } from '$lib/server/salary';
+import { recallDestination } from '$lib/import/transfer-memory';
+import { laneRank } from '$lib/import/review-lane';
+import { groupReviewRows, takeGroups } from '$lib/import/review-groups';
+
+import { salaryAttribution } from '$lib/server/db/schema';
 import { runCpuQueue } from '$lib/server/jobs';
 import { previewLayout } from '$lib/server/import/detect';
 import { confirmMapping } from '$lib/server/import/wizard';
@@ -17,6 +27,7 @@ import { PROOF_LABELS, sourceLabel } from '$lib/transactions/provenance';
 import {
 	confirmTransferProposal,
 	markOneSidedTransfer,
+	markUntrackedTransfer,
 	rejectTransferProposal
 } from '$lib/server/import/transfer-decisions';
 import { loadCategoryGroups } from '$lib/server/categorize/groups';
@@ -28,6 +39,15 @@ import { localToday } from '$lib/dates';
 import { displayCurrency, formatMinor } from '$lib/money';
 import type { Actions, PageServerLoad } from './$types';
 
+/**
+ * How many queued rows the screen shows at once.
+ *
+ * A cap, not a page: there is no "next fifty". Every row is ranked before the
+ * cut (see `ranked` below), so the fifty shown are the fifty most worth
+ * answering, and answering them brings up the next fifty.
+ */
+const REVIEW_PAGE = 50;
+
 /** A calendar day, or nothing. Checks shape AND validity — `2026-13-45` matches the pattern but isn't a date. */
 function isoDay(value: string | null): string | null {
 	if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
@@ -36,6 +56,17 @@ function isoDay(value: string | null): string | null {
 		? null
 		: value;
 }
+
+/**
+ * How long a statement stays under "Recent imports" before it ages out.
+ *
+ * Long enough to come back to a batch later in the week and read what each
+ * file was checked against; short enough that the list is the recent few and
+ * not everything ever filed. Ageing out hides the row and nothing else — the
+ * import, its transactions, its stored file and its document all stay, and a
+ * re-upload is still caught as a duplicate by content hash.
+ */
+const RECENT_IMPORT_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const load: PageServerLoad = async ({ url }) => {
 	const monthStart = new Date();
@@ -51,6 +82,64 @@ export const load: PageServerLoad = async ({ url }) => {
 	const proposedLegIds = new Set(
 		proposedPairs.flatMap((p) => [p.outTransactionId, p.inTransactionId])
 	);
+
+	/**
+	 * The in-leg of each proposal, hidden from the queue.
+	 *
+	 * A proposal puts BOTH legs in `needs_review`, so once a row started showing
+	 * its counterpart stacked beneath it the same pair drew twice — once from
+	 * each end, each displaying the other. One decision, asked twice, and
+	 * answering either resolved both.
+	 *
+	 * The money LEAVING is the one kept: it reads as the action, and the row
+	 * beneath it as where it went. Safe to hide the other because confirming or
+	 * rejecting acts on the pair, whichever leg's button is pressed.
+	 */
+	const redundantLegIds = proposedPairs.map((p) => p.inTransactionId);
+
+	/**
+	 * The OTHER leg of each proposal, keyed by the leg being asked about.
+	 *
+	 * Confirming a pair meant pressing "Own transfer" on a row that never said
+	 * what it had been matched WITH — the one fact needed to answer. Both legs
+	 * are read here so the row can show its counterpart and be checked rather
+	 * than trusted.
+	 */
+	const legIds = [...proposedLegIds];
+	const legRows = legIds.length
+		? await db
+				.select({
+					id: transaction.id,
+					bookedOn: transaction.bookedOn,
+					amountMinor: transaction.amountMinor,
+					currency: transaction.currency,
+					counterparty: transaction.counterparty,
+					description: transaction.description,
+					// The counterpart leg is just as likely to be a row named after a
+					// payment method, and it is the one being checked against.
+					counterpartyAccount: transaction.counterpartyAccount,
+					variableSymbol: transaction.variableSymbol,
+					constantSymbol: transaction.constantSymbol,
+					specificSymbol: transaction.specificSymbol,
+					bankRef: transaction.bankRef,
+					originalAmountMinor: transaction.originalAmountMinor,
+					originalCurrency: transaction.originalCurrency,
+					accountName: account.name
+				})
+				.from(transaction)
+				.innerJoin(account, eq(account.id, transaction.accountId))
+				.where(inArray(transaction.id, legIds))
+		: [];
+	const legById = new Map(legRows.map((l) => [l.id, l]));
+	const counterpartOf = new Map<string, (typeof legRows)[number]>();
+	for (const pair of proposedPairs) {
+		const out = legById.get(pair.outTransactionId);
+		const inn = legById.get(pair.inTransactionId);
+		if (out && inn) {
+			counterpartOf.set(pair.outTransactionId, inn);
+			counterpartOf.set(pair.inTransactionId, out);
+		}
+	}
 
 	const [
 		queue,
@@ -81,8 +170,16 @@ export const load: PageServerLoad = async ({ url }) => {
 			})
 			.from(importFile)
 			// Acknowledged imports leave this list only — the record, transactions,
-			// stored file and document all stay.
-			.where(isNull(importFile.acknowledgedAt))
+			// stored file and document all stay. So does one that simply got old:
+			// this list is the last few statements and what they were checked
+			// against, not a permanent ledger, and a household that never presses
+			// ✕ should not accumulate one forever.
+			.where(
+				and(
+					isNull(importFile.acknowledgedAt),
+					gte(importFile.uploadedAt, new Date(Date.now() - RECENT_IMPORT_MS))
+				)
+			)
 			.orderBy(desc(importFile.uploadedAt))
 			.limit(8),
 		db
@@ -106,6 +203,15 @@ export const load: PageServerLoad = async ({ url }) => {
 				currency: transaction.currency,
 				counterparty: transaction.counterparty,
 				description: transaction.description,
+				// What the row is identified BY when its name identifies nothing —
+				// a Czech statement names the payment method, not the payee.
+				counterpartyAccount: transaction.counterpartyAccount,
+				variableSymbol: transaction.variableSymbol,
+				constantSymbol: transaction.constantSymbol,
+				specificSymbol: transaction.specificSymbol,
+				bankRef: transaction.bankRef,
+				originalAmountMinor: transaction.originalAmountMinor,
+				originalCurrency: transaction.originalCurrency,
 				reviewReason: transaction.reviewReason,
 				suggestedCategoryId: transaction.suggestedCategoryId,
 				transferPairId: transaction.transferPairId,
@@ -116,9 +222,24 @@ export const load: PageServerLoad = async ({ url }) => {
 			})
 			.from(transaction)
 			.innerJoin(account, eq(transaction.accountId, account.id))
-			.where(eq(transaction.reviewState, 'needs_review'))
-			.orderBy(desc(transaction.bookedOn))
-			.limit(50),
+			.where(
+				and(
+					eq(transaction.reviewState, 'needs_review'),
+					redundantLegIds.length > 0 ? not(inArray(transaction.id, redundantLegIds)) : undefined
+				)
+			)
+			// Newest first WITHIN a lane; which lane comes first is decided below,
+			// in one place, by the same `reviewLane` the colours use.
+			//
+			// No cap here, and that is the point. The list shows fifty, and which
+			// fifty is the whole question: ordered by date alone, a proposal is
+			// only ever as recent as the older of the two statements that made
+			// it, so ours sat in April to August behind a hundred and fourteen
+			// newer rows — past the cap, and the queue is the only place a
+			// proposal can be answered at all. Sorting the fetched page would not
+			// have fixed it; the rows have to be ranked before anything is cut.
+			// The predicate above already narrows this to rows needing review.
+			.orderBy(desc(transaction.bookedOn)),
 		loadCategories(),
 		db
 			.select({
@@ -126,9 +247,11 @@ export const load: PageServerLoad = async ({ url }) => {
 				name: account.name,
 				currency: account.currency,
 				emoji: account.emoji,
+				bank: account.bank,
 				balanceAsOf: account.balanceOn
 			})
 			.from(account)
+			.where(activeAccount())
 			.orderBy(account.createdAt, account.id),
 		loadCategoryGroups(),
 		// For the "whose salary is this?" sub-select on a joint account.
@@ -141,6 +264,163 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	const total = readAgg[0].count;
 	const auto = autoAgg[0].count;
+
+	/**
+	 * The queue in the order it is worked.
+	 *
+	 * `sort` is stable, so ranking by lane alone keeps the newest-first order
+	 * the query already applied within each lane. Ranking BEFORE the page is
+	 * cut is what puts every transfer and every pre-filled row on the first
+	 * page rather than whichever fifty happen to be most recent.
+	 */
+	const ranked = [...reviewRows].sort(
+		(a, b) =>
+			laneRank({
+				isTransfer: proposedLegIds.has(a.id),
+				suggestedCategoryId: a.suggestedCategoryId,
+				reason: a.reviewReason
+			}) -
+			laneRank({
+				isTransfer: proposedLegIds.has(b.id),
+				suggestedCategoryId: b.suggestedCategoryId,
+				reason: b.reviewReason
+			})
+	);
+
+	// Read once for the whole queue rather than per row: the answer to "whose
+	// pay is this" is the same rule the filing action applies, and asking it
+	// fifty times would read the table fifty times.
+	const attributions = await db
+		.select({
+			matchKey: salaryAttribution.matchKey,
+			personId: salaryAttribution.personId,
+			accountId: salaryAttribution.accountId
+		})
+		.from(salaryAttribution);
+	const personName = new Map(people.map((p) => [p.id, p.name]));
+
+	// Every one-sided transfer anybody has already answered. This IS the
+	// memory behind the "moved to" default — no preference is stored, the
+	// past decisions are read back.
+	const pastDestinations = await db
+		.select({
+			accountId: transaction.accountId,
+			counterpartyAccount: transaction.counterpartyAccount,
+			toAccountId: transaction.transferToAccountId,
+			untracked: transaction.transferToUntracked,
+			bookedOn: transaction.bookedOn
+		})
+		.from(transaction)
+		.where(
+			or(isNotNull(transaction.transferToAccountId), eq(transaction.transferToUntracked, true))
+		);
+	const openAccountIds = new Set(accounts.map((a) => a.id));
+
+	/**
+	 * One payee, one card.
+	 *
+	 * Grouped AFTER ranking, so a group sits where its first row ranked, and
+	 * cut on whole groups so a card never says "3 rows" with one missing.
+	 *
+	 * Grouped on the grouping fields alone; only the rows that survive the cut
+	 * are filled in below. Whose pay this is, what it was matched with and
+	 * where it probably went each scan a table, and the queue can hold
+	 * hundreds of rows while the screen shows fifty.
+	 */
+	const shownGroups = takeGroups(
+		groupReviewRows(
+			ranked.map((r) => ({
+				id: r.id,
+				merchant: r.counterparty ?? r.description ?? '—',
+				// What makes two rows the same payee, and the amount compared
+				// exactly rather than as a formatted string.
+				counterparty: r.counterparty,
+				counterpartyAccount: r.counterpartyAccount,
+				amountKey: r.amountMinor.toString(),
+				row: r
+			}))
+		),
+		REVIEW_PAGE
+	);
+
+	const card = (r: (typeof ranked)[number]) => ({
+		id: r.id,
+		counterparty: r.counterparty,
+		counterpartyAccount: r.counterpartyAccount,
+		amountKey: r.amountMinor.toString(),
+		date: r.bookedOn,
+		merchant: r.counterparty ?? r.description ?? '—',
+		detail: identifyingDetail(r, r.counterparty ?? r.description),
+		reason: r.reviewReason ?? 'needs a look',
+		// Whose pay this would be recorded as, if it is filed as salary.
+		// Sent whether or not the answer is known, because the screen has to
+		// say which of the two it is: silently attributing money to a person
+		// puts it in their salary history and their retirement projection,
+		// and the one screen that could have shown it said nothing.
+		salaryFor: (() => {
+			const found = matchAttribution(
+				{
+					accountOwnerPersonId: r.accountOwnerPersonId,
+					counterparty: r.counterparty,
+					accountId: r.accountId
+				},
+				attributions
+			);
+			if (!found.personId) return null;
+			return {
+				personId: found.personId,
+				name: personName.get(found.personId) ?? 'someone',
+				// An owned account answers from its own owner and has nothing
+				// to unlearn; a learned rule does, so the two are offered
+				// differently.
+				learned: r.accountOwnerPersonId === null
+			};
+		})(),
+		amount: `${formatMinor(r.amountMinor, r.currency, { signed: true })} ${displayCurrency(r.currency)}`,
+		negative: r.amountMinor < 0n,
+		isTransfer: proposedLegIds.has(r.id),
+		// What the engine matched this against, so "Own transfer" is a
+		// judgement rather than a leap of faith. Null unless this row is
+		// half of a proposal.
+		pairedWith: (() => {
+			const other = counterpartOf.get(r.id);
+			if (!other) return null;
+			return {
+				date: other.bookedOn,
+				account: other.accountName,
+				amount: `${formatMinor(other.amountMinor, other.currency, { signed: true })} ${displayCurrency(other.currency)}`,
+				negative: other.amountMinor < 0n,
+				merchant: other.counterparty ?? other.description ?? '—',
+				detail: identifyingDetail(other, other.counterparty ?? other.description),
+				// Days apart: the tie-breaker the pairer itself sorts on, so a
+				// match made four days late is visibly a weaker one.
+				daysApart: Math.abs(daysBetween(other.bookedOn, r.bookedOn))
+			};
+		})(),
+		account: r.accountName,
+		// Lets the "moved to my…" picker exclude the account the money left.
+		accountId: r.accountId,
+		// What this row was probably a transfer to, from what the same
+		// destination number — or failing that, this account — was answered
+		// before. Preselected, never submitted on its own: the button is
+		// still a decision somebody makes.
+		recalled: (() => {
+			const found = recallDestination(r, pastDestinations);
+			if (!found) return null;
+			// A remembered account that has since been closed, or is the one
+			// the money left, cannot be offered — the option is not there.
+			if (found.toAccountId !== null) {
+				if (!openAccountIds.has(found.toAccountId)) return null;
+				if (found.toAccountId === r.accountId) return null;
+			}
+			return found;
+		})(),
+		accountIsJoint: r.accountOwnerPersonId === null,
+		// The engine's best guess, pre-selected so the row arrives with a suggestion.
+		suggestedCategoryId: r.suggestedCategoryId
+	});
+	const cardGroups = shownGroups.map((g) => ({ ...g, rows: g.rows.map(({ row }) => card(row)) }));
+	const shownRows = cardGroups.reduce((n, g) => n + g.rows.length, 0);
 
 	// Local calendar date: the UTC day reads a day behind Prague every evening.
 	const todayIso = localToday();
@@ -164,6 +444,7 @@ export const load: PageServerLoad = async ({ url }) => {
 			id: a.id,
 			name: a.name,
 			emoji: a.emoji || '🏦',
+			logo: logoHref(a.bank),
 			to: a.balanceAsOf,
 			days: a.balanceAsOf ? daysBetween(a.balanceAsOf, todayIso) : status.daysSince,
 			cadence: cadenceWord(days),
@@ -202,21 +483,14 @@ export const load: PageServerLoad = async ({ url }) => {
 			autoPct: total > 0 ? Math.round((auto / total) * 100) : null,
 			transfersPaired: pairedAgg[0].count
 		},
-		review: reviewRows.map((r) => ({
-			id: r.id,
-			date: r.bookedOn,
-			merchant: r.counterparty ?? r.description ?? '—',
-			reason: r.reviewReason ?? 'needs a look',
-			amount: `${formatMinor(r.amountMinor, r.currency, { signed: true })} ${displayCurrency(r.currency)}`,
-			negative: r.amountMinor < 0n,
-			isTransfer: proposedLegIds.has(r.id),
-			account: r.accountName,
-			// Lets the "moved to my…" picker exclude the account the money left.
-			accountId: r.accountId,
-			accountIsJoint: r.accountOwnerPersonId === null,
-			// The engine's best guess, pre-selected so the row arrives with a suggestion.
-			suggestedCategoryId: r.suggestedCategoryId
+		// `repeated` is a Set on the server and an array over the wire.
+		reviewGroups: cardGroups.map((g) => ({
+			key: g.key,
+			label: g.label,
+			rows: g.rows,
+			repeated: [...g.repeated]
 		})),
+		reviewCount: shownRows,
 		accounts,
 		/**
 		 * Prefill from the Statements ribbon's link, so filing a gap doesn't mean
@@ -390,10 +664,13 @@ export const actions: Actions = {
 	 *  — the pairing machinery needs both legs, and only one exists here. */
 	markOneSided: async ({ request }) => {
 		const form = await request.formData();
-		const result = await markOneSidedTransfer(
-			asRowId(form.get('id')),
-			asRowId(form.get('toAccountId'))
-		);
+		const to = String(form.get('toAccountId') ?? '');
+		// The picker's escape hatch. Not a row id, so it is matched before
+		// `asRowId` is allowed anywhere near it.
+		const result =
+			to === UNTRACKED_ACCOUNT
+				? await markUntrackedTransfer(asRowId(form.get('id')))
+				: await markOneSidedTransfer(asRowId(form.get('id')), asRowId(to));
 		if (!result.ok) return fail(result.status, { message: result.message });
 		return { ok: true };
 	},

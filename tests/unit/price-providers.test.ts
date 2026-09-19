@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { providerSymbol } from '$lib/server/prices/adapter';
 import { parseYahooChart } from '$lib/server/prices/yahoo';
 import { parseStooqCsv } from '$lib/server/prices/stooq';
+import { withAlias } from '$lib/server/prices/settings';
 
 const YAHOO = JSON.stringify({
 	chart: {
@@ -34,6 +35,19 @@ describe('providerSymbol', () => {
 		expect(providerSymbol('MSFT.US', 'stooq')).toBe('msft.us');
 		expect(providerSymbol('CEZ.CZ', 'stooq')).toBeNull();
 		expect(providerSymbol('NOSUFFIX', 'yahoo')).toBeNull();
+	});
+});
+
+describe('withAlias', () => {
+	it("swaps only the base, keeping the ticker's own market suffix", () => {
+		expect(withAlias('TSLA.DE', { 'TSLA.DE': 'TL0' })).toBe('TL0.DE');
+		expect(providerSymbol(withAlias('TSLA.DE', { 'TSLA.DE': 'TL0' }), 'yahoo')).toBe('TL0.DE');
+		expect(providerSymbol(withAlias('TSLA.DE', { 'TSLA.DE': 'TL0' }), 'stooq')).toBe('tl0.de');
+	});
+
+	it('leaves a ticker with no alias exactly as it is', () => {
+		expect(withAlias('RKLB.US', { 'TSLA.DE': 'TL0' })).toBe('RKLB.US');
+		expect(withAlias('RKLB.US', {})).toBe('RKLB.US');
 	});
 });
 

@@ -21,6 +21,7 @@ const year = (over: Partial<Record<string, unknown>> = {}) =>
 		bonusTotalMinor: '6000000',
 		equityTotalMinor: '0',
 		equityOnPayslipMinor: '0',
+		equityUnvestedMinor: '0',
 		netTotalMinor: '60000000',
 		grossMonths: 12,
 		netMonths: 12,
@@ -97,10 +98,44 @@ describe('equity on the bar', () => {
 	it('draws only the vests a payslip did not already carry, and counts them in the ceiling', () => {
 		const row = year({ equityTotalMinor: '9000000', equityOnPayslipMinor: '3000000' });
 		const segments = salaryBarSegments(row, 'total');
-		expect(segments[0]).toMatchObject({ kind: 'equity', value: 6_000_000 });
+		expect(segments.find((s) => s.kind === 'equity')).toMatchObject({ value: 6_000_000 });
 		expect(ceilingFor([row], 'total')).toBe(
 			BigInt(row.baseTotalMinor) + BigInt(row.bonusTotalMinor) + 6_000_000n
 		);
 		expect(salaryBarSegments(year(), 'total').some((s) => s.kind === 'equity')).toBe(false);
+	});
+
+	it('keeps what is still to vest as its own segment, above the vested one', () => {
+		// Two blocks, not one: the lower half is settled at each vest day and the
+		// upper is a quote at today's close, and a reader has to be able to tell
+		// which part of the bar moves tomorrow.
+		const row = year({
+			equityTotalMinor: '9000000',
+			equityOnPayslipMinor: '0',
+			equityUnvestedMinor: '4000000'
+		});
+		const segments = salaryBarSegments(row, 'total');
+		expect(segments.find((s) => s.kind === 'equity-unvested')).toMatchObject({
+			value: 4_000_000
+		});
+		expect(segments.find((s) => s.kind === 'equity')).toMatchObject({ value: 5_000_000 });
+		// Both halves raise the ceiling, or the tallest bar would overflow.
+		expect(ceilingFor([row], 'total')).toBe(
+			BigInt(row.baseTotalMinor) + BigInt(row.bonusTotalMinor) + 9_000_000n
+		);
+	});
+
+	it('takes what a payslip carried off the vested half, never off what is to come', () => {
+		// Nothing unvested has been through a payslip; it has not happened yet.
+		const row = year({
+			equityTotalMinor: '9000000',
+			equityOnPayslipMinor: '3000000',
+			equityUnvestedMinor: '4000000'
+		});
+		const segments = salaryBarSegments(row, 'total');
+		expect(segments.find((s) => s.kind === 'equity-unvested')).toMatchObject({
+			value: 4_000_000
+		});
+		expect(segments.find((s) => s.kind === 'equity')).toMatchObject({ value: 2_000_000 });
 	});
 });

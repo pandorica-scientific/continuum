@@ -203,8 +203,8 @@ describe('salaryStats with equity', () => {
 			],
 			null,
 			[
-				{ year: 2026, valueMinor: 300_000n, onPayslip: false },
-				{ year: 2026, valueMinor: 50_000n, onPayslip: true }
+				{ year: 2026, valueMinor: 300_000n, onPayslip: false, vested: true },
+				{ year: 2026, valueMinor: 50_000n, onPayslip: true, vested: true }
 			]
 		);
 		expect(years[0].grossTotalMinor).toBe(200_000n);
@@ -213,14 +213,51 @@ describe('salaryStats with equity', () => {
 		expect(years[0].equityOnPayslipMinor).toBe(50_000n);
 	});
 	it('lists a year that has only equity, with no monthly figure', () => {
-		const years = salaryStats([], null, [{ year: 2027, valueMinor: 1n, onPayslip: false }]);
+		const years = salaryStats([], null, [
+			{ year: 2027, valueMinor: 1n, onPayslip: false, vested: true }
+		]);
 		expect(years.map((y) => y.year)).toEqual([2027]);
 		expect(years[0].grossMonths).toBe(0);
 		expect(years[0].avgMonthlyMinor).toBe(0n);
 	});
+	it('keeps the unvested half of a year nameable, and counts it in the total', () => {
+		// Both halves land in the same year (vestValues decides which), but a
+		// screen has to be able to say which part is settled and which is a
+		// quote that moves — so the unvested half is carried separately too.
+		const years = salaryStats([{ periodMonth: '2026-01', grossMinor: 100_000n }], null, [
+			{ year: 2026, valueMinor: 300_000n, onPayslip: false, vested: true },
+			{ year: 2026, valueMinor: 500_000n, onPayslip: false, vested: false }
+		]);
+		expect(years[0].equityTotalMinor).toBe(800_000n);
+		expect(years[0].equityUnvestedMinor).toBe(500_000n);
+	});
+
+	it('counts equity in the change line without letting it touch base or pay', () => {
+		// 2025 pays 100k a month and grants nothing; 2026 pays the same and
+		// grants 1 200 000. Pay did not move, so deltaPct is 0 — but the offer
+		// did, and compDeltaPct is what says so.
+		const months = (year: number) =>
+			Array.from({ length: 12 }, (_, i) => ({
+				periodMonth: `${year}-${String(i + 1).padStart(2, '0')}`,
+				grossMinor: 100_000n
+			}));
+		const years = salaryStats([...months(2025), ...months(2026)], null, [
+			{ year: 2026, valueMinor: 1_200_000n, onPayslip: false, vested: false }
+		]);
+		const [, latest] = years;
+		expect(latest.deltaPct).toBe(0);
+		expect(latest.baseDeltaPct).toBe(0);
+		// 100 000 a month becomes 200 000 with the grant spread over the year.
+		expect(latest.compDeltaPct).toBe(100);
+	});
+
 	it('sums equity across people in the household view', () => {
-		const a = salaryStats([], null, [{ year: 2026, valueMinor: 10n, onPayslip: false }]);
-		const b = salaryStats([], null, [{ year: 2026, valueMinor: 5n, onPayslip: true }]);
+		const a = salaryStats([], null, [
+			{ year: 2026, valueMinor: 10n, onPayslip: false, vested: true }
+		]);
+		const b = salaryStats([], null, [
+			{ year: 2026, valueMinor: 5n, onPayslip: true, vested: true }
+		]);
 		const merged = mergeSalaryYears([a, b]);
 		expect(merged[0].equityTotalMinor).toBe(15n);
 		expect(merged[0].equityOnPayslipMinor).toBe(5n);

@@ -89,7 +89,9 @@ const AMOUNT_RE =
  * in the European form, "45,231.00" and "1,234,567.89" in the English one.
  */
 export function parsePrintedAmount(raw: string, currency: string): bigint | null {
-	const cleaned = raw.replace(/[\s\u00A0\u202F]/g, '');
+	// Apostrophes too: it is what this app prints between thousands, and what
+	// a Swiss payslip prints.
+	const cleaned = raw.replace(/[\s\u00A0\u202F'\u2019]/g, '');
 	const digits = minorDigits(currency);
 
 	const toMinor = (whole: string, fraction?: string): bigint | null => {
@@ -962,14 +964,23 @@ export interface SalaryYear {
 	/** The year's net months added up — what actually landed in the account. */
 	netTotalMinor: bigint;
 	/**
-	 * Shares that vested this year, valued at the close on their vest day.
+	 * Equity AWARDED this year — the whole grant, whenever it pays out.
 	 *
-	 * Beside bonus and outside base on purpose: a grant is compensation, and it
-	 * is not a raise. `baseDeltaPct` never sees it.
+	 * Vested parts at the close on their vest day, parts still to come at the
+	 * latest close. Beside bonus and outside base on purpose: a grant is
+	 * compensation, and it is not a raise. `baseDeltaPct` never sees it.
 	 */
 	equityTotalMinor: bigint;
 	/** The part of that the employer already put through a payslip, so gross carries it once. */
 	equityOnPayslipMinor: bigint;
+	/**
+	 * The part of `equityTotalMinor` that has NOT vested, at the latest close.
+	 *
+	 * Split out so a screen can say which half of the figure is settled and
+	 * which is a quote that moves — the rest of a year never changes again,
+	 * and this does, every time a price is fetched.
+	 */
+	equityUnvestedMinor: bigint;
 	/**
 	 * Whether the net total covers a whole year — a partial year reads as a
 	 * collapse beside a complete one if not marked as such.
@@ -989,6 +1000,15 @@ export interface SalaryYear {
 	avgIsGross: boolean;
 	/** average vs the previous listed year, in percent — like against like */
 	deltaPct: number | null;
+	/**
+	 * The same change with equity counted in, in percent.
+	 *
+	 * `deltaPct` is pay alone. This is the package: pay plus what was awarded
+	 * in shares that year, which is the figure that answers "was I better off
+	 * this year" when a grant is part of the offer. Null on the same terms as
+	 * `deltaPct`, and identical to it in a year with no grant.
+	 */
+	compDeltaPct: number | null;
 }
 
 /** One month's salary, from a payslip, a bank credit, or both. */
@@ -1011,9 +1031,12 @@ export interface SalaryMonth {
  * somebody simply started uploading payslips.
  */
 export interface VestSummary {
+	/** The year the grant was awarded — see `vestValues`. */
 	year: number;
 	valueMinor: bigint;
 	onPayslip: boolean;
+	/** False for a part still to vest, valued at the latest close. */
+	vested: boolean;
 }
 
 export function salaryStats(
@@ -1023,11 +1046,25 @@ export function salaryStats(
 ): SalaryYear[] {
 	const byYear = new Map<
 		number,
-		{ gross: bigint[]; net: bigint[]; bonus: bigint; equity: bigint; equityOnPayslip: bigint }
+		{
+			gross: bigint[];
+			net: bigint[];
+			bonus: bigint;
+			equity: bigint;
+			equityOnPayslip: bigint;
+			equityUnvested: bigint;
+		}
 	>();
 	const bucketFor = (year: number) => {
 		if (!byYear.has(year)) {
-			byYear.set(year, { gross: [], net: [], bonus: 0n, equity: 0n, equityOnPayslip: 0n });
+			byYear.set(year, {
+				gross: [],
+				net: [],
+				bonus: 0n,
+				equity: 0n,
+				equityOnPayslip: 0n,
+				equityUnvested: 0n
+			});
 		}
 		return byYear.get(year)!;
 	};
@@ -1046,12 +1083,14 @@ export function salaryStats(
 		// but means something different to the reader looking at the month.
 		if (month.bonusMinor) bucket.bonus += month.bonusMinor;
 	}
-	// A vest is compensation in the year it lands, whether or not a payslip
-	// for that month exists yet.
+	// A grant is compensation in the year it was AWARDED, whatever its schedule
+	// says and whether or not a payslip for it exists yet — see `vestValues`,
+	// which is what decides the year and the value of each half.
 	for (const vest of vests) {
 		const bucket = bucketFor(vest.year);
 		bucket.equity += vest.valueMinor;
 		if (vest.onPayslip) bucket.equityOnPayslip += vest.valueMinor;
+		if (!vest.vested) bucket.equityUnvested += vest.valueMinor;
 	}
 
 	const mean = (values: bigint[]): bigint | null =>
@@ -1059,7 +1098,7 @@ export function salaryStats(
 
 	const rows: SalaryYear[] = [];
 	for (const year of [...byYear.keys()].sort()) {
-		const { gross, net, bonus, equity, equityOnPayslip } = byYear.get(year)!;
+		const { gross, net, bonus, equity, equityOnPayslip, equityUnvested } = byYear.get(year)!;
 		if (gross.length === 0 && net.length === 0 && equity === 0n) continue;
 
 		const grossTotal = gross.reduce((sum, v) => sum + v, 0n);
@@ -1087,6 +1126,17 @@ export function salaryStats(
 		const baseAvg = gross.length > 0 ? baseTotal / BigInt(gross.length) : null;
 		const prevBaseAvg =
 			prev && prev.grossMonths > 0 ? prev.baseTotalMinor / BigInt(prev.grossMonths) : null;
+		// Pay plus what was awarded in shares, over the same months — the package,
+		// not the salary. Equity already inside gross is not added again.
+		const compAvg = compAverage(avg, monthCount, equity, equityOnPayslip);
+		const prevCompAvg = prev
+			? compAverage(
+					prev.avgMonthlyMinor,
+					prev.months,
+					prev.equityTotalMinor,
+					prev.equityOnPayslipMinor
+				)
+			: null;
 
 		rows.push({
 			year,
@@ -1101,6 +1151,7 @@ export function salaryStats(
 			netTotalMinor: netTotal,
 			equityTotalMinor: equity,
 			equityOnPayslipMinor: equityOnPayslip,
+			equityUnvestedMinor: equityUnvested,
 			netComplete: net.length >= 12,
 			baseDeltaPct:
 				baseAvg !== null && prevBaseAvg !== null && prevBaseAvg > 0n
@@ -1111,10 +1162,34 @@ export function salaryStats(
 			avgIsGross,
 			deltaPct: comparable
 				? Math.round((Number(avg) / Number(prev.avgMonthlyMinor) - 1) * 1000) / 10
-				: null
+				: null,
+			compDeltaPct:
+				comparable && prevCompAvg !== null && prevCompAvg > 0n
+					? Math.round((Number(compAvg) / Number(prevCompAvg) - 1) * 1000) / 10
+					: null
 		});
 	}
 	return rows;
+}
+
+/**
+ * A year's monthly PACKAGE: the pay average plus the equity awarded that year
+ * spread over the same months.
+ *
+ * Spread rather than added whole, because the figure it sits beside is monthly
+ * — adding a year's grant to one month's pay would compare a year against a
+ * month. Equity the employer already put through a payslip is inside the pay
+ * average already and is not added twice.
+ */
+function compAverage(
+	avgMonthlyMinor: bigint,
+	months: number,
+	equityMinor: bigint,
+	equityOnPayslipMinor: bigint
+): bigint {
+	const outside = equityMinor - equityOnPayslipMinor;
+	if (outside <= 0n) return avgMonthlyMinor;
+	return avgMonthlyMinor + outside / BigInt(Math.max(months, 1));
 }
 
 /**
@@ -1145,6 +1220,7 @@ export function mergeSalaryYears(perPerson: SalaryYear[][]): SalaryYear[] {
 		const baseTotal = total((r) => r.baseTotalMinor);
 		const equityTotal = total((r) => r.equityTotalMinor);
 		const equityOnPayslip = total((r) => r.equityOnPayslipMinor);
+		const equityUnvested = total((r) => r.equityUnvestedMinor);
 		const grossMonths = parts.reduce((n, r) => n + r.grossMonths, 0);
 		const netMonths = parts.reduce((n, r) => n + r.netMonths, 0);
 
@@ -1160,6 +1236,16 @@ export function mergeSalaryYears(perPerson: SalaryYear[][]): SalaryYear[] {
 		const baseAvg = grossMonths > 0 ? baseTotal / BigInt(grossMonths) : null;
 		const prevBaseAvg =
 			prev && prev.grossMonths > 0 ? prev.baseTotalMinor / BigInt(prev.grossMonths) : null;
+		const months = avgIsGross ? grossMonths : netMonths;
+		const compAvg = compAverage(avg, months, equityTotal, equityOnPayslip);
+		const prevCompAvg = prev
+			? compAverage(
+					prev.avgMonthlyMinor,
+					prev.months,
+					prev.equityTotalMinor,
+					prev.equityOnPayslipMinor
+				)
+			: null;
 
 		rows.push({
 			year,
@@ -1176,6 +1262,7 @@ export function mergeSalaryYears(perPerson: SalaryYear[][]): SalaryYear[] {
 			netTotalMinor: netTotal,
 			equityTotalMinor: equityTotal,
 			equityOnPayslipMinor: equityOnPayslip,
+			equityUnvestedMinor: equityUnvested,
 			// Complete only when EVERY contributor's year was: one person's partial
 			// year makes the household total partial too, however many months the
 			// other one covered.
@@ -1185,11 +1272,15 @@ export function mergeSalaryYears(perPerson: SalaryYear[][]): SalaryYear[] {
 					? Math.round((Number(baseAvg) / Number(prevBaseAvg) - 1) * 1000) / 10
 					: null,
 			avgMonthlyMinor: avg,
-			months: avgIsGross ? grossMonths : netMonths,
+			months,
 			avgIsGross,
 			deltaPct: comparable
 				? Math.round((Number(avg) / Number(prev.avgMonthlyMinor) - 1) * 1000) / 10
-				: null
+				: null,
+			compDeltaPct:
+				comparable && prevCompAvg !== null && prevCompAvg > 0n
+					? Math.round((Number(compAvg) / Number(prevCompAvg) - 1) * 1000) / 10
+					: null
 		});
 	}
 	return rows;

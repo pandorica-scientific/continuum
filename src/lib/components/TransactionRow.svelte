@@ -9,6 +9,7 @@
 	import Pill from '$lib/components/Pill.svelte';
 	import TagInput from '$lib/components/TagInput.svelte';
 	import { REVIEW_HUES, REVIEW_LABELS } from '$lib/transactions/filter';
+	import { UNTRACKED_ACCOUNT } from '$lib/import/transfer-target';
 
 	interface Group {
 		key: string;
@@ -19,6 +20,7 @@
 	let {
 		row,
 		categories,
+		accounts,
 		loans,
 		knownTags,
 		proofLabel,
@@ -45,6 +47,8 @@
 			categoryToken: string;
 			reviewState: keyof typeof REVIEW_LABELS;
 			account: string;
+			/** The account the money left, excluded from the "moved to" picker. */
+			accountId: string;
 			/** The transaction's own currency code, which loans are matched against. */
 			currency: string;
 			isTransfer: boolean;
@@ -72,6 +76,8 @@
 			ruleHref: string;
 		};
 		categories: Group[];
+		/** Open accounts a transfer could have gone to. */
+		accounts: { id: string; name: string }[];
 		/**
 		 * The loans a debit can be recorded against — empty when the module is off
 		 * or nothing is still owed, which is what hides the action entirely.
@@ -94,6 +100,8 @@
 	let picked = $state<string | null>(null);
 
 	let recording = $state(false);
+	/** Whether the "was this an own transfer?" picker has been asked for. */
+	let moving = $state(false);
 	// Only loans in this debit's own currency — the mutation refuses a
 	// cross-currency payment rather than guessing a rate.
 	const payableLoans = $derived(loans.filter((l) => l.currency === row.currency));
@@ -105,6 +113,7 @@
 			changing = false;
 			picked = null;
 			recording = false;
+			moving = false;
 		}
 	});
 
@@ -291,6 +300,15 @@
 							Record as loan payment
 						</button>
 					{/if}
+					{#if !row.isTransfer && !moving}
+						<!-- The one direction the register could not go. A row filed under
+						     a category may still have been money moving between two of
+						     your own accounts, and answering anything on Import takes the
+						     row out of the only queue that ever asked. -->
+						<button type="button" class="btn" onclick={() => (moving = true)}>
+							Own transfer…
+						</button>
+					{/if}
 					<a class="btn" href={row.ruleHref}>Make a rule</a>
 				</div>
 			</div>
@@ -302,6 +320,54 @@
 					<input type="hidden" name="transactionId" value={row.id} />
 					<span>Loan payment · {row.loanPayment.loanName}</span>
 					<button type="submit" aria-label="Unlink loan payment">✕</button>
+				</form>
+			{/if}
+
+			<!-- The same way back out, for the same reason: marking a row "not
+			     spending" takes it off the Import queue, so the screen that asked
+			     the question can no longer be asked to unask it. A matched pair is
+			     not offered here — that one is evidenced by two statements rather
+			     than asserted, and is undone by rejecting the pair. -->
+			{#if row.transferKind === 'one-sided'}
+				<form method="POST" action="?/clearTransfer" use:enhance class="tag-chip recorded">
+					<input type="hidden" name="transactionId" value={row.id} />
+					<span>Own transfer · not spending</span>
+					<button type="submit" aria-label="No longer a transfer">✕</button>
+				</form>
+			{:else if row.transferKind === 'paired'}
+				<!-- Stated rather than left implicit. A matched pair carries no
+				     category and cannot be given one, so without this the row
+				     showed "Uncategorised" and looked like something still to do.
+				     No ✕: this one is evidenced by two statements rather than
+				     asserted by a person, so it is not undone by one click here. -->
+				<span class="tag-chip recorded matched">Own transfer · matched to its other leg</span>
+			{/if}
+
+			{#if moving}
+				<!-- Asked the same way the Import queue asks it, wording included:
+				     "to" or "from" by the SIGN of the row, so money arriving is not
+				     asked which account it was moved TO while you are looking at the
+				     account it arrived in. -->
+				<form method="POST" action="?/markTransfer" use:enhance class="move-form">
+					<input type="hidden" name="transactionId" value={row.id} />
+					<label class="move-phrase">
+						<span>{row.negative ? 'Moved to' : 'Came from'}</span>
+						<select
+							name="toAccountId"
+							required
+							aria-label={row.negative
+								? 'Which of your accounts it went to'
+								: 'Which of your accounts it came from'}
+						>
+							<option value="" disabled selected>which account?</option>
+							{#each accounts.filter((a) => a.id !== row.accountId) as a (a.id)}
+								<option value={a.id}>{a.name}</option>
+							{/each}
+							<option value={UNTRACKED_ACCOUNT}>another account · closed or not tracked</option>
+						</select>
+					</label>
+					<button type="submit" class="btn">Not spending</button>
+					<button type="button" class="btn" onclick={() => (moving = false)}>Cancel</button>
 				</form>
 			{/if}
 
@@ -567,6 +633,23 @@
 		align-self: flex-start;
 		color: var(--teal);
 		border-color: color-mix(in srgb, var(--teal) 45%, transparent);
+	}
+	/* A statement of fact, not a control: nothing here is pressable. */
+	.matched {
+		padding: 3px 9px;
+	}
+	.move-form {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		flex-wrap: wrap;
+	}
+	.move-phrase {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-3);
+		font-size: var(--text-sm);
+		color: var(--fg3);
 	}
 	.splits {
 		list-style: none;

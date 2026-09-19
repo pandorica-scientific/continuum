@@ -44,16 +44,17 @@ beforeEach(async () => {
 });
 
 describe('lanes', () => {
-	it('seeds an employer with the three lanes an employer has', async () => {
+	it('seeds an employer with the two lanes an employer has', async () => {
 		const org = await addOrganisation(
 			{ shelfId: await incomeTaxShelf(db), name: 'Institute', kind: 'employer' },
 			db
 		);
 		const lanes = await lanesFor(org.id, db);
+		// No yearly lane: an annual return is one per person per year, not one per
+		// employer, so it lives on the tax year card.
 		expect(lanes.map((l) => `${l.label}:${l.cadence}`)).toEqual([
 			'Payslips:monthly',
-			'Once a year · declaration, annual settlement:yearly',
-			'Changes to pay:none'
+			'Contract & HR:none'
 		]);
 	});
 
@@ -81,7 +82,7 @@ describe('lanes', () => {
 			db
 		);
 		await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'institute' }, db);
-		expect(await lanesFor(first.id, db)).toHaveLength(3);
+		expect(await lanesFor(first.id, db)).toHaveLength(2);
 	});
 
 	it('goes with the organisation', async () => {

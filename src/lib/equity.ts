@@ -120,6 +120,8 @@ export interface TrancheFigures {
 	deliveredUnits: number | null;
 	withheldUnits: number | null;
 	soldUnits: number;
+	/** Transferred to a brokerage account that counts them instead. */
+	movedUnits: number;
 	forfeitedOn: string | null;
 	onPayslip: boolean;
 }
@@ -132,10 +134,20 @@ export function trancheState(t: TrancheFigures, today: string): TrancheState {
 	return 'pending';
 }
 
-/** Units the person still holds from this tranche: delivered (or scheduled) less sold. */
+/**
+ * Units the person still holds AS A GRANT: delivered (or scheduled), less what
+ * was sold, less what moved to a broker. Moved units are still owned — they
+ * are simply counted from that broker's report now, and counting them here too
+ * would value the same shares twice.
+ */
 export function heldUnits(t: TrancheFigures): number {
 	if (t.forfeitedOn) return 0;
-	return roundUnits((t.deliveredUnits ?? t.units) - t.soldUnits);
+	return roundUnits((t.deliveredUnits ?? t.units) - t.soldUnits - t.movedUnits);
+}
+
+/** Units at a close, in the close's minor units. */
+export function unitsAtClose(units: number, closeMinor: bigint): bigint {
+	return BigInt(Math.round(Number(closeMinor) * units));
 }
 
 export function grantSummary(

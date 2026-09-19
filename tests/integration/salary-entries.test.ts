@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { rowId } from '../row-id';
-import { document, documentLink, salaryEntry } from '$lib/server/db/schema';
+import { document, documentLink, salaryAttribution, salaryEntry } from '$lib/server/db/schema';
 import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 import { makeAccount, makePerson } from './fixtures';
@@ -211,6 +211,29 @@ describe('whose salary it is', () => {
 		).toEqual({ personId: KSENIYA });
 	});
 
+	it('still honours a rule learned before trailing numbers were stripped from keys', async () => {
+		// Stored by an earlier release, with the bank's constant symbol still on.
+		await testDb.insert(salaryAttribution).values({
+			id: rowId('old-attribution-key'),
+			matchKey: 'msd czech republic s 0138',
+			personId: ROBERT,
+			accountId: null
+		});
+		expect(
+			await attributeSalary(
+				{ accountOwnerPersonId: null, counterparty: 'MSD CZECH REPUBLIC S 0142', accountId: JOINT },
+				testDb
+			)
+		).toEqual({ personId: ROBERT });
+
+		// Learning it again replaces the old spelling rather than leaving it behind.
+		await rememberAttribution({ matchKey: 'MSD CZECH REPUBLIC S 0142', personId: KSENIYA }, testDb);
+		const rows = await testDb.select().from(salaryAttribution);
+		expect(rows.map((row) => [row.matchKey, row.personId])).toEqual([
+			['msd czech republic s', KSENIYA]
+		]);
+	});
+
 	it('has nothing to go on when the statement names no counterparty', async () => {
 		expect(
 			await attributeSalary(
@@ -227,6 +250,28 @@ describe('attributionKey', () => {
 		expect(attributionKey('  ACME   CORP  ')).toBe('acme corp');
 		expect(attributionKey('Česká pošta')).toBe('ceska posta');
 		expect(attributionKey('!!!')).toBe('');
+	});
+
+	it('drops the bank code a statement glues on', () => {
+		// The real case: ČS printed "MSD CZECH REPUBLIC S" one month and
+		// "MSD CZECH REPUBLIC S 0138" the next — 0138 being a constant symbol,
+		// not part of anybody's name. Kept, one employer grows a second key and
+		// the household is asked whose pay it is all over again.
+		expect(attributionKey('MSD CZECH REPUBLIC S 0138')).toBe('msd czech republic s');
+		expect(attributionKey('MSD CZECH REPUBLIC S')).toBe('msd czech republic s');
+		// The period a description carries goes the same way.
+		expect(attributionKey('ACME Corp s.r.o. 07/2026')).toBe('acme corp s r o');
+	});
+
+	it('keeps a number that is part of the name rather than trailing it', () => {
+		expect(attributionKey('Sodexo 24 Prague')).toBe('sodexo 24 prague');
+	});
+
+	it('does not reduce an all-numeric name to nothing it could match on', () => {
+		// Every token is a trailing number, so the key empties — which reads as
+		// "nothing to remember this by" and asks, rather than attaching itself
+		// to whatever else happens to be blank.
+		expect(attributionKey('0138')).toBe('');
 	});
 });
 

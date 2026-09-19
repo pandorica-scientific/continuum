@@ -97,6 +97,30 @@ describe('salaryYearGrossTotalConverted', () => {
 		expect(seen).toEqual(['EUR|CZK|2025-01-01', 'CZK|CZK|2025-02-01']);
 	});
 
+	it('leaves a year already in the asked-for currency exactly as the payslips said it', () => {
+		// The reason the prefill is computed per currency rather than once in the
+		// household's own. A year of Czech payslips read in CZK must be the sum
+		// of what the slips said — not a round trip out to EUR and back, which
+		// lands a few haléř away from the figure the tax office expects.
+		const czk = [
+			{ personId: 'p1', periodMonth: '2025-01', grossMinor: 9_333_333n, currency: 'CZK' },
+			{ personId: 'p1', periodMonth: '2025-02', grossMinor: 9_333_337n, currency: 'CZK' }
+		];
+		// A converter that would lose precision if it were ever asked.
+		const lossy = (amount: bigint, from: string, to: string) =>
+			from === to ? amount : BigInt(Math.round(Number(amount) * 0.0411)) * 24n;
+
+		expect(salaryYearGrossTotalConverted(czk, 'p1', 2025, 'CZK', lossy)).toEqual({
+			totalMinor: 18_666_670n,
+			months: 2
+		});
+		// Read in another currency it does convert, and the difference is real —
+		// which is why the currency asked for has to be the one the form shows.
+		expect(salaryYearGrossTotalConverted(czk, 'p1', 2025, 'EUR', lossy).totalMinor).not.toBe(
+			18_666_670n
+		);
+	});
+
 	it('never asks the converter about a month with no gross', () => {
 		const seen: string[] = [];
 		const result = salaryYearGrossTotalConverted(

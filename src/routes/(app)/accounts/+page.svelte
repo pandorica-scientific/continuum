@@ -88,9 +88,19 @@
 
 		{#each data.accounts as a (a.id)}
 			<article class="acct" class:open={editing === a.id}>
-				<span class="acct-tile" style:background="color-mix(in srgb, {a.color} 18%, transparent)"
-					>{a.emoji}</span
+				<span
+					class="acct-tile"
+					class:has-logo={a.logo}
+					style:background={a.logo ? null : `color-mix(in srgb, ${a.color} 18%, transparent)`}
 				>
+					{#if a.logo}
+						<!-- Decorative: the account's name is right beside it, so a
+						     screen reader announcing the bank twice helps nobody. -->
+						<img src={a.logo} alt="" class="acct-logo" loading="lazy" />
+					{:else}
+						{a.emoji}
+					{/if}
+				</span>
 				<span class="acct-mid">
 					<span class="name-line">
 						<span class="name">{a.name}</span>
@@ -104,7 +114,14 @@
 							✎
 						</button>
 					</span>
-					<span class="meta">{a.meta}</span>
+					<span class="meta"
+						>{#if a.archived}<span class="closed-tag">Closed</span> ·
+						{/if}{a.meta}{#if a.balanceAge}<span
+								class="stale"
+								title="The figure beside this is the closing balance of that statement — later movements are not in it yet"
+								>&nbsp;· ⚠ {a.balanceAge}</span
+							>{/if}</span
+					>
 					{#if a.share !== null}
 						<span class="share">
 							<span class="bar"
@@ -174,6 +191,54 @@
 							<button type="submit" class="btn btn-primary">Save</button>
 						</div>
 					</form>
+
+					<!-- Closing and deleting are different acts, and only one is ever
+					     offered. An account that has carried a transaction can only be
+					     closed: `transaction.account_id` cascades, so deleting it would
+					     take that history with it. One that never carried anything was a
+					     mistake and can simply go. -->
+					<div class="danger-row">
+						{#if a.archived}
+							<div class="danger-choice">
+								<form method="POST" action="?/unarchiveAccount" use:enhance>
+									<input type="hidden" name="id" value={a.id} />
+									<button type="submit" class="btn">Reopen</button>
+								</form>
+								<span class="quiet">Closed — its rows stay in the ledger.</span>
+							</div>
+						{:else}
+							<div class="danger-choice">
+								<form method="POST" action="?/archiveAccount" use:enhance>
+									<input type="hidden" name="id" value={a.id} />
+									<button type="submit" class="btn">Close account</button>
+								</form>
+								<span class="quiet">
+									<!-- An account that never carried a row has no history to keep,
+									     so "keeps its 0 transactions" would be a promise about
+									     nothing. It is still closeable — a spare account opened for
+									     next year is not a mistake — but for a different reason. -->
+									{#if a.transactions === 0}
+										Stops counting toward what you have, and stops being offered as somewhere to
+										import to.
+									{:else}
+										Keeps {a.transactions === 1
+											? 'its 1 transaction'
+											: `all ${a.transactions} of its transactions`} and stops counting toward what you
+										have.
+									{/if}
+								</span>
+							</div>
+						{/if}
+						{#if a.deletable}
+							<div class="danger-choice">
+								<form method="POST" action="?/deleteAccount" use:enhance>
+									<input type="hidden" name="id" value={a.id} />
+									<button type="submit" class="btn danger">Delete</button>
+								</form>
+								<span class="quiet">Never held anything, so there is nothing to keep.</span>
+							</div>
+						{/if}
+					</div>
 					<DocumentsCard
 						bare
 						heading="Statements and reports"
@@ -370,6 +435,21 @@
 		font-size: var(--text-2xl);
 		line-height: 1;
 	}
+	/* A logo sits on light, whatever the theme. Half these marks are black on
+	   transparent — Revolut's and N26's among them — and on the dark tile the
+	   bank's own colour gives them, they vanish completely. A near-white chip is
+	   what the marks were drawn for and is what every banking app uses. */
+	.acct-tile.has-logo {
+		background: #f4f5f7;
+	}
+	/* Whole rather than cropped: a bank mark is a fixed shape and squaring one
+	   off changes what it is. Most are wide wordmarks, so the box is as wide as
+	   the tile allows and the height follows. */
+	.acct-logo {
+		width: 36px;
+		height: 36px;
+		object-fit: contain;
+	}
 	.acct-mid {
 		display: flex;
 		flex-direction: column;
@@ -408,6 +488,54 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	/* Amber, not red: the figure is right, it is simply true for an earlier
+	   day. Nothing is broken and nothing needs fixing but an upload. */
+	.stale {
+		color: var(--orange);
+	}
+	.closed-tag {
+		color: var(--fg3);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		font-size: var(--text-xs);
+	}
+	/* Its own row under the edit form rather than beside Save: closing or
+	   deleting an account is not a field being corrected. */
+	.danger-row {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+		margin-top: var(--space-5);
+		padding-top: var(--space-5);
+		border-top: 1px solid var(--bd1);
+	}
+	/* Each choice keeps its own reason beside it. Laid out as a grid with a
+	   fixed first column so the two buttons line up and each caption starts
+	   where the other does — flex alone let a long caption push its button
+	   wide and drop the next one onto a line of its own, away from the button
+	   it explains. */
+	.danger-choice {
+		display: grid;
+		grid-template-columns: 8.5rem 1fr;
+		align-items: center;
+		gap: var(--space-4);
+	}
+	.danger-choice .btn {
+		width: 100%;
+	}
+	.danger-row .quiet {
+		font-size: var(--text-sm);
+	}
+	@media (max-width: 40rem) {
+		/* No room for two columns: the caption goes under its button. */
+		.danger-choice {
+			grid-template-columns: 1fr;
+			gap: var(--space-2);
+		}
+	}
+	.btn.danger {
+		color: var(--red);
 	}
 	/* Same figure as the pie wedge, repeated here so it reads without looking at the chart. */
 	.share {
@@ -565,11 +693,6 @@
 	.t-route {
 		color: var(--fg2);
 	}
-	@media (max-width: 720px) {
-		.add-form {
-			grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-		}
-	}
 	.edit-form {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -599,7 +722,11 @@
 	}
 	.add-form {
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) auto auto auto minmax(0, 1fr) auto;
+		/* auto-fit + a floor, not a fixed auto/1fr mix: a fixed-width column
+		   refuses to shrink, so once the row runs out of room the flexible
+		   columns get squeezed toward zero instead — this wraps every field
+		   onto its own line before any of them get that small. */
+		grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 		gap: var(--space-4);
 		padding-top: 11px;
 		border-top: 1px solid var(--bd);

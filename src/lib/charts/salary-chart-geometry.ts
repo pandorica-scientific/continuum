@@ -15,10 +15,13 @@ export interface SerialisedSalaryYear {
 	netTotalMinor: string;
 	equityTotalMinor: string;
 	equityOnPayslipMinor: string;
+	equityUnvestedMinor: string;
 	grossMonths: number;
 	netMonths: number;
 	netComplete: boolean;
 	deltaPct: number | null;
+	/** The same change with equity counted in — the package, not the pay. */
+	compDeltaPct: number | null;
 	baseDeltaPct: number | null;
 }
 
@@ -32,20 +35,26 @@ export interface SerialisedSalaryYear {
 export function barValues(
 	row: SerialisedSalaryYear,
 	mode: SalaryMode
-): { base: bigint; bonus: bigint; equity: bigint; net: bigint | null } {
+): { base: bigint; bonus: bigint; equity: bigint; equityUnvested: bigint; net: bigint | null } {
 	const base = BigInt(row.baseTotalMinor);
 	const bonus = BigInt(row.bonusTotalMinor);
 	const net = BigInt(row.netTotalMinor);
-	// Only the vests not already inside gross, to avoid drawing that money twice.
-	const equity = BigInt(row.equityTotalMinor) - BigInt(row.equityOnPayslipMinor);
+	// Only the part not already inside gross, to avoid drawing that money twice.
+	// What the employer put through a payslip is necessarily vested, so it comes
+	// off the vested half and never off what is still to come.
+	const unvested = BigInt(row.equityUnvestedMinor);
+	const equity = BigInt(row.equityTotalMinor) - BigInt(row.equityOnPayslipMinor) - unvested;
 
-	if (mode === 'total') return { base, bonus, equity, net: row.netMonths > 0 ? net : null };
+	if (mode === 'total') {
+		return { base, bonus, equity, equityUnvested: unvested, net: row.netMonths > 0 ? net : null };
+	}
 
 	const months = BigInt(Math.max(row.grossMonths, 1));
 	return {
 		base: base / months,
 		bonus: bonus / months,
 		equity: equity / months,
+		equityUnvested: unvested / months,
 		net: row.netAvgMinor === null ? null : BigInt(row.netAvgMinor)
 	};
 }
@@ -53,8 +62,8 @@ export function barValues(
 /** The tallest bar in the set, for scaling every year against one ceiling. */
 export function ceilingFor(rows: SerialisedSalaryYear[], mode: SalaryMode): bigint {
 	return rows.reduce((most, row) => {
-		const { base, bonus, equity } = barValues(row, mode);
-		const total = base + bonus + equity;
+		const { base, bonus, equity, equityUnvested } = barValues(row, mode);
+		const total = base + bonus + equity + equityUnvested;
 		return total > most ? total : most;
 	}, 0n);
 }
@@ -69,9 +78,22 @@ export function ceilingFor(rows: SerialisedSalaryYear[], mode: SalaryMode): bigi
 export function salaryBarSegments(
 	row: SerialisedSalaryYear,
 	mode: SalaryMode
-): { value: number; fill: string; stroke: string; kind: 'base' | 'bonus' | 'equity' }[] {
+): {
+	value: number;
+	fill: string;
+	stroke: string;
+	kind: 'base' | 'bonus' | 'equity' | 'equity-unvested';
+}[] {
 	const v = barValues(row, mode);
 	return [
+		{
+			// Topmost, and drawn faintest: this is the half that has not happened
+			// yet and reprices every time a close is fetched.
+			kind: 'equity-unvested' as const,
+			value: Number(v.equityUnvested),
+			fill: 'url(#salary-equity-unvested)',
+			stroke: 'var(--purple)'
+		},
 		{
 			kind: 'equity' as const,
 			value: Number(v.equity),

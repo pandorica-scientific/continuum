@@ -34,7 +34,15 @@ export interface ParsedRow {
 	valueDate?: string;
 	/** Minor units of `currency`; negative = money out. Gross of any fee. */
 	amountMinor: bigint;
-	/** Separate bank fee on this movement, positive minor units. */
+	/**
+	 * Separate bank fee on this movement, in minor units, SIGNED.
+	 *
+	 * Positive is the ordinary case: a fee charged on top, so the balance
+	 * moves by `amountMinor - feeMinor` -- the arithmetic every reader of this
+	 * field applies. Negative is a fee handed BACK, which the same subtraction
+	 * adds to the balance; Revolut writes one on the refund of a payment that
+	 * was charged a fee.
+	 */
 	feeMinor?: bigint;
 	currency: string;
 	/** Original amount for FX card payments billed in the account currency. */

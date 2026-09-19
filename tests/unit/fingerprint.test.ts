@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fingerprintAll } from '$lib/server/import/fingerprint';
+import { fingerprintAll, keyWithoutCounterparty } from '$lib/server/import/fingerprint';
 import type { ParsedRow } from '$lib/server/import/types';
 
 // The occurrence counter is the hardest-to-reason-about mechanism in dedup —
@@ -74,5 +74,27 @@ describe('fingerprint occurrence counter', () => {
 			row({ balanceAfterMinor: 97000n })
 		]);
 		expect(new Set(prints).size).toBe(2);
+	});
+});
+
+describe('keyWithoutCounterparty', () => {
+	it('is the same for two spellings of one row and differs on any fact that is not the name', () => {
+		const stored = {
+			bookedOn: '2026-07-14',
+			amountMinor: -3000n,
+			currency: 'CZK',
+			counterpartyAccount: '19-2000145399/0800'
+		};
+		// The reader renamed the payee; the row is still the row.
+		expect(keyWithoutCounterparty(stored)).toBe(keyWithoutCounterparty({ ...stored }));
+		expect(keyWithoutCounterparty(stored)).not.toBe(
+			keyWithoutCounterparty({ ...stored, amountMinor: -3001n })
+		);
+		expect(keyWithoutCounterparty(stored)).not.toBe(
+			keyWithoutCounterparty({ ...stored, counterpartyAccount: null })
+		);
+		expect(keyWithoutCounterparty(stored)).not.toBe(
+			keyWithoutCounterparty({ ...stored, balanceAfterMinor: 100n })
+		);
 	});
 });

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-import { equityGrantRows, heldEquityValues } from '$lib/invest/equity-rows';
+import { equityGrantRows, grantEquityValues } from '$lib/invest/equity-rows';
 
 describe('equityGrantRows', () => {
 	const grant = {
@@ -22,6 +22,7 @@ describe('equityGrantRows', () => {
 			deliveredUnits: 62,
 			withheldUnits: 38,
 			soldUnits: 0,
+			movedUnits: 0,
 			forfeitedOn: null,
 			onPayslip: true
 		},
@@ -33,6 +34,7 @@ describe('equityGrantRows', () => {
 			deliveredUnits: null,
 			withheldUnits: null,
 			soldUnits: 0,
+			movedUnits: 0,
 			forfeitedOn: null,
 			onPayslip: false
 		}
@@ -53,9 +55,9 @@ describe('equityGrantRows', () => {
 		expect(row.heldUnits).toBe('62');
 		expect(row.pendingUnits).toBe('100');
 		expect(row.nextVest).toBe('2027-03-01 · 100 units');
-		expect(row.vestedValue).toBe('8\u202f822.60');
-		expect(row.pendingValue).toBe('14\u202f230');
-		expect(row.vestedBase).toBe('202\u202f919.80');
+		expect(row.vestedValue).toBe('8\u0027822.60');
+		expect(row.pendingValue).toBe('14\u0027230');
+		expect(row.vestedBase).toBe('202\u0027919.80');
 		expect(row.priceDay).toBe('2026-09-12');
 		expect(row.priceStale).toBe(false);
 		expect(row.tranches[0]).toMatchObject({
@@ -99,29 +101,74 @@ describe('equityGrantRows', () => {
 	});
 });
 
-describe('heldEquityValues', () => {
-	it('values held units per priced grant in the price currency, and skips unpriced grants', () => {
-		const tranches = [
-			{
-				id: 'a',
-				vestsOn: '2026-03-01',
-				units: 100,
-				settledOn: '2026-03-01',
-				deliveredUnits: 62,
-				withheldUnits: 38,
-				soldUnits: 12,
-				forfeitedOn: null,
-				onPayslip: false
-			}
-		];
-		const out = heldEquityValues(
-			[
-				{ grant: { ticker: 'ACME.US' }, tranches },
-				{ grant: { ticker: 'NOVA.US' }, tranches }
-			],
-			new Map([['ACME.US', { day: '2026-09-12', closeMinor: 14230n, currency: 'USD' }]]),
+describe('grantEquityValues', () => {
+	const vested = {
+		id: 'a',
+		vestsOn: '2026-03-01',
+		units: 100,
+		settledOn: '2026-03-01',
+		deliveredUnits: 62,
+		withheldUnits: 38,
+		soldUnits: 12,
+		movedUnits: 0,
+		forfeitedOn: null,
+		onPayslip: false
+	};
+	const pending = {
+		id: 'b',
+		vestsOn: '2027-03-01',
+		units: 40,
+		settledOn: null,
+		deliveredUnits: null,
+		withheldUnits: null,
+		soldUnits: 0,
+		movedUnits: 0,
+		forfeitedOn: null,
+		onPayslip: false
+	};
+	const price = new Map([['ACME.US', { day: '2026-09-12', closeMinor: 14230n, currency: 'USD' }]]);
+
+	it('counts what has not vested as well as what has', () => {
+		// The headline beside the portfolio asks "what is all of this worth",
+		// which is not the same question as "what could be sold today".
+		const out = grantEquityValues(
+			[{ grant: { ticker: 'ACME.US' }, tranches: [vested, pending] }],
+			price,
 			'2026-09-15'
 		);
-		expect(out).toEqual([{ valueMinor: 50n * 14230n, currency: 'USD', day: '2026-09-12' }]);
+		// 50 still held of the vested tranche, plus 40 not yet vested.
+		expect(out).toEqual([
+			{ valueMinor: 90n * 14230n, currency: 'USD', day: '2026-09-12', units: 90 }
+		]);
+	});
+
+	it('values a grant with nothing vested at all, which is the case that was reading as zero', () => {
+		const out = grantEquityValues(
+			[{ grant: { ticker: 'ACME.US' }, tranches: [pending] }],
+			price,
+			'2026-09-15'
+		);
+		expect(out[0]).toMatchObject({ units: 40, valueMinor: 40n * 14230n });
+	});
+
+	it('leaves out units already moved to the broker, which the portfolio holds', () => {
+		// Counting them here and in the portfolio total would report the same
+		// shares twice in one figure.
+		const moved = { ...vested, soldUnits: 0, movedUnits: 62 };
+		const out = grantEquityValues(
+			[{ grant: { ticker: 'ACME.US' }, tranches: [moved] }],
+			price,
+			'2026-09-15'
+		);
+		expect(out).toEqual([]);
+	});
+
+	it('skips a grant no feed has priced rather than counting it at nothing', () => {
+		const out = grantEquityValues(
+			[{ grant: { ticker: 'NOVA.US' }, tranches: [vested, pending] }],
+			price,
+			'2026-09-15'
+		);
+		expect(out).toEqual([]);
 	});
 });

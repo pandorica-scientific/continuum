@@ -545,12 +545,26 @@ export function salaryMonths(personId: string, handle: Db = db) {
  * every payday. Letters and digits only, lowercased.
  */
 export function attributionKey(counterparty: string): string {
-	return counterparty
+	const words = counterparty
 		.toLowerCase()
 		.normalize('NFD')
 		.replace(/[̀-ͯ]/g, '')
 		.replace(/[^a-z0-9]+/g, ' ')
-		.trim();
+		.trim()
+		.split(' ')
+		.filter(Boolean);
+
+	// A trailing run of bare numbers is never part of an employer's name: it is
+	// the constant symbol the bank glued on ("MSD CZECH REPUBLIC S 0138"), or
+	// the period the description carries ("… 07/2026"). Left in, one employer
+	// grows a new key every time the bank changes its mind, and the household is
+	// asked whose pay it is all over again.
+	//
+	// Only from the END, so "Sodexo 24 Prague" keeps its number. A name that is
+	// nothing BUT numbers empties, which is the honest result: there is nothing
+	// there to recognise an employer by next month.
+	while (words.length > 0 && /^\d+$/.test(words[words.length - 1])) words.pop();
+	return words.join(' ');
 }
 
 /**
@@ -568,19 +582,42 @@ export async function attributeSalary(
 ): Promise<{ personId: string } | { personId: null; askFor: string | null }> {
 	if (input.accountOwnerPersonId) return { personId: input.accountOwnerPersonId };
 
+	const all = await handle.select().from(salaryAttribution);
+	return matchAttribution(input, all);
+}
+
+/** One learned attribution, as much of it as matching needs. */
+export interface LearnedAttribution {
+	matchKey: string;
+	personId: string;
+	accountId: string | null;
+}
+
+/**
+ * The same rule without the query, so a screen asking it about fifty rows
+ * reads the table once instead of fifty times — and asks exactly the question
+ * `attributeSalary` asks, rather than a second spelling of it.
+ */
+export function matchAttribution(
+	input: { accountOwnerPersonId: string | null; counterparty: string | null; accountId: string },
+	all: LearnedAttribution[]
+): { personId: string } | { personId: null; askFor: string | null } {
+	if (input.accountOwnerPersonId) return { personId: input.accountOwnerPersonId };
+
 	const key = input.counterparty ? attributionKey(input.counterparty) : '';
 	if (!key) return { personId: null, askFor: null };
 
-	// Every attribution, matched in code rather than in SQL: a stored key matches
-	// when it is a PREFIX of what arrived, because a description carries the
-	// period — "ACME CORP S.R.O. 07/2026" one month, 08/2026 the next. Exact
-	// equality would ask the same question every payday, which is the thing this
-	// exists to stop.
+	// A key learned before trailing numbers were stripped still carries them.
+	// Folding it again is the same rule applied once more, and it is what
+	// keeps a rule learned last year matching this year's payslip.
+	const folded = all.map((row) => ({ ...row, matchKey: attributionKey(row.matchKey) }));
+
+	// A stored key matches when it is a PREFIX of what arrived: even with the
+	// trailing code stripped, a description can carry more than the name.
 	//
 	// A minimum length keeps that from becoming a wildcard: a two-letter key
 	// would attach itself to half the ledger.
-	const all = await handle.select().from(salaryAttribution);
-	const learned = all.filter(
+	const learned = folded.filter(
 		(row) =>
 			row.matchKey.length >= MIN_KEY && (key === row.matchKey || key.startsWith(row.matchKey + ' '))
 	);
@@ -602,7 +639,18 @@ export async function rememberAttribution(
 ): Promise<void> {
 	const key = attributionKey(input.matchKey);
 	if (!key) return;
-	await handle.delete(salaryAttribution).where(eq(salaryAttribution.matchKey, key));
+	// Every spelling of this key goes, including one learned before trailing
+	// numbers were stripped: deleted by the new spelling alone, the old row
+	// would stay behind for good.
+	const stale = (
+		await handle
+			.select({ id: salaryAttribution.id, matchKey: salaryAttribution.matchKey })
+			.from(salaryAttribution)
+	)
+		.filter((row) => attributionKey(row.matchKey) === key)
+		.map((row) => row.id);
+	if (stale.length > 0)
+		await handle.delete(salaryAttribution).where(inArray(salaryAttribution.id, stale));
 	await handle.insert(salaryAttribution).values({
 		id: uuidv7(),
 		matchKey: key,

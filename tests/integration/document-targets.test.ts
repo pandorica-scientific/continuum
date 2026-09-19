@@ -334,7 +334,9 @@ describe('naming a row of every kind', () => {
 		expect(row?.name).toContain('2026-03-04');
 		// The amount is formatted through the currency's own minor units, so the
 		// separators are whatever `formatMinor` writes.
-		expect(row?.meta?.replace(/\s/g, '')).toContain('1234.50');
+		// Separator-agnostic on purpose: this asserts the amount is THERE, not how
+		// thousands are grouped, so it strips the grouping as well as the spaces.
+		expect(row?.meta?.replace(/[\s\u0027]/g, '')).toContain('1234.50');
 		expect(row?.meta).toContain(displayCurrency('CZK'));
 	});
 

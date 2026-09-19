@@ -32,6 +32,8 @@ export async function createCard(
 		emoji?: string;
 		/** Organisations only; ignored on a subject shelf. */
 		kind?: EnumValue<'organisation.kind'>;
+		/** Organisations only: which country it is in. */
+		country?: string | null;
 	},
 	handle: Queryable = db
 ): Promise<NewCard> {
@@ -45,7 +47,13 @@ export async function createCard(
 		// monthly and a tax office does not, and the shelf cannot know which this
 		// is. `addOrganisation` does the seeding, and is idempotent on the name.
 		const org = await addOrganisation(
-			{ name: input.name, shelfId: home.id, kind: input.kind, emoji: input.emoji },
+			{
+				name: input.name,
+				shelfId: home.id,
+				kind: input.kind,
+				emoji: input.emoji,
+				country: input.country
+			},
 			handle
 		);
 		return { id: org.id, unit: 'organisation' };

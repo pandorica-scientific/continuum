@@ -14,9 +14,10 @@ import {
 	securityPrice
 } from '$lib/server/db/schema';
 import { grantsWithTranches, normaliseTicker } from '$lib/server/equity';
-import { latestPrices, priceHistory, pricedTickers } from '$lib/server/prices';
-import { getPriceSettings } from '$lib/server/prices/settings';
-import { equityGrantRows, heldEquityValues } from '$lib/invest/equity-rows';
+import { latestPrices, priceHistory, pricedTickers, refreshPrices } from '$lib/server/prices';
+import { getPriceSettings, setPriceAlias } from '$lib/server/prices/settings';
+import { equityGrantRows, grantEquityValues } from '$lib/invest/equity-rows';
+import { grantSummary } from '$lib/equity';
 import { brokerReports, uploadBrokerReport } from '$lib/server/invest/reports';
 import { documentsAbout } from '$lib/server/documents/targets';
 import { annualisedReturn, buildSeries, markedTail } from '$lib/server/invest/series';
@@ -143,7 +144,23 @@ export const load: PageServerLoad = async () => {
 	// After the last report, units × fetched closes, dashed on the chart.
 	const today = new Date().toISOString().slice(0, 10);
 	let markedAsOf: string | null = null;
+	// A holding no feed has ever priced (the broker's own ticker for it is not
+	// what a feed calls the same security — Tesla on Xetra trades as "TL0",
+	// not "TSLA") keeps the dashed tail from drawing at all, silently, since
+	// `markedTail` needs every holding priced before it will draw one day.
+	// Named here rather than left a console warning, so there is a way to
+	// answer it from the screen the chart is already on.
+	let unpricedTickers: { ticker: string; currency: string }[] = [];
 	if (latestSnapshot && holdings.length > 0) {
+		// `priceHistory` below is deliberately floored at the last report's day —
+		// it feeds the tail, which only ever draws AFTER that day. "Has this
+		// ticker EVER been priced" is a different question and needs the
+		// unfloored answer, or a ticker fetched only before the last report
+		// (the ordinary case) would misread as never priced at all.
+		const latest = await latestPrices(holdings.map((h) => h.ticker));
+		unpricedTickers = holdings
+			.filter((h) => !latest.has(h.ticker))
+			.map((h) => ({ ticker: h.ticker, currency: h.currency }));
 		const history = await priceHistory(
 			holdings.map((h) => h.ticker),
 			latestSnapshot.day
@@ -160,6 +177,7 @@ export const load: PageServerLoad = async () => {
 		);
 		// One point per month, the month's last marked day, appended or replacing
 		// the reconstructed cost point buildSeries wrote for the same month.
+		let markedValue: number | null = null;
 		for (const point of tail) {
 			const month = point.day.slice(0, 7);
 			const value = toMajor(point.valueMinor, accountCurrency);
@@ -179,7 +197,31 @@ export const load: PageServerLoad = async () => {
 					isMarked: true
 				});
 			}
+			markedValue = value;
 			markedAsOf = point.day;
+		}
+
+		// The tail can fall entirely inside the month the last report landed in,
+		// which is the ORDINARY case for a report uploaded this month: the loop
+		// above then finds a point that IS a snapshot, leaves it alone, and the
+		// dashed tail has a single point and draws nothing — while the legend
+		// goes on promising one, because `markedAsOf` was set anyway.
+		//
+		// Monthly points cannot say "later in the same month", so the marked
+		// value is appended as its own final point. Without it the tail cannot
+		// appear until the calendar turns over, which is exactly when a fresh
+		// report makes it least interesting.
+		if (markedValue !== null && !series.some((p) => p.isMarked)) {
+			const last = series[series.length - 1];
+			series.push({
+				month: last.month,
+				moneyIn: last.moneyIn,
+				bench5: last.bench5,
+				bench10: last.bench10,
+				actual: markedValue,
+				isSnapshot: false,
+				isMarked: true
+			});
 		}
 	}
 
@@ -223,10 +265,18 @@ export const load: PageServerLoad = async () => {
 	// A second figure beside Portfolio, not inside it: money in, gain and the
 	// annualised return are measured against what was paid into the broker, and
 	// granted shares were not paid for.
-	const heldEquity = heldEquityValues(grantRows, grantPrices, today);
+	//
+	// Every grant, vested or not, because that is the question this tile asks —
+	// "what is all of this worth". Counting only what had vested made a grant
+	// whose first tranche is a year out read as nothing at all. Units already
+	// delivered and moved to the broker are excluded by `grantEquityValues`, so
+	// they are not counted here and in the portfolio both.
+	const heldEquity = grantEquityValues(grantRows, grantPrices, today);
 	let equityInAccount = 0n;
 	let equityUnconverted = 0;
+	let equityUnits = 0;
 	for (const e of heldEquity) {
+		equityUnits += e.units;
 		const converted = convertMinorSync(rates, e.valueMinor, e.currency, accountCurrency, e.day);
 		if (converted === null) equityUnconverted += 1;
 		else equityInAccount += converted;
@@ -235,9 +285,35 @@ export const load: PageServerLoad = async () => {
 		heldEquity.length > 0 && equityUnconverted === 0
 			? {
 					value: formatMinor(portfolioValue + equityInAccount, accountCurrency),
-					equity: formatMinor(equityInAccount, accountCurrency)
+					equity: formatMinor(equityInAccount, accountCurrency),
+					units: equityUnits
 				}
 			: null;
+
+	/**
+	 * Why the tile has no figure, when it has none.
+	 *
+	 * `grantEquityValues` skips a grant for two unrelated reasons — no close for
+	 * its ticker, and nothing left held or still to vest — and the tile used to
+	 * conflate both into "no price for the grant yet". A grant that has been
+	 * fully sold or moved to a broker is not waiting on a price; saying so sends
+	 * somebody looking for a broken feed that is working.
+	 */
+	const equityAbsence: 'unpriced' | 'nothing-left' | 'unconverted' | null =
+		withEquity !== null || grantRows.length === 0
+			? null
+			: grantRows.every((g) => !grantPrices.has(g.grant.ticker))
+				? 'unpriced'
+				: equityUnconverted > 0
+					? 'unconverted'
+					: 'nothing-left';
+
+	/** The soonest day any grant has shares coming, for the tile to name. */
+	const nextVest =
+		grantRows
+			.map((g) => grantSummary(g.tranches, today).nextVest?.vestsOn ?? null)
+			.filter((day): day is string => day !== null)
+			.sort()[0] ?? null;
 
 	// Shared by the pie and the table: the swatch on a row IS its wedge.
 	const colorFor = seriesFor([
@@ -299,11 +375,19 @@ export const load: PageServerLoad = async () => {
 		hasData: holdings.length > 0 || operations.length > 0,
 		asOf: latestSnapshot?.day ?? null,
 		markedAsOf,
+		unpricedTickers,
 		metrics: {
 			portfolio: formatMinor(portfolioValue, accountCurrency),
-			portfolioBase: valueBase !== null ? formatMinor(valueBase, baseCurrency) : null,
+			// Null when the broker account is already kept in the household's own
+			// currency: the conversion is then the identity, and the tile printed
+			// the same number twice under an "≈".
+			portfolioBase:
+				valueBase !== null && accountCurrency !== baseCurrency
+					? formatMinor(valueBase, baseCurrency)
+					: null,
 			withEquity,
-			equityUnpriced: grantRows.length > 0 && heldEquity.length === 0,
+			equityAbsence,
+			nextVest,
 			moneyIn: formatMinor(moneyIn, accountCurrency),
 			since: contributionOps[0]?.at.slice(0, 4) ?? null,
 			gain: formatMinor(gain, accountCurrency, { signed: true }),
@@ -394,6 +478,32 @@ export const actions: Actions = {
 				target: [securityPrice.ticker, securityPrice.day],
 				set: { closeMinor, currency, source: 'manual' }
 			});
+		return { ok: true };
+	},
+
+	/**
+	 * What a feed actually calls this security, when it is not what the broker
+	 * calls it — Tesla on Xetra is "TL0", not "TSLA". Saved once, tried right
+	 * away rather than waiting for the next scheduled refresh, so the answer
+	 * is on screen the moment it is right.
+	 */
+	setPriceAlias: async ({ request }) => {
+		const form = await request.formData();
+		let ticker: string;
+		try {
+			ticker = normaliseTicker(String(form.get('ticker') ?? ''));
+		} catch (err) {
+			return fail(400, { message: err instanceof Error ? err.message : 'Pick the ticker.' });
+		}
+		if (!(await pricedTickers()).some((t) => t.ticker === ticker)) {
+			return fail(400, { message: `${ticker} is not a ticker this household holds.` });
+		}
+		const overrideBase = String(form.get('overrideBase') ?? '')
+			.trim()
+			.toUpperCase();
+		if (!overrideBase) return fail(400, { message: 'What does a feed actually call it?' });
+		await setPriceAlias(ticker, overrideBase);
+		await refreshPrices();
 		return { ok: true };
 	}
 };

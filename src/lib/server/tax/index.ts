@@ -4,6 +4,7 @@
 
 import { uuidv7 } from 'uuidv7';
 import { eq } from 'drizzle-orm';
+import { foldCountry } from '$lib/countries';
 import { db, type Db, type Queryable } from '$lib/server/db';
 import {
 	document,
@@ -38,6 +39,17 @@ export interface StatementAttachment {
 	ext: string;
 	addedOn: string;
 	kind: AttachmentKind;
+	/**
+	 * Which country's paperwork this one is, when it is not the statement's own.
+	 *
+	 * A filing can carry papers from more than one country — an employer's
+	 * earnings report from where the work was done, filed with a return
+	 * somewhere else — and naming them all after the statement's country made
+	 * them indistinguishable on the Documents screen. Optional: absent means
+	 * the statement's own, which is what every attachment saved before this
+	 * meant.
+	 */
+	country?: string;
 	/**
 	 * The name the browser sent. Used only to break a collision between two
 	 * attachments of one kind in one year — never as the document's own name,
@@ -133,9 +145,14 @@ export async function attachDocumentsToStatement(
 
 	const filedIds: string[] = [];
 	for (const attachment of attachments) {
-		const plain = statementDocumentName(year, country, attachment.kind);
+		// Codes by the time they get here — `saveStatement` and the Tax screen's
+		// upload both refuse anything else with a message — so this is the
+		// guard against a caller that did not, not a second place that decides.
+		const from = foldCountry(attachment.country) ?? foldCountry(country);
+		if (!from) throw new Error(`Not a country code: ${attachment.country ?? country}`);
+		const plain = statementDocumentName(year, from, attachment.kind);
 		const name = taken.has(plain)
-			? statementDocumentName(year, country, attachment.kind, attachment.original)
+			? statementDocumentName(year, from, attachment.kind, attachment.original)
 			: plain;
 		taken.add(name);
 
@@ -151,6 +168,16 @@ export async function attachDocumentsToStatement(
 				storedName: attachment.storedName,
 				ext: attachment.ext,
 				addedOn: attachment.addedOn,
+				// The year this filing is FOR, both ends. `period_on` alone means the
+				// single month it names, so a return dated 2025-01-01 and nothing else
+				// would read as January 2025 everywhere a period is drawn — and a
+				// filing with no period at all could not be placed on anything.
+				periodOn: `${year}-01-01`,
+				periodEndOn: `${year}-12-31`,
+				// A field now, not only a slice of the generated name: the tax year
+				// card groups by it, and grouping by a substring of a title is
+				// grouping by a typo waiting to happen.
+				country: from,
 				expiresOn: null,
 				expiryVerb: 'expires',
 				contentHash: attachment.contentHash ?? null,
@@ -180,13 +207,23 @@ export async function saveStatement(input: StatementInput, handle: Db = db): Pro
 	if (!Number.isInteger(input.year) || input.year < 1900 || input.year > 2200)
 		return { ok: false, status: 400, message: 'That year does not look right.' };
 	if (!input.country.trim()) return { ok: false, status: 400, message: 'Name the country.' };
+	// A code, or refused here: `document.country` takes nothing else, and a
+	// statement whose country is prose would fail its own paperwork as a 500.
+	const country = foldCountry(input.country);
+	if (!country)
+		return { ok: false, status: 400, message: 'Name the country as a two-letter code, like CZ.' };
+	if (input.attachments.some((a) => a.country !== undefined && !foldCountry(a.country)))
+		return {
+			ok: false,
+			status: 400,
+			message: "Name each paper's country as a two-letter code, like CZ."
+		};
 	const currency = input.currency.trim().toUpperCase();
 	if (!/^[A-Z]{3}$/.test(currency))
 		return { ok: false, status: 400, message: 'Use a three-letter currency code.' };
 	if (input.grossIncomeMinor < 0n || input.taxPaidMinor < 0n)
 		return { ok: false, status: 400, message: 'Figures on a statement cannot be negative.' };
 
-	const country = input.country.trim().toUpperCase();
 	const values = {
 		personId: input.personId,
 		year: input.year,

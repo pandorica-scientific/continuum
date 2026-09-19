@@ -46,7 +46,7 @@ describe('Revolut adapter', () => {
 	const [statement] = parseRevolut(readFileSync(fixture('revolut.csv'), 'utf-8'));
 
 	it('keeps only completed rows and reads amounts', () => {
-		expect(statement.rows).toHaveLength(7);
+		expect(statement.rows).toHaveLength(9);
 		expect(statement.rows[0].amountMinor).toBe(-5391n);
 		expect(statement.rows[0].counterparty).toBe('Fresh Point');
 	});
@@ -55,6 +55,27 @@ describe('Revolut adapter', () => {
 		const withFee = statement.rows.find((r) => r.feeMinor !== undefined)!;
 		expect(withFee.amountMinor).toBe(-5660n);
 		expect(withFee.feeMinor).toBe(2117n);
+	});
+
+	it('keeps a refunded fee negative, so the refund is not charged the fee again', () => {
+		// Revolut writes the balance as amount - fee throughout, with the fee
+		// SIGNED: refunding a payment refunds the fee it was charged with, as
+		// -0.98 against the +0.98 on the payment. Normalising that to a magnitude
+		// took the fee off twice and broke the running balance on that one row,
+		// which was enough to reject a 400-row statement whole.
+		const refund = statement.rows.find((r) => r.description === 'Card Refund')!;
+		expect(refund.amountMinor).toBe(9841n);
+		expect(refund.feeMinor).toBe(-98n);
+	});
+
+	it('closes its running balance across a fee charged and then refunded', () => {
+		// The whole point of the sign: the chain the proof engine tests is
+		// `balance(n) === balance(n-1) + amount - fee`, on every row.
+		for (let i = 1; i < statement.rows.length; i++) {
+			const previous = statement.rows[i - 1].balanceAfterMinor!;
+			const row = statement.rows[i];
+			expect(row.balanceAfterMinor).toBe(previous + row.amountMinor - (row.feeMinor ?? 0n));
+		}
 	});
 
 	it('records the started date as the value date', () => {
@@ -151,6 +172,72 @@ describe('Raiffeisenbank PDF adapter', () => {
 describe('Česká spořitelna PDF adapter', () => {
 	const lines = JSON.parse(readFileSync(fixture('cs-lines.json'), 'utf-8')) as PdfLine[];
 	const statement = parseCsLines(lines);
+
+	it('names a payment by what it was for, not by what KIND of payment it was', () => {
+		// ČS prints the kind on the first detail line for some operations —
+		// "okamžitá" (instant) here — and what the payment was on the next.
+		// Taken as the counterparty, twenty-three unrelated payments to nine
+		// different accounts all read "okamžitá" and none could be told apart.
+		const instant = statement.rows.find((r) => r.amountMinor === -48000n);
+		expect(instant?.counterparty).toBe('QRFA 262082506');
+		// Nothing is lost: the kind is still in the description.
+		expect(instant?.description).toContain('okamžitá');
+	});
+
+	it('names a payment by its message, not by the constant symbol above it', () => {
+		// The same mistake one line further along: ČS prints the constant symbol
+		// on its own line directly before the message, so three Alza orders were
+		// all named "0308" while "OBJEDNAVKA ... NA ALZA.CZ" sat right under it.
+		// A payee is never written as digits alone.
+		const withSymbol: PdfLine[] = [
+			{ page: 1, y: 900, cells: ['Číslo účtu/kód banky: 1122334455/0800'] },
+			{ page: 1, y: 890, cells: ['Měna účtu: CZK'] },
+			{
+				page: 1,
+				y: 500,
+				cells: ['28.03.2026', 'Tuzemská odchozí úhrada', '2171532/0800', '590111449', '-265.00']
+			},
+			{ page: 1, y: 490, cells: ['0308'] },
+			{ page: 1, y: 480, cells: ['OBJEDNAVKA 590111449 NA ALZA.CZ'] }
+		];
+		const [row] = parseCsLines(withSymbol).rows;
+		expect(row.counterparty).toBe('OBJEDNAVKA 590111449 NA ALZA.CZ');
+		// The symbol is not lost, only demoted — it is still in the description.
+		expect(row.description).toContain('0308');
+	});
+
+	it('falls back to the kind of payment when every detail line is a bare code', () => {
+		// A Moneyback row: a constant symbol and then the card number. Neither
+		// names anything, so the kind wins — "Moneyback · 0006" at least says
+		// what happened, where "0006" alone says nothing at all.
+		const allCodes: PdfLine[] = [
+			{ page: 1, y: 900, cells: ['Číslo účtu/kód banky: 1122334455/0800'] },
+			{ page: 1, y: 890, cells: ['Měna účtu: CZK'] },
+			{ page: 1, y: 500, cells: ['05.03.2026', 'Moneyback', '12.50'] },
+			{ page: 1, y: 490, cells: ['0006'] },
+			{ page: 1, y: 480, cells: ['4405797473'] }
+		];
+		const [row] = parseCsLines(allCodes).rows;
+		expect(row.counterparty).toBe('Moneyback · 0006');
+	});
+
+	it('falls back to the kind of payment when there is nothing else to go on', () => {
+		// A transfer whose only other detail line is the row's own date. The
+		// date would identify it even less than the kind does, so the kind wins.
+		const onlyADate: PdfLine[] = [
+			{ page: 1, y: 900, cells: ['Číslo účtu/kód banky: 1122334455/0800'] },
+			{ page: 1, y: 890, cells: ['Měna účtu: CZK'] },
+			{
+				page: 1,
+				y: 500,
+				cells: ['13.02.2026', 'Tuzemská odchozí úhrada', '131-3171230277/0100', '-399 629.09']
+			},
+			{ page: 1, y: 490, cells: ['okamžitá'] },
+			{ page: 1, y: 480, cells: ['13.02.2026'] }
+		];
+		const [row] = parseCsLines(onlyADate).rows;
+		expect(row.counterparty).toBe('Tuzemská odchozí úhrada · okamžitá');
+	});
 
 	it('reads header facts', () => {
 		expect(statement.accountNumber).toBe('1122334455/0800');

@@ -1087,10 +1087,14 @@ describe('import database integrity', () => {
 			inTransactionId: rowId('reject-in'),
 			state: 'proposed'
 		});
+		// Imported, not copied: the trigger below fires on the exact wording the
+		// reject path writes, so a reworded reason must fail this test rather
+		// than quietly stop matching and assert nothing.
+		const { REJECTED_REASON } = await import('$lib/server/import/transfer-decisions');
 		await harness.sql.unsafe(`
 			create function task1_fail_leg_update() returns trigger language plpgsql as $$
 			begin
-				if old.review_reason = 'transfer rejected — pick a category'
+				if old.review_reason = '${REJECTED_REASON}'
 					and new.review_reason is distinct from old.review_reason then
 					raise exception 'injected recategorisation failure';
 				end if;

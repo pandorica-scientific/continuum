@@ -12,6 +12,10 @@ import {
 	splitSnippet,
 	subLine,
 	typeLabel,
+	documentChips,
+	periodLabel,
+	coversPeriod,
+	type ChipRow,
 	aboutOptionLabel,
 	groupAboutOptions,
 	type AboutOption,
@@ -245,10 +249,9 @@ describe('sortDocuments', () => {
 });
 
 describe('the row itself', () => {
-	it('reads its sub-line as shelf then what it is about', () => {
-		expect(subLine(row({ shelfLabel: 'Property', entities: ['Karlín', 'Jana'] }))).toBe(
-			'Property · Karlín · Jana'
-		);
+	// What it is about is a chip now, not grey text — see `documentChips`.
+	it('reads its sub-line as where it is filed', () => {
+		expect(subLine(row({ shelfLabel: 'Property', entities: ['Karlín', 'Jana'] }))).toBe('Property');
 	});
 
 	it('never shows a raw type code', () => {
@@ -368,5 +371,146 @@ describe('the about filter', () => {
 		expect(
 			aboutOptionLabel(option({ name: 'Alza 2026-03-04', meta: '−1 234,50 CZK', count: 1 }))
 		).toBe('Alza 2026-03-04 · −1 234,50 CZK · 1');
+	});
+});
+
+const chipRow = (over: Partial<ChipRow> = {}): ChipRow => ({
+	type: over.type ?? 'other',
+	periodOn: over.periodOn ?? null,
+	periodEndOn: over.periodEndOn ?? null,
+	country: over.country ?? null,
+	about: over.about ?? []
+});
+
+describe('periodLabel', () => {
+	it('is null when the document covers nothing', () => {
+		expect(periodLabel(null, null)).toBeNull();
+	});
+
+	it('reads one month when only the first day is set', () => {
+		expect(periodLabel('2025-03-01', null)).toEqual({ text: 'Mar 2025', filter: '2025-03' });
+	});
+
+	it('reads one month when both ends sit in it', () => {
+		expect(periodLabel('2025-03-01', '2025-03-31')).toEqual({
+			text: 'Mar 2025',
+			filter: '2025-03'
+		});
+	});
+
+	// The reason a yearly document has to write BOTH ends: January alone is
+	// January, and a tax return that read as January would be a lie on the row.
+	it('reads January, not the year, when only January is covered', () => {
+		expect(periodLabel('2025-01-01', null)).toEqual({ text: 'Jan 2025', filter: '2025-01' });
+	});
+
+	it('reads the year when January to December are covered', () => {
+		expect(periodLabel('2025-01-01', '2025-12-31')).toEqual({ text: '2025', filter: '2025' });
+	});
+
+	it('reads a span inside one year with the year once', () => {
+		expect(periodLabel('2025-04-01', '2025-06-30')).toEqual({
+			text: 'Apr\u2013Jun 2025',
+			filter: '2025-04'
+		});
+	});
+
+	it('names both years when a span crosses one', () => {
+		expect(periodLabel('2024-11-01', '2025-02-28')).toEqual({
+			text: 'Nov 2024 \u2013 Feb 2025',
+			filter: '2024-11'
+		});
+	});
+});
+
+describe('coversPeriod', () => {
+	const doc = { periodOn: '2025-04-01', periodEndOn: '2025-06-30' };
+
+	it('matches the year it sits in', () => {
+		expect(coversPeriod(doc, '2025')).toBe(true);
+	});
+
+	it('matches any month inside the span', () => {
+		expect(coversPeriod(doc, '2025-05')).toBe(true);
+	});
+
+	it('does not match a month outside it', () => {
+		expect(coversPeriod(doc, '2025-07')).toBe(false);
+	});
+
+	it('treats a missing end as the single month of the start', () => {
+		expect(coversPeriod({ periodOn: '2025-04-01', periodEndOn: null }, '2025-05')).toBe(false);
+		expect(coversPeriod({ periodOn: '2025-04-01', periodEndOn: null }, '2025-04')).toBe(true);
+	});
+
+	it('never matches a document that covers nothing', () => {
+		expect(coversPeriod({ periodOn: null, periodEndOn: null }, '2025')).toBe(false);
+	});
+});
+
+describe('documentChips', () => {
+	it('draws type, period, each link and country, in that order', () => {
+		const chips = documentChips(
+			chipRow({
+				type: 'payslip',
+				periodOn: '2025-03-01',
+				country: 'CZ',
+				about: [{ id: 'o1', name: 'Alphabet' }]
+			})
+		);
+		expect(chips.map((c) => c.kind)).toEqual(['type', 'period', 'link', 'country']);
+		expect(chips.map((c) => c.text)).toEqual([
+			'Payslip',
+			'Mar 2025',
+			'Alphabet',
+			'\u{1F1E8}\u{1F1FF} CZ'
+		]);
+	});
+
+	it('gives every chip the search parameter it sets', () => {
+		const chips = documentChips(
+			chipRow({
+				type: 'tax_document',
+				periodOn: '2025-01-01',
+				periodEndOn: '2025-12-31',
+				country: 'CZ',
+				about: [{ id: 'p1', name: 'Robert' }]
+			})
+		);
+		expect(chips.map((c) => c.filter)).toEqual([
+			{ key: 'type', value: 'tax_document' },
+			{ key: 'period', value: '2025' },
+			{ key: 'entity', value: 'p1' },
+			{ key: 'country', value: 'CZ' }
+		]);
+	});
+
+	it('draws one chip per link, in the order given', () => {
+		const chips = documentChips(
+			chipRow({
+				about: [
+					{ id: 'a', name: 'Robert' },
+					{ id: 'b', name: 'Partner' },
+					{ id: 'c', name: 'Alphabet' }
+				]
+			})
+		);
+		expect(chips.filter((c) => c.kind === 'link').map((c) => c.text)).toEqual([
+			'Robert',
+			'Partner',
+			'Alphabet'
+		]);
+	});
+
+	it('leaves out what the document does not say', () => {
+		const chips = documentChips(chipRow({ type: 'receipt' }));
+		expect(chips.map((c) => c.kind)).toEqual(['type']);
+	});
+
+	it('uses the household\u2019s own label for a type it renamed', () => {
+		const chips = documentChips(chipRow({ type: 'payslip' }), {
+			payslip: 'V\u00fdplatn\u00ed p\u00e1ska'
+		});
+		expect(chips[0].text).toBe('V\u00fdplatn\u00ed p\u00e1ska');
 	});
 });

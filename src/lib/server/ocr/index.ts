@@ -18,8 +18,18 @@ export const TESSDATA = resolve('tessdata');
  *
  * Kept in step with `scripts/fetch-tessdata.mjs` by a test.
  */
-export type OcrLanguage = 'eng' | 'ces' | 'pol' | 'deu' | 'spa';
-export const OCR_LANGUAGES: OcrLanguage[] = ['eng', 'ces', 'pol', 'deu', 'spa'];
+export type OcrLanguage = 'eng' | 'ces' | 'pol' | 'deu' | 'spa' | 'ukr';
+export const OCR_LANGUAGES: OcrLanguage[] = ['eng', 'ces', 'pol', 'deu', 'spa', 'ukr'];
+
+/** What a person picking languages in Settings reads, not what tesseract does. */
+export const OCR_LANGUAGE_LABELS: Record<OcrLanguage, string> = {
+	eng: 'English',
+	ces: 'Czech',
+	pol: 'Polish',
+	deu: 'German',
+	spa: 'Spanish',
+	ukr: 'Ukrainian'
+};
 
 /**
  * The languages whose data is actually on disk. Rejecting a missing language

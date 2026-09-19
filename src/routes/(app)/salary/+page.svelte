@@ -48,6 +48,8 @@
 		personFilter === 'both' ? null : (data.history.find((p) => p.id === personFilter) ?? null)
 	);
 	const years = $derived(selected ? selected.years : data.household);
+	// Follows the person filter, the same way the year rows do.
+	const equityNow = $derived(selected ? selected.equityNow : data.householdEquityNow);
 	// Payslips follow the filter; under "Both" every person's are listed, each
 	// one carrying whose it is so two Augusts are not mistaken for one.
 	const payslips = $derived(
@@ -145,7 +147,7 @@
 {/if}
 
 <SummaryBand
-	tiles={salarySummaryTiles(years, data.baseCurrency, selected ? 'person' : 'household')}
+	tiles={salarySummaryTiles(years, data.baseCurrency, selected ? 'person' : 'household', equityNow)}
 />
 
 {#if data.people.length > 1}
@@ -165,6 +167,7 @@
 	{years}
 	currency={data.baseCurrency}
 	{openYear}
+	{equityNow}
 	onToggle={(year) => (openYear = openYear === year ? null : year)}
 >
 	{#snippet detail(year)}

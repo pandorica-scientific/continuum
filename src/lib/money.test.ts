@@ -4,13 +4,13 @@ import { formatMinor, minorDigits, parseAmountToMinor } from './money';
 
 describe('formatMinor', () => {
 	it('groups thousands with narrow spaces and drops zero fractions', () => {
-		expect(formatMinor(1057590000n, 'CZK')).toBe('10 575 900');
+		expect(formatMinor(1057590000n, 'CZK')).toBe('10\u0027575\u0027900');
 	});
 	it('keeps a meaningful fraction', () => {
 		expect(formatMinor(23979n, 'CZK')).toBe('239.79');
 	});
 	it('prints exact fractions when asked', () => {
-		expect(formatMinor(500000n, 'EUR', { exact: true })).toBe('5 000.00');
+		expect(formatMinor(500000n, 'EUR', { exact: true })).toBe('5\u0027000.00');
 	});
 	it('uses a proper minus and optional plus', () => {
 		expect(formatMinor(-5391n, 'CZK')).toBe('−53.91');
@@ -66,10 +66,10 @@ describe('minor units per currency', () => {
 	});
 
 	it('formats and parses a zero-decimal currency without inventing cents', () => {
-		expect(formatMinor(1500n, 'JPY')).toBe('1 500'); // narrow no-break space
-		expect(parseAmountToMinor('1 500', 'JPY')).toBe(1500n);
+		expect(formatMinor(1500n, 'JPY')).toBe('1\u0027500'); // narrow no-break space
+		expect(parseAmountToMinor('1\u0027500', 'JPY')).toBe(1500n);
 		expect(parseAmountToMinor('1500', 'JPY')).toBe(1500n);
-		expect(formatMinor(1500n, 'JPY', { exact: true })).toBe('1 500');
+		expect(formatMinor(1500n, 'JPY', { exact: true })).toBe('1\u0027500');
 	});
 
 	it('falls back to 2 for an unknown but well-formed code', () => {

@@ -58,6 +58,8 @@ import {
 } from '$lib/server/calendar/sync';
 import { startAuth } from '$lib/server/calendar/sync/google-oauth';
 import { serverStatus } from '$lib/server/system/status';
+import { ocrLanguages } from '$lib/server/documents/extract';
+import { OCR_LANGUAGES, OCR_LANGUAGE_LABELS } from '$lib/server/ocr';
 import { MODULE_KEYS, type ModuleKey } from '$lib/modules/registry';
 import { createToken, listTokens, revokeToken } from '$lib/server/api/tokens';
 import type { Action } from '@sveltejs/kit';
@@ -149,7 +151,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		calendarAccounts,
 		calendarMarkers,
 		calendarSyncMinutes,
-		investTax
+		investTax,
+		ocrLangs
 	] = await Promise.all([
 		// All three render only inside the isAdmin branches, so a member skips the queries.
 		isAdmin ? getModules() : null,
@@ -178,7 +181,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		isAdmin ? getCalendarMarkers() : true,
 		isAdmin ? getSyncIntervalMinutes() : 15,
 		// How realised gains are taxed — beside base currency, both facts about the taxing country.
-		isAdmin ? getSetting<GainsPolicy>('investTax', DEFAULT_GAINS_POLICY) : null
+		isAdmin ? getSetting<GainsPolicy>('investTax', DEFAULT_GAINS_POLICY) : null,
+		isAdmin ? ocrLanguages() : null
 	]);
 
 	const groups = await loadCategoryGroups();
@@ -237,6 +241,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		backupRunning: backupInProgress(),
 		backupDestinations: isAdmin ? detectDestinations() : [],
 		status,
+		ocrLanguages: ocrLangs ? ocrLangs.split('+') : [],
+		ocrLanguageOptions: OCR_LANGUAGES.map((code) => ({ code, label: OCR_LANGUAGE_LABELS[code] })),
 		apiTokens: tokens.map((t) => ({
 			id: t.id,
 			label: t.label,
@@ -671,6 +677,18 @@ export const actions = administered({
 				message: err instanceof Error ? err.message : 'The file did not parse.'
 			});
 		}
+		return { ok: true };
+	},
+
+	setOcrLanguages: async ({ request }) => {
+		const form = await request.formData();
+		// Order fixed to OCR_LANGUAGES' own, not the form's: tesseract tries
+		// them in order, and a checkbox list posts in DOM order regardless of
+		// which the person actually reached for first.
+		const posted = new Set(form.getAll('languages').map(String));
+		const picked = OCR_LANGUAGES.filter((code) => posted.has(code));
+		if (picked.length === 0) return fail(400, { message: 'Pick at least one language.' });
+		await setSetting('ocr.languages', picked.join('+'));
 		return { ok: true };
 	},
 

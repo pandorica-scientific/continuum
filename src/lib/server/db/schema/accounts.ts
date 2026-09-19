@@ -65,6 +65,20 @@ export const account = pgTable(
 			.notNull()
 			.default(sql`0`),
 		balanceOn: date('balance_on'),
+		/**
+		 * Closed, or opened here by mistake and kept for what it already holds.
+		 *
+		 * Archiving rather than deleting, because `transaction.account_id`
+		 * cascades: removing an account with history takes every row it ever
+		 * carried, and a closed account's past spending still happened. An
+		 * archived account keeps its transactions in the ledger and in cash-flow
+		 * history, and leaves the places that ask about money you have NOW — the
+		 * account pickers, net worth, the cash donut.
+		 *
+		 * An account with no transactions at all can simply be deleted; there is
+		 * nothing to preserve and nothing to cascade to.
+		 */
+		archivedAt: timestamp('archived_at', { withTimezone: true }),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [
@@ -297,6 +311,20 @@ export const transaction = pgTable(
 		transferToAccountId: uuid('transfer_to_account_id').references(() => account.id, {
 			onDelete: 'set null'
 		}),
+		/**
+		 * The same claim, about an account this household does not keep.
+		 *
+		 * A closed account, or a bank never added here. The movement is still a
+		 * movement between the household's own money and so still neither income
+		 * nor spending, but there is no row to point `transferToAccountId` at and
+		 * inventing an account to satisfy a foreign key would put a dead
+		 * institution in the Accounts list and the net-worth donut forever.
+		 *
+		 * Kept apart from a named destination rather than folded into it: "went
+		 * to my savings" and "went somewhere I no longer track" are different
+		 * facts, and only the first can ever be confirmed by a later import.
+		 */
+		transferToUntracked: boolean('transfer_to_untracked').notNull().default(false),
 		transferPairId: uuid('transfer_pair_id')
 	},
 	(table) => [

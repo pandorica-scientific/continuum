@@ -2,12 +2,20 @@
 import { uuidv7 } from 'uuidv7';
 import { asEnumValue } from '$lib/enums';
 import { asOptionalRowId, asRowId } from '$lib/ids';
-import { parseAccountNumbers, updateAccount } from '$lib/server/accounts';
+import {
+	archiveAccount,
+	deleteAccount,
+	parseAccountNumbers,
+	unarchiveAccount,
+	updateAccount
+} from '$lib/server/accounts';
 import { fail } from '@sveltejs/kit';
 import { desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { account, bank, person, transaction, transferPair } from '$lib/server/db/schema';
 import { loadRateTable } from '$lib/server/fx/table';
+import { balanceAge, balanceAgeLabel } from '$lib/statements/balance-age';
+import { logoHref } from '$lib/server/banks/logos';
 import { availableCurrencies } from '$lib/server/fx/currencies';
 import { getBaseCurrency } from '$lib/server/settings';
 import { displayCurrency, formatMinor } from '$lib/money';
@@ -37,7 +45,8 @@ export const load: PageServerLoad = async () => {
 				balanceAsOf: account.balanceOn,
 				numbers: account.numbers,
 				ownerPersonId: account.ownerPersonId,
-				ownerName: person.name
+				ownerName: person.name,
+				archivedAt: account.archivedAt
 			})
 			.from(account)
 			.leftJoin(person, eq(account.ownerPersonId, person.id))
@@ -90,6 +99,10 @@ export const load: PageServerLoad = async () => {
 			bank: a.bank,
 			ownerPersonId: a.ownerPersonId,
 			canChangeCurrency: (held.get(a.id) ?? 0) === 0,
+			archived: a.archivedAt !== null,
+			// The same count the currency rule uses: an account that never carried
+			// a row is the one that can be deleted rather than closed.
+			transactions: held.get(a.id) ?? 0,
 			// Raw value for the edit form; falling back to the bank's emoji here would
 			// turn "unset" into a value on the next save.
 			ownEmoji: a.emoji || '',
@@ -97,6 +110,10 @@ export const load: PageServerLoad = async () => {
 			// pairing (or non-pairing) is explainable.
 			numbers: a.numbers ?? [],
 			emoji: a.emoji || bankEmoji.get(a.bank) || '🏦',
+			// A logo only where one has actually been fetched. Null is the
+			// ordinary case — this repository ships none — and the emoji above is
+			// what draws then, exactly as it always has.
+			logo: logoHref(a.bank),
 			kind: a.kind,
 			currency: a.currency,
 			meta: [
@@ -104,6 +121,13 @@ export const load: PageServerLoad = async () => {
 				a.ownerName ?? 'joint',
 				a.balanceAsOf ? `statement to ${a.balanceAsOf}` : 'no statement yet'
 			].join(' · '),
+			// How old the figure beside it is. A correct balance from last month
+			// looks exactly like a current one otherwise, which reads as the app
+			// being wrong rather than the statements being behind.
+			balanceAge: (() => {
+				const age = balanceAge(a.balanceAsOf ?? null, today);
+				return age?.stale ? balanceAgeLabel(age) : null;
+			})(),
 			balance: formatMinor(a.balanceMinor, a.currency),
 			baseEquivalent:
 				a.currency === baseCurrency
@@ -120,7 +144,9 @@ export const load: PageServerLoad = async () => {
 	// Donut: share of cash by account, excluding the brokerage, in base currency.
 	// A missing rate uses the app-wide, explicitly-bannered face-value fallback;
 	// dropping that row would make this total disagree with net worth.
-	const cashRows = rows.filter((r) => r.kind !== 'brokerage');
+	// A closed account holds nothing to show a share of, and net worth has
+	// already stopped counting it (see the view).
+	const cashRows = rows.filter((r) => r.kind !== 'brokerage' && !r.archived);
 	const cashTotal = cashRows.reduce((sum, r) => sum + r.balanceMinorBase, 0n);
 	const donut = positiveDonutSlices(cashRows, (row) => row.balanceMinorBase).map(
 		({ item: r, pct, from, to }, i) => {
@@ -178,6 +204,9 @@ export const load: PageServerLoad = async () => {
 		),
 		accounts: rows.map((r) => ({
 			...r,
+			// Only an account that never held anything may be deleted outright;
+			// anything else is closed, because the delete would cascade.
+			deletable: r.transactions === 0,
 			balanceMinorBase: undefined,
 			share: shareById.get(r.id)?.pct ?? null,
 			color: shareById.get(r.id)?.color ?? 'var(--fg3)'
@@ -237,6 +266,31 @@ export const actions: Actions = {
 					.trim()
 					.toUpperCase() || null
 		});
+		if (!result.ok) return fail(result.status, { message: result.message });
+		return { ok: true };
+	},
+
+	/**
+	 * Close an account. Its rows stay; only its balance stops counting.
+	 */
+	archiveAccount: async ({ request }) => {
+		const result = await archiveAccount(asRowId((await request.formData()).get('id')));
+		if (!result.ok) return fail(result.status, { message: result.message });
+		return { ok: true };
+	},
+
+	unarchiveAccount: async ({ request }) => {
+		const result = await unarchiveAccount(asRowId((await request.formData()).get('id')));
+		if (!result.ok) return fail(result.status, { message: result.message });
+		return { ok: true };
+	},
+
+	/**
+	 * Delete one added by mistake. Refused the moment it holds a transaction —
+	 * the foreign key cascades, and tidying a list must not take history with it.
+	 */
+	deleteAccount: async ({ request }) => {
+		const result = await deleteAccount(asRowId((await request.formData()).get('id')));
 		if (!result.ok) return fail(result.status, { message: result.message });
 		return { ok: true };
 	},

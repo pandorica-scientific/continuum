@@ -201,34 +201,69 @@ export async function recordSettlement(
 }
 
 /**
- * Add to what was sold from a tranche; never beyond what it still holds.
- *
- * One statement, guarded in SQL: two sales recorded at once cannot both read
- * the same held figure and together sell more than there is.
+ * What a tranche still holds, in SQL: delivered (or scheduled) less what has
+ * already left it, either way it can leave. The same subtraction `heldUnits`
+ * makes in TypeScript — spelled once here so a write cannot guard against a
+ * looser figure than the screens report.
  */
-export async function recordSale(
+const heldInSql = sql`coalesce(${equityTranche.deliveredUnits}, ${equityTranche.units}) - ${equityTranche.soldUnits} - ${equityTranche.movedUnits}`;
+
+/**
+ * Take units out of a tranche, one statement, guarded in SQL: two writes
+ * arriving at once cannot both read the same held figure and together take
+ * more units than the tranche has.
+ */
+async function takeUnits(
 	trancheId: string,
-	soldUnits: number,
-	handle: Db = db
+	units: number,
+	column: 'soldUnits' | 'movedUnits',
+	handle: Db
 ): Promise<void> {
-	if (!(soldUnits > 0)) throw new Error('A sale needs a positive number of units.');
-	const sold = String(soldUnits);
+	const amount = String(units);
+	const target = column === 'soldUnits' ? equityTranche.soldUnits : equityTranche.movedUnits;
 	const updated = await handle
 		.update(equityTranche)
-		.set({ soldUnits: sql`${equityTranche.soldUnits} + ${sold}::numeric` })
+		.set({ [column]: sql`${target} + ${amount}::numeric` })
 		.where(
 			and(
 				eq(equityTranche.id, trancheId),
 				isNull(equityTranche.forfeitedOn),
-				sql`coalesce(${equityTranche.deliveredUnits}, ${equityTranche.units}) - ${equityTranche.soldUnits} >= ${sold}::numeric`
+				sql`${heldInSql} >= ${amount}::numeric`
 			)
 		)
 		.returning({ id: equityTranche.id });
 	if (updated.length === 1) return;
 	const [row] = await handle.select().from(equityTranche).where(eq(equityTranche.id, trancheId));
 	if (!row) throw new Error('That tranche is no longer here.');
-	if (row.forfeitedOn) throw new Error('That tranche was forfeited; there is nothing to sell.');
+	if (row.forfeitedOn) throw new Error('That tranche was forfeited; it holds nothing.');
 	throw new Error(`Only ${heldUnits(trancheFigures(row))} units are held from this tranche.`);
+}
+
+/** Add to what was sold from a tranche; never beyond what it still holds. */
+export async function recordSale(
+	trancheId: string,
+	soldUnits: number,
+	handle: Db = db
+): Promise<void> {
+	if (!(soldUnits > 0)) throw new Error('A sale needs a positive number of units.');
+	await takeUnits(trancheId, soldUnits, 'soldUnits', handle);
+}
+
+/**
+ * Record units transferred into a brokerage account, still owned.
+ *
+ * Deliberately not a sale: no money changed hands and nothing is realised.
+ * What it does is hand the counting over — from here the broker's own report
+ * values these shares, so the grant stops, and the household's total is right
+ * either side of the move.
+ */
+export async function recordMove(
+	trancheId: string,
+	movedUnits: number,
+	handle: Db = db
+): Promise<void> {
+	if (!(movedUnits > 0)) throw new Error('A move needs a positive number of units.');
+	await takeUnits(trancheId, movedUnits, 'movedUnits', handle);
 }
 
 /** Whose job an engagement is, so a grant cannot be hung on somebody else's. */
@@ -284,7 +319,7 @@ export async function trancheOwner(
 	return row?.personId ?? null;
 }
 
-export function trancheFigures(row: typeof equityTranche.$inferSelect): TrancheFigures {
+function trancheFigures(row: typeof equityTranche.$inferSelect): TrancheFigures {
 	return {
 		id: row.id,
 		vestsOn: row.vestsOn,
@@ -293,6 +328,7 @@ export function trancheFigures(row: typeof equityTranche.$inferSelect): TrancheF
 		deliveredUnits: row.deliveredUnits === null ? null : Number(row.deliveredUnits),
 		withheldUnits: row.withheldUnits === null ? null : Number(row.withheldUnits),
 		soldUnits: Number(row.soldUnits),
+		movedUnits: Number(row.movedUnits),
 		forfeitedOn: row.forfeitedOn,
 		onPayslip: row.onPayslip
 	};

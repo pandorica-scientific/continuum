@@ -13,7 +13,7 @@
  * household confirms them.
  */
 import { uuidv7 } from 'uuidv7';
-import { and, asc, eq, gte, isNull, lte, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, isNotNull, isNull, lte, sql } from 'drizzle-orm';
 import { db, inTransaction, type Queryable } from '$lib/server/db';
 import {
 	account,
@@ -55,6 +55,101 @@ function shiftDay(day: string, delta: number): string {
  * bounds the work without caring how old they are, and lets historical
  * statements pair at all.
  */
+/**
+ * How far apart an asserted transfer and its real second leg may sit.
+ *
+ * The same three days tier 3 allows, for the same reason: a transfer booked on
+ * one bank's Friday can land on the other's Monday. Wider would start adopting
+ * a different payment of the same size.
+ */
+const ADOPTION_DAYS = 3;
+
+/**
+ * Give each hand-asserted one-sided transfer the real leg it was waiting for.
+ *
+ * Returns the ids adopted, so the caller can keep them out of the general
+ * matcher. Both rows come out as a genuine pair in state `auto`: the household
+ * named the account and the ledger now shows the movement, which is the same
+ * standard of evidence tier 1 pairs on.
+ */
+async function adoptLateLegs(
+	handle: Queryable,
+	candidates: {
+		id: string;
+		accountId: string;
+		bookedOn: string;
+		amountMinor: bigint;
+		currency: string;
+	}[]
+): Promise<Set<string>> {
+	const adopted = new Set<string>();
+	if (candidates.length === 0) return adopted;
+
+	// The assertions still waiting: a named counterpart account, no real pair.
+	const asserted = await handle
+		.select()
+		.from(transaction)
+		.where(and(isNotNull(transaction.transferToAccountId), isNull(transaction.transferPairId)))
+		.for('update');
+	if (asserted.length === 0) return adopted;
+
+	const claimed = new Set<string>();
+	for (const one of asserted) {
+		const match = candidates
+			.filter(
+				(late) =>
+					!adopted.has(late.id) &&
+					!claimed.has(late.id) &&
+					// In the very account the assertion named, and not the one the
+					// asserted row itself sits in.
+					late.accountId === one.transferToAccountId &&
+					late.accountId !== one.accountId &&
+					late.currency === one.currency &&
+					// Opposite and equal: the two halves of one movement.
+					late.amountMinor === -one.amountMinor &&
+					Math.abs(daysApart(late.bookedOn, one.bookedOn)) <= ADOPTION_DAYS
+			)
+			// Closest in time wins, as the general matcher also does.
+			.sort(
+				(a, b) =>
+					Math.abs(daysApart(a.bookedOn, one.bookedOn)) -
+						Math.abs(daysApart(b.bookedOn, one.bookedOn)) || (a.id < b.id ? -1 : 1)
+			)[0];
+		if (!match) continue;
+
+		claimed.add(match.id);
+		const pairId = uuidv7();
+		const outId = one.amountMinor < 0n ? one.id : match.id;
+		const inId = one.amountMinor < 0n ? match.id : one.id;
+		await handle
+			.insert(transferPair)
+			.values({ id: pairId, outTransactionId: outId, inTransactionId: inId, state: 'auto' });
+		for (const id of [outId, inId]) {
+			await handle
+				.update(transaction)
+				.set({
+					transferPairId: pairId,
+					// The assertion has been superseded by the movement itself, so the
+					// hand-written marker comes off: leaving it would show the row as
+					// both asserted and paired, and `clearOneSidedTransfer` would then
+					// offer to undo something that is now evidenced.
+					transferToAccountId: null,
+					reviewState: 'auto',
+					reviewReason: null,
+					categoryId: null
+				})
+				.where(eq(transaction.id, id));
+		}
+		adopted.add(match.id);
+	}
+	return adopted;
+}
+
+/** Whole days between two ISO days, signed. */
+function daysApart(a: string, b: string): number {
+	return (Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86_400_000;
+}
+
 export function pairingWindowAround(days: string[]): PairingWindow | null {
 	const known = days.filter(Boolean).sort();
 	if (known.length === 0) return null;
@@ -122,8 +217,23 @@ async function pairAndCategoriseInTransaction(
 			.for('update')
 	).filter((t) => !legsInPairs.has(t.id));
 
+	// A leg that arrives AFTER the household asserted the other half by hand.
+	//
+	// Marking a one-sided transfer says "this went to Savings" while Savings'
+	// own statement is not imported yet. When it finally is, the real second leg
+	// turns up as an ordinary undecided row — and because the asserted side is
+	// already out of the figures, the late one lands in them alone and the
+	// transfer is counted half in, half out. The assertion NAMES the account, so
+	// a leg sitting in exactly that account, opposite in sign and equal in
+	// amount inside the window, is the half it was promised.
+	//
+	// Done before `proposePairs` and its legs removed from the candidates: a row
+	// adopted here must not also be offered to the general matcher.
+	const adopted = await adoptLateLegs(handle, candidates);
+	const remaining = candidates.filter((t) => !adopted.has(t.id));
+
 	const proposals = proposePairs(
-		candidates.map((t): PairableTx => ({
+		remaining.map((t): PairableTx => ({
 			id: t.id,
 			accountId: t.accountId,
 			bookedOn: t.bookedOn,
@@ -143,7 +253,7 @@ async function pairAndCategoriseInTransaction(
 		}
 	);
 
-	let paired = 0;
+	let paired = adopted.size;
 	for (const proposal of proposals) {
 		const pairId = uuidv7();
 		if (proposal.confidence === 'auto') {

@@ -10,8 +10,15 @@ import type { ParsedRow } from './types';
  * v3: minorDigits stopped assuming two minor units for every currency,
  *     changing amountMinor (and the hash) for HUF, JPY, KRW, ISK, IDR, VND,
  *     CLP, COP, KWD, BHD, OMR, JOD and TND.
+ * v4: the ČS reader stopped taking a payment's KIND as its counterparty
+ *     ("okamžitá", "úvěru"), which changes the hash of every ČS row that has
+ *     no bank reference — those hash the counterparty.
+ * v5: the same reader stopped taking a bare code as a counterparty — a
+ *     constant symbol ("0308", "0598") or a card number printed on the line
+ *     above the message that actually names the payee. Same set of rows as
+ *     v4: ČS rows with no bank reference.
  */
-export const FINGERPRINT_VERSION = 3;
+export const FINGERPRINT_VERSION = 5;
 
 /**
  * Stable identity of a transaction across overlapping statement uploads.
@@ -40,6 +47,32 @@ export function fingerprint(row: ParsedRow, occurrence: number): string {
 		row.bankRef && occurrence === 0 ? '' : String(occurrence)
 	];
 	return createHash('sha256').update(parts.join('\0')).digest('hex');
+}
+
+/**
+ * A row's identity WITHOUT its counterparty, for finding the row an earlier
+ * reader stored under a different name.
+ *
+ * A row with no bank reference hashes its counterparty, so a reader that
+ * starts naming a payee better (v4, v5) changes that row's fingerprint and
+ * nothing else about it. Booking day, amount, currency, destination account
+ * and running balance are what the two spellings still share; statement
+ * order settles the rows those cannot tell apart, as `fingerprintAll` does.
+ */
+export function keyWithoutCounterparty(row: {
+	bookedOn: string;
+	amountMinor: bigint;
+	currency: string;
+	counterpartyAccount?: string | null;
+	balanceAfterMinor?: bigint | null;
+}): string {
+	return [
+		row.bookedOn,
+		row.amountMinor.toString(),
+		row.currency,
+		row.counterpartyAccount ?? '',
+		row.balanceAfterMinor?.toString() ?? ''
+	].join('\0');
 }
 
 /** Assign occurrence indices to rows that would otherwise collide. */

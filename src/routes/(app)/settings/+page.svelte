@@ -606,6 +606,38 @@
 							{/each}
 						</ul>
 					</div>
+					<div class="ocr-languages">
+						<span class="s-label">Reading scanned paper</span>
+						<p class="note">
+							Every language below is already bundled in the image — nothing to download, nothing
+							phoned for. Trying more of them makes every scan slower, so turn on only the ones your
+							paper actually arrives in.
+						</p>
+						<!-- reset: false — Svelte sets a dynamic `checked` as a property, not the
+					     DOM attribute, so a default reset would uncheck every language. -->
+						<form
+							method="POST"
+							action="?/setOcrLanguages"
+							use:enhance={() =>
+								async ({ update }) =>
+									update({ reset: false })}
+							class="ocr-form"
+						>
+							{#each data.ocrLanguageOptions as lang (lang.code)}
+								<label class="toggle">
+									<input
+										type="checkbox"
+										name="languages"
+										value={lang.code}
+										checked={data.ocrLanguages.includes(lang.code)}
+									/>
+									<span>{lang.label}</span>
+								</label>
+							{/each}
+							<button type="submit" class="btn">Save</button>
+						</form>
+					</div>
+
 					<p class="prose">
 						Everything on this server — people, currencies, modules, integrations — is configuration
 						in your own database. Restoring elsewhere is booting a fresh instance and feeding it the
@@ -1634,6 +1666,24 @@
 		align-items: center;
 		gap: var(--space-6);
 		flex-wrap: wrap;
+	}
+	.ocr-languages {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+	}
+	.ocr-form {
+		display: flex;
+		align-items: center;
+		gap: var(--space-6);
+		flex-wrap: wrap;
+	}
+	.ocr-form .toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-3);
+		font-size: var(--text-sm);
+		color: var(--fg2);
 	}
 	.import-label input[type='file'] {
 		display: none;
