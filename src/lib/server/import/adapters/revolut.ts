@@ -52,12 +52,18 @@ export function parseRevolut(text: string): ParsedStatement[] {
 
 		const started = (cells[cStarted] || '').slice(0, 10);
 		const completed = (cells[cCompleted] || started).slice(0, 10);
+		// The fee's SIGN is Revolut's, not ours to normalise. The balance moves
+		// by amount - fee throughout the file, and refunding a payment refunds
+		// the fee with it: the payment carries fee 0.98, the refund of that same
+		// payment carries fee -0.98. Taking the magnitude here charged the fee
+		// twice, once on the payment and again on its refund, and the chain broke
+		// on that one row -- which rejected the whole statement.
 		const fee = cells[cFee] ? parseAmountToMinor(cells[cFee], rowCurrency) : 0n;
 		pocket.rows.push({
 			bookedAt: completed,
 			valueDate: started || undefined,
 			amountMinor: parseAmountToMinor(cells[cAmount], rowCurrency),
-			feeMinor: fee !== 0n ? (fee < 0n ? -fee : fee) : undefined,
+			feeMinor: fee !== 0n ? fee : undefined,
 			currency: rowCurrency,
 			counterparty: cells[cDescription]?.trim() || undefined,
 			description: cells[cType]?.trim() || undefined,

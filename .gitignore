@@ -45,6 +45,7 @@ Thumbs.db
 
 # Session tooling
 .remember/
+.playwright-mcp/
 
 # Vite
 vite.config.js.timestamp-*

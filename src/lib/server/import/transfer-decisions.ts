@@ -42,6 +42,15 @@ export async function confirmTransferProposal(
 	});
 }
 
+/**
+ * What both legs say after a proposal is rejected.
+ *
+ * Exported because a test pins behaviour to it in raw SQL: a literal copied
+ * there goes stale the moment this wording changes, and the test would keep
+ * passing while asserting nothing.
+ */
+export const REJECTED_REASON = 'not the same movement — give each a category';
+
 export async function rejectTransferProposal(
 	id: string,
 	handle: Queryable = db
@@ -58,7 +67,7 @@ export async function rejectTransferProposal(
 			.set({
 				transferPairId: null,
 				reviewState: 'needs_review',
-				reviewReason: 'transfer rejected — pick a category'
+				reviewReason: REJECTED_REASON
 			})
 			.where(inArray(transaction.id, [pair.outTransactionId, pair.inTransactionId]));
 		await pairAndCategorise(tx);
@@ -110,6 +119,41 @@ export async function markOneSidedTransfer(
 	});
 }
 
+/**
+ * The same as above, for money that went somewhere this household does not
+ * keep: an account since closed, or a bank never added here.
+ *
+ * Its own function rather than a null destination passed to the one above,
+ * because the two assert different things. A named account can be corroborated
+ * when its statement finally arrives — `adoptLateLegs` waits for exactly that —
+ * and this can never be. Nothing will ever turn up to confirm it, which is
+ * precisely why it is worth recording as its own claim.
+ */
+export async function markUntrackedTransfer(
+	id: string,
+	handle: Queryable = db
+): Promise<TransferDecisionResult> {
+	return inTransaction(handle, async (tx) => {
+		const [row] = await tx.select().from(transaction).where(eq(transaction.id, id)).for('update');
+		if (!row) return { ok: false, status: 404, message: 'Transaction not found.' };
+		if (row.transferPairId) {
+			return { ok: false, status: 409, message: 'This row is already a matched transfer.' };
+		}
+		await tx
+			.update(transaction)
+			.set({
+				transferToUntracked: true,
+				// Any earlier guess at a named account is withdrawn by this one.
+				transferToAccountId: null,
+				reviewState: 'confirmed',
+				reviewReason: null,
+				categoryId: null
+			})
+			.where(eq(transaction.id, id));
+		return { ok: true };
+	});
+}
+
 /** Undo the above: the row goes back to needing a category. */
 export async function clearOneSidedTransfer(
 	id: string,
@@ -118,13 +162,14 @@ export async function clearOneSidedTransfer(
 	return inTransaction(handle, async (tx) => {
 		const [row] = await tx.select().from(transaction).where(eq(transaction.id, id)).for('update');
 		if (!row) return { ok: false, status: 404, message: 'Transaction not found.' };
-		if (!row.transferToAccountId) {
+		if (!row.transferToAccountId && !row.transferToUntracked) {
 			return { ok: false, status: 409, message: 'This row is not a one-sided transfer.' };
 		}
 		await tx
 			.update(transaction)
 			.set({
 				transferToAccountId: null,
+				transferToUntracked: false,
 				reviewState: 'needs_review',
 				reviewReason: 'no longer a transfer — pick a category'
 			})

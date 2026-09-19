@@ -35,6 +35,7 @@
 	} from '$lib/components/PageSize.svelte';
 	import DataTable from '$lib/components/DataTable.svelte';
 	import type { Column, Group } from '$lib/components/data-table';
+	import { NO_EQUITY_NOW, type SerialisedEquityNow } from '$lib/salary-tiles';
 
 	interface SerialisedSalaryYear {
 		year: number;
@@ -47,6 +48,7 @@
 		netTotalMinor: string;
 		equityTotalMinor: string;
 		equityOnPayslipMinor: string;
+		equityUnvestedMinor: string;
 		grossMonths: number;
 		netMonths: number;
 		netComplete: boolean;
@@ -59,14 +61,25 @@
 		currency,
 		openYear,
 		onToggle,
-		detail
+		detail,
+		equityNow = NO_EQUITY_NOW
 	}: {
 		years: SerialisedSalaryYear[];
 		currency: string;
 		openYear: number | null;
 		onToggle: (year: number) => void;
 		detail?: Snippet<[number]>;
+		/** The grants as they stand today; the year rows carry vest-day value. */
+		equityNow?: SerialisedEquityNow;
 	} = $props();
+
+	// What a sale today would fetch, and what is still coming. Kept out of every
+	// total on this table: those are pay, and this is a holding that reprices
+	// every morning.
+	const heldNow = $derived(BigInt(equityNow.heldMinor));
+	const pendingNow = $derived(BigInt(equityNow.pendingMinor));
+	const equityPriced = $derived(equityNow.unpricedUnits === 0);
+	const hasEquity = $derived(equityNow.heldUnits > 0 || equityNow.pendingUnits > 0);
 
 	const symbol = $derived(displayCurrency(currency));
 
@@ -170,6 +183,29 @@
 			<span class="f-cell">
 				<span class="f-label">All</span>
 				<span class="c-sub">{years.length} {years.length === 1 ? 'year' : 'years'}</span>
+				{#if hasEquity}
+					<!-- Equity as it stands today, not as it was earned: held is what a
+					     sale this morning would fetch, to vest is what has not arrived.
+					     Beside the totals rather than in them — every other figure here
+					     is pay that was received and will not change again. -->
+					<!-- Terse: this cell is the width of a year. The tile above the
+					     table is where "at today's close" is spelled out. -->
+					<span
+						class="c-sub equity"
+						title="Equity at today's close, not counted in any total above"
+					>
+						{#if !equityPriced}
+							{equityNow.heldUnits + equityNow.pendingUnits} units, unpriced
+						{:else}
+							{[
+								equityNow.heldUnits > 0 ? `held ${compactMinor(heldNow, currency)}` : null,
+								equityNow.pendingUnits > 0 ? `to vest ${compactMinor(pendingNow, currency)}` : null
+							]
+								.filter(Boolean)
+								.join(' · ')}
+						{/if}
+					</span>
+				{/if}
 			</span>
 			{#if visible.has('base')}
 				<span class="f-cell right">
@@ -219,6 +255,7 @@
 			{@const bonus = BigInt(row.bonusTotalMinor)}
 			{@const equity = BigInt(row.equityTotalMinor)}
 			{@const equityOnPayslip = BigInt(row.equityOnPayslipMinor)}
+			{@const equityUnvested = BigInt(row.equityUnvestedMinor)}
 			<span class="year mono">
 				<span class="chevron" class:open={group.open}>{group.open ? '▼' : '▶'}</span>
 				{row.year}
@@ -251,11 +288,15 @@
 						<span class="c-sub quiet">not itemised</span>
 					{/if}
 					{#if equity > 0n}
-						<!-- Beside bonus, outside gross: shares that vested this year at the
-						     close on the day. Listed with the award because that is what
-						     it is, and kept out of the bar's gross for the same reason. -->
+						<!-- Beside bonus, outside gross: the shares AWARDED this year,
+						     whatever year they pay out in. Listed with the award because
+						     that is what it is, and kept out of the bar's gross for the
+						     same reason. What is still to vest is named apart from it —
+						     that half is a quote at today's close, not a settled figure. -->
 						<span class="c-sub equity"
-							>+ {compactMinor(equity, currency)} equity{equityOnPayslip > 0n
+							>+ {compactMinor(equity, currency)} equity{equityUnvested > 0n
+								? ` · ${compactMinor(equityUnvested, currency)} to vest`
+								: ''}{equityOnPayslip > 0n
 								? ` · ${compactMinor(equityOnPayslip, currency)} on slips`
 								: ''}</span
 						>

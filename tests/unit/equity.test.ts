@@ -17,6 +17,7 @@ const tranche = (over: Partial<TrancheFigures>): TrancheFigures => ({
 	deliveredUnits: null,
 	withheldUnits: null,
 	soldUnits: 0,
+	movedUnits: 0,
 	forfeitedOn: null,
 	onPayslip: false,
 	...over

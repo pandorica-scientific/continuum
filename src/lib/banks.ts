@@ -16,6 +16,45 @@ export const BANK_SEED: BankSeed[] = [
 	{ key: 'mbank', label: 'mBank', emoji: '🅜' },
 	{ key: 'rb', label: 'Raiffeisenbank', emoji: '🟡' },
 	{ key: 'cs', label: 'Česká spořitelna', emoji: '🔵' },
+
+	// The euro area, so an account there can be named without typing the bank
+	// in first. A list, not a registry: these are the institutions a household
+	// in the euro area is most likely to hold an account with, and anything
+	// missing is still one "add a bank" away. Seeded with
+	// `onConflictDoNothing`, so a household that has already edited or added
+	// any of these keeps what they have.
+	//
+	// The emoji is the bank's own colour where it has an unmistakable one, and
+	// a plain 🏦 where it does not. It is what shows until a logo file is
+	// present, and what goes on showing for anyone who never fetches one — see
+	// `assets/bank-logos/README.md`.
+	{ key: 'n26', label: 'N26', emoji: '⚫' },
+	{ key: 'wise', label: 'Wise', emoji: '🟢' },
+	{ key: 'bunq', label: 'bunq', emoji: '🌈' },
+	{ key: 'ing', label: 'ING', emoji: '🟠' },
+	{ key: 'deutsche-bank', label: 'Deutsche Bank', emoji: '🔷' },
+	{ key: 'commerzbank', label: 'Commerzbank', emoji: '🟡' },
+	{ key: 'sparkasse', label: 'Sparkasse', emoji: '🔴' },
+	{ key: 'dkb', label: 'DKB', emoji: '🔵' },
+	{ key: 'bnp-paribas', label: 'BNP Paribas', emoji: '🟩' },
+	{ key: 'credit-agricole', label: 'Crédit Agricole', emoji: '🟩' },
+	{ key: 'societe-generale', label: 'Société Générale', emoji: '🔴' },
+	{ key: 'santander', label: 'Santander', emoji: '🔴' },
+	{ key: 'bbva', label: 'BBVA', emoji: '🔵' },
+	{ key: 'caixabank', label: 'CaixaBank', emoji: '🔵' },
+	{ key: 'unicredit', label: 'UniCredit', emoji: '🔴' },
+	{ key: 'intesa', label: 'Intesa Sanpaolo', emoji: '🟢' },
+	{ key: 'abn-amro', label: 'ABN AMRO', emoji: '🟢' },
+	{ key: 'rabobank', label: 'Rabobank', emoji: '🟠' },
+	{ key: 'kbc', label: 'KBC', emoji: '🔵' },
+	{ key: 'belfius', label: 'Belfius', emoji: '🔴' },
+	{ key: 'erste', label: 'Erste Bank', emoji: '🔵' },
+	{ key: 'bank-of-ireland', label: 'Bank of Ireland', emoji: '🔵' },
+	{ key: 'aib', label: 'AIB', emoji: '🟢' },
+	{ key: 'nordea', label: 'Nordea', emoji: '🔵' },
+	{ key: 'op', label: 'OP', emoji: '🟠' },
+	{ key: 'pko', label: 'PKO Bank Polski', emoji: '🔵' },
+
 	// The fallback every import can always resolve to. Kept as a real row so
 	// account.bank can carry a foreign key without a special case.
 	{ key: 'other', label: 'Other', emoji: '💼' }

@@ -314,6 +314,18 @@ export function isCountryCode(value: string | null | undefined): boolean {
 }
 
 /**
+ * `cz ` → `CZ`; `Czechia` → null. A code, or nothing.
+ *
+ * The one folding rule for every country column. Each carries the CHECK
+ * `^[A-Z]{2}$`, and a value that fails it has to be refused here, as a
+ * message, rather than by the constraint, as a 500.
+ */
+export function foldCountry(value: string | null | undefined): string | null {
+	const code = (value ?? '').trim().toUpperCase();
+	return isCountryCode(code) ? code : null;
+}
+
+/**
  * A country's readable name.
  *
  * An unrecognised code shows as itself rather than as a blank: `country` also

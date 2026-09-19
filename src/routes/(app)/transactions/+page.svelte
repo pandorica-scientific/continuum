@@ -254,8 +254,8 @@
 					type="search"
 					name="q"
 					value={data.filter.search ?? ''}
-					placeholder="Search transactions"
-					aria-label="Search transactions"
+					placeholder="Search, or an amount like 1100 or 100-200"
+					aria-label="Search transactions, or type an amount or a range"
 				/>
 			</label>
 		</form>
@@ -305,7 +305,11 @@
 		<div class="grid">
 			<label class="f-wide">
 				<span>Search</span>
-				<input name="q" value={data.filter.search ?? ''} placeholder="counterparty, note, symbol" />
+				<input
+					name="q"
+					value={data.filter.search ?? ''}
+					placeholder="counterparty, note, symbol — or 1100, 100-200, >5000"
+				/>
 			</label>
 			<label>
 				<span>From</span>
@@ -392,7 +396,8 @@
 		<Eyebrow hue="--teal" icon="ledger" label="Matching" />
 		<span class="eyebrow-caption">
 			{data.total}
-			{data.total === 1 ? 'transaction' : 'transactions'} · the newest month is open
+			{data.total === 1 ? 'transaction' : 'transactions'} ·
+			{data.openMonth ? `${data.openMonth} is open` : 'open a month to see its rows'}
 		</span>
 	</div>
 
@@ -536,6 +541,7 @@
 			<TransactionRow
 				row={r}
 				categories={data.categories}
+				accounts={data.accounts}
 				loans={data.loans}
 				knownTags={data.knownTags}
 				proofLabel={r.proofClass ? data.proofLabels[r.proofClass] : null}

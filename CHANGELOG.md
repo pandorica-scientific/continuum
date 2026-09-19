@@ -2,6 +2,210 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security
 
+## 0.10.0 — Unreleased
+
+> A year's tax return on its own card, an import queue that sorts itself, and an account that can be closed.
+
+### ⬆️ Upgrading
+
+This release changes the schema, so a database made by an earlier one needs the
+SQL below before `docker compose up -d` — see [Installing](docs/install.md).
+Back up first.
+
+```sql
+BEGIN;
+
+-- A closed account keeps its transactions and leaves net worth.
+ALTER TABLE account ADD COLUMN IF NOT EXISTS archived_at timestamp with time zone;
+
+-- Vested shares moved to a broker, counted by that broker's report instead.
+-- Before the view: it reads the column.
+ALTER TABLE equity_tranche
+	ADD COLUMN IF NOT EXISTS moved_units numeric(18, 6) NOT NULL DEFAULT '0';
+
+DROP VIEW IF EXISTS net_worth_component;
+CREATE VIEW net_worth_component AS
+	SELECT id, 'property'::text AS kind, kind::text AS subkind, owner_person_id,
+	       currency, value_minor, valued_on
+	  FROM property
+	UNION ALL
+	-- A closed account is not money you have. Its transactions stay in the
+	-- ledger and in cash-flow history; only the balance leaves.
+	SELECT id, 'account', kind::text, owner_person_id,
+	       currency, balance_minor, balance_on
+	  FROM account
+	 WHERE archived_at IS NULL
+	UNION ALL
+	SELECT id, 'loan', kind::text, owner_person_id,
+	       currency, -owed_minor, owed_on
+	  FROM loan
+	UNION ALL
+	SELECT id, 'holding', category, NULL,
+	       currency, value_minor, valued_at::date
+	  FROM holding
+	UNION ALL
+	SELECT t.id, 'equity', 'rsu', g.person_id,
+	       p.currency,
+	       round((coalesce(t.delivered_units, t.units) - t.sold_units - t.moved_units) * p.close_minor)::bigint,
+	       p.day
+	  FROM equity_tranche t
+	  JOIN equity_grant g ON g.id = t.grant_id
+	  JOIN LATERAL (
+	    SELECT close_minor, currency, day FROM security_price sp
+	     WHERE sp.ticker = g.ticker ORDER BY sp.day DESC LIMIT 1
+	  ) p ON true
+	 WHERE t.forfeited_on IS NULL
+	   AND (t.settled_on IS NOT NULL OR t.vests_on <= current_date)
+	   AND (coalesce(t.delivered_units, t.units) - t.sold_units - t.moved_units) > 0;
+
+-- A transfer out to an account this household does not track.
+ALTER TABLE transaction
+	ADD COLUMN IF NOT EXISTS transfer_to_untracked boolean NOT NULL DEFAULT false;
+
+-- An organisation says which country it is in — what puts its role periods on
+-- a tax year card. Set it on each employer's card afterwards; until then that
+-- employer contributes no card.
+ALTER TABLE organisation ADD COLUMN IF NOT EXISTS country text;
+ALTER TABLE organisation DROP CONSTRAINT IF EXISTS organisation_country_check;
+ALTER TABLE organisation ADD CONSTRAINT organisation_country_check
+	CHECK (country IS NULL OR country ~ '^[A-Z]{2}$');
+
+-- A document says which country's paper it is.
+ALTER TABLE document ADD COLUMN IF NOT EXISTS country text;
+ALTER TABLE document DROP CONSTRAINT IF EXISTS document_country_check;
+ALTER TABLE document ADD CONSTRAINT document_country_check
+	CHECK (country IS NULL OR country ~ '^[A-Z]{2}$');
+
+-- Which tax filings this household says are expected, where the derivation is
+-- wrong. NULLS NOT DISTINCT because person_id IS NULL is the card itself.
+CREATE TABLE IF NOT EXISTS tax_filing_override (
+	id uuid PRIMARY KEY,
+	year integer NOT NULL,
+	country text NOT NULL,
+	person_id uuid,
+	expected boolean NOT NULL,
+	-- Named rather than left to Postgres, so an upgraded database and a fresh
+	-- one carry the identical constraint name.
+	CONSTRAINT tax_filing_override_person_id_person_id_fk
+		FOREIGN KEY (person_id) REFERENCES person(id) ON DELETE CASCADE,
+	CONSTRAINT tax_filing_override_country_check CHECK (country ~ '^[A-Z]{2}$')
+);
+CREATE UNIQUE INDEX IF NOT EXISTS tax_filing_override_unique_idx
+	ON tax_filing_override (year, country, person_id) NULLS NOT DISTINCT;
+CREATE INDEX IF NOT EXISTS tax_filing_override_person_idx
+	ON tax_filing_override (person_id);
+
+-- Tax documents filed before this release carry their year and country only in
+-- their generated name — "2025 CZ tax statement". Lift both out, for the ones
+-- whose country really is a two-letter code; the field was free text, so some
+-- may say "Czech Republic", and those are left for a person to set by hand.
+UPDATE document SET country = upper(substring(name from '^[0-9]{4} ([A-Z]{2}) '))
+ WHERE country IS NULL
+   AND type = 'tax_document'
+   AND name ~ '^[0-9]{4} [A-Z]{2} ';
+
+UPDATE document SET
+	period_on     = (substring(name from '^([0-9]{4}) ') || '-01-01')::date,
+	period_end_on = (substring(name from '^([0-9]{4}) ') || '-12-31')::date
+ WHERE period_on IS NULL
+   AND type = 'tax_document'
+   AND name ~ '^[0-9]{4} [A-Z]{2} ';
+
+-- An employer no longer expects a yearly declaration: it is one per person per
+-- year, not one per employer. Anything filed in such a lane falls back to the
+-- card's history — document.lane_id is ON DELETE SET NULL.
+DELETE FROM lane
+ WHERE cadence = 'yearly'
+   AND label = 'Once a year · declaration, annual settlement'
+   AND entity_id IN (SELECT id FROM organisation WHERE kind = 'employer');
+
+COMMIT;
+```
+
+### ✨ Added
+
+- 🗓️ **A tax year is a card of its own, holding everyone** — an annual return is one filing per person per year, not one per employer, so the card is drawn from each employer's country and the years worked there with a row per person.
+- 🏷️ **Every document row says what the document already is** — type, months covered, subject and country as quiet chips beside your own tags, and clicking one narrows the list to everything sharing that fact.
+- 🌍 **A document can say which country it is from** — a field rather than a slice of its name, so Czech and Austrian paper for the same year files apart.
+- 🏦 **Statements draws a band for a loan** — a mortgage statement has a card and a coverage ribbon of its own instead of living under "Not assigned yet".
+- 🖱️ **Drag a document onto the card it belongs to** — from the proposals list or any card's own paper, onto any card at all, not just the one guessed.
+- 🚪 **Role periods can be recorded and closed from the organisation's card** — including that somebody left, so a former employer stops being expected to send anything.
+- ✏️ **A role period's title and start date can be corrected afterward** — recording one without a start date no longer means it stays blank forever.
+- 🌐 **The languages scanned paper is read in are a setting** — English, Czech, Polish, German, Spanish and Ukrainian ship in every image, and only what a household needs is on by default because each costs reading time.
+- 🔁 **A holding can be told the symbol a feed prices it under** — for a broker ticker a feed calls something else (Tesla on Xetra is "TL0", not "TSLA"), tried at once and on every refresh after.
+- 🏦 **A fresh instance knows the euro area's banks** — N26, Wise, bunq, ING, Deutsche Bank, Sparkasse, DKB, Commerzbank, BNP Paribas, Crédit Agricole, Société Générale, Santander, BBVA, CaixaBank, UniCredit, Intesa, ABN AMRO, Rabobank, KBC, Belfius, Erste, Bank of Ireland, AIB, Nordea, OP and PKO, seeded without touching a bank already added or renamed.
+- 🖼️ **An account shows its bank's logo** — the files ship in `assets/bank-logos/` with each one's source and terms in `CREDITS.md` beside them, and a bank without one keeps its emoji.
+- 📈 **Salary counts a grant in the year it was awarded, vested and unvested alike** — vested parts at the close on each vest day, the rest at the latest close and labelled as an estimate, with an "Equity to vest" tile and one Change line for pay, bonus and equity together.
+- ➕ **Adding files one at a time gathers them instead of replacing** — each visit to the picker merges into what is already there, the same file twice counts once, and each has a ✕.
+- 📎 **Each paper in a filing says what it is and where it is from** — every picked file carries its own kind and country, so a Czech return, an Austrian employer report and a broker report go up together and are named apart.
+- 🧾 **A tax statement's suggested gross follows the currency you file in** — computed per currency, so a year of Czech payslips read in CZK is the sum of what the slips said rather than a round trip through the base currency.
+- 📊 **The equity table shows what the whole grant is worth** — a "Grant value" column gives vested plus still-to-vest at the same close, labelled as the estimate it is.
+- 🖱️ **Hovering the investments chart reads out that point** — the month, the value, money in and the gain between them, snapped to real points rather than interpolated.
+- ↪️ **A filed row can be called an own transfer afterwards** — the register asks "Moved to" or "Came from" by the row's sign, so money moved between two of your own accounts no longer stays counted as spending.
+- 👥 **One payee's queued rows sit on one card** — grouped on the destination account number, each row keeping its own picker and Save, with a repeated amount called out because that is what a standing payment looks like.
+- 🔍 **The register's search box takes an amount or a range** — `1100` for exactly that much, `100-200` for a band, `>5000` or `<=50` for one side, matched on the amount as printed.
+- ⌨️ **The category picker is searched by typing** — case and diacritics are folded so "kavarna" finds "Kavárna", a group name matches everything under it, and typing at a closed picker opens it.
+- 🎨 **A queued row says why it is queued, as a colour along its top edge** — green for a suggested category, purple for a transfer to confirm, red where two rules disagree, blue for a row you sent back and yellow where nothing was recognised.
+- 🧭 **"Moved to which account?" remembers where the last ones went** — the same destination account number carries its previous answer over, and failing that the most common answer from this account is preselected.
+- 🗄️ **An account can be closed, and a mistaken one deleted** — closing keeps every transaction and only takes the balance out of net worth, and deleting is offered only for an account that never held one.
+- 🔎 **A row named after a payment method now says where the money went** — an (i) beside "QR Platba" or "okamžitá" shows the account number, the variable symbol and the line as printed.
+- 🏦 **Vested shares can be recorded as moved to a broker** — that broker's report counts them from then on, so the same shares are not counted twice and nothing pretends they were sold.
+
+### 🔧 Changed
+
+- 🚌 **Transport is what you buy, not what you own** — Public transport, Taxi & ride-hailing, Car rental and Parking & tolls replace Car loan, Fuel & tolls and Car service, and a household with a car makes a group for it.
+- 💰 **"Cash buffer" is now "Money set aside"** — it names the act, money that left the current account without being spent, rather than a thing.
+- 🗂️ **An employer's catch-all lane is now "Contract & HR"** — "Changes to pay" undersold the contract, its amendments and a raise or bonus letter.
+- 👤 **An organisation's card names whose relationship it is** — "Robert · Research scientist · since 2025", so a household of more than one can tell whose employer a card is.
+- 📇 **Income & Tax cards read as employment history** — the job held leads, earlier ones follow newest-first, and a finished employment collapses by default.
+- 🏷️ **The transfer buttons say what they decide** — "Own transfer" is now "Internal transfer" and "Not a transfer" is "Not the same", because rejecting is a claim about the match, not about the row.
+- 🔢 **The queue is ordered by what is worth answering, not by date** — transfers first, then rows already filled in, then conflicts and rows sent back, then the unrecognised, all ranked before the cut of fifty.
+- 🔢 **Thousands are grouped with an apostrophe** — `103'055.29` rather than `103 055.29`, because a space reads as a gap between two numbers and an apostrophe is nobody's decimal mark.
+- 📥 **The import queue empties as files land** — it holds only what is still happening plus anything that failed, instead of repeating a finished row that Recent imports already shows.
+- 🕰️ **Recent imports lets go of statements after a week** — the row hides and nothing else, so the import, its transactions and its document stay and a re-upload is still caught as a duplicate.
+- 📏 **The equity table has room to be read** — the price date moved to one line under the table and the Pending units column went, since "0 / 62" already says it.
+- 💶 **The Portfolio tile stops printing the same figure twice** — the "≈" line is hidden when the broker account is already in the household's currency.
+
+### 🐛 Fixed
+
+- 📅 **Any document can say which months it covers** — the Covers fields showed only for a bank statement, so a tax return filed by hand had nowhere to say which year it was for.
+- 🧾 **A tax document filed from the Tax screen is dated** — it carried no period, which is the other half of why a year's cell stayed red after the paperwork went in.
+- 🎚️ **The confidence floor's slider fill lines up with its thumb** — the track was painted to the raw percentage while the thumb sits where a 5–95 range puts it.
+- 🔁 **A transfer you asserted by hand adopts its real other half when the statement arrives** — an opposite, equal leg in the named account within three days becomes the pair, and the hand-written marker comes off.
+- 👯 **A proposed transfer is asked about once, not twice** — the leg the money left on is the one kept in the queue.
+- 🔀 **A proposed transfer shows what it was matched with** — the counterpart sits under the row with its date, account, amount and how many days apart the two are.
+- 🔢 **A ČS payment is no longer named after a bank code** — a payee is never digits alone, so "0308" gives way to the order line naming the shop, and a row stored under the old name is corrected in place, fingerprint included, when its statement is uploaded again.
+- 🏷️ **A ČS payment is named by what it was for, not by what kind of payment it was** — "okamžitá" and "úvěru" were the payment's kind, and the line naming the counterparty was one position along.
+- ↩️ **"Not spending" can be taken back** — the register carries the same way back out its loan payments have, so a debit wrongly called a transfer no longer stays out of spending for good.
+- 🔗 **A matched transfer can no longer be given a category** — filing such a row is refused and the register says it is matched, so one leg of an own transfer cannot show as "Money set aside".
+- 🚪 **A transfer to a closed or untracked account can be taken back** — it reads as the one-sided transfer it is, with the same way out a named account has.
+- 🏷️ **Filing by hand applies a rule's tags, as filing by itself always did** — a tag is not a verdict, so they now apply whatever category was chosen.
+- ↔️ **"Moved to" says "Came from" on money arriving** — the question followed one direction whatever the sign.
+- 🔄 **A suggestion that arrives late is shown without a page reload** — the picker follows the rule's suggestion until a person picks, and only then stops listening.
+- 📐 **Save and "New category…" stay where they are** — the picker has a fixed width and a long name is truncated rather than pushing the buttons about.
+- 📱 **A queued row is laid out on a phone, not left to wrap** — the picker with Save at its end, then "New category…", the destination, and "Not spending" across the bottom.
+- 👤 **A salary row says whose pay it is instead of deciding quietly** — it states the remembered person with a way to say "not theirs", and asks only when nothing answers.
+- 🧹 **One employer makes one remembered rule** — a trailing run of bare numbers is never part of a name, so "MSD CZECH REPUBLIC S 0138" is learned as the same employer as "MSD CZECH REPUBLIC S".
+- 🕰️ **A balance from an old statement says how old it is** — a figure more than a week behind carries its age in amber beside the date.
+- 📊 **"Month by month" covers the period the rest of the screen is showing** — it drew a fixed six months whatever the range above it.
+- 🧾 **A Revolut statement with a refunded fee is no longer rejected whole** — the fee is signed, so a refund's negative fee was being charged a second time and the balance failed to follow.
+- 🔗 **The enrollment link only shows when it means something** — hidden in open mode, where everyone can already sign in and set a password in their own Settings.
+- 📐 **The "Add account" row stopped losing fields on a narrower screen** — it wraps onto more lines instead of collapsing Name and Whose toward invisible.
+- 🏢 **A new organisation card no longer suggests naming it after a car** — the placeholder fits what the card is.
+- 🗂️ **Filing a document for the first time lands it in its lane, not permanently in History** — the lane is guessed whenever exactly one on that card fits.
+- 📅 **Saving a document no longer wipes the month a payslip covers** — saving anything but a bank statement read the hidden Covers fields as "clear it".
+- ◀️ **"Previous year" no longer refuses to move** — its bound was read off the cells of the year already on screen.
+- 🚪 **Switching employer mid-year no longer marks the one you left as missing payslips forever** — a closed role period caps what a monthly lane expects, as its start already did.
+- 📅 **A yearly declaration stops being expected once the job is over** — a closed role bounds a yearly lane's last year the same way it bounds a monthly one's.
+- 🙈 **An empty monthly or yearly lane no longer draws a blank grid** — a seeded lane stays out of the way until it holds a filing or a gap.
+- 💬 **"no rhythm" is gone from a lane with no schedule** — it read as jargon, so a cadence-less lane just shows its name.
+- ☑️ **Saving OCR languages no longer unchecks every one of them** — the form reset was reverting each box to its un-hydrated state on submit.
+- 📉 **An XTB report's total value is read under its real column label** — "Open position value" parsed as 0 and emptied the portfolio chart and the net-worth sidebar.
+- 🏷️ **A holding no feed can price now says so, with a place to type its close** — the same prompt equity grants already had.
+- 📈 **Net worth's investments figure moves with the market between broker reports** — each holding's price drift since the report is added on top, all-or-nothing, so a half-priced portfolio never reads as a fall.
+- 📉 **The investments line goes dashed after the last broker report, as it always claimed to** — the marked value is appended as its own final point, so a report uploaded this month no longer leaves the tail with nothing to draw.
+- 🌱 **"With equity" counts every grant, not only what has vested** — the whole grant is valued at the latest close, with units already moved to the broker left out so nothing is counted twice.
+
 ## 0.9.3 — 2026-09-16
 
 > Open mode you can actually close, and a setup wizard that keeps what you typed.
@@ -16,88 +220,6 @@
 ## 0.9.2 — 2026-09-16
 
 > Shares an employer grants, vesting on their own calendar, priced every day.
-
-### ⬆️ Upgrading
-
-Three new tables and one changed view. Pulling the image alone leaves a 0.9.1
-database refused at boot; run this against it first (backup first, see
-[Install](docs/install.md#updating)), then `docker compose up -d`.
-
-```sql
-CREATE TABLE IF NOT EXISTS "security_price" (
-	"ticker" text NOT NULL,
-	"day" date NOT NULL,
-	"close_minor" bigint NOT NULL,
-	"currency" text NOT NULL REFERENCES "currency"("code"),
-	"source" text NOT NULL,
-	"fetched_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "security_price_ticker_day_pk" PRIMARY KEY ("ticker", "day"),
-	CONSTRAINT security_price_source_check CHECK (source in ('yahoo', 'stooq', 'manual'))
-);
-CREATE INDEX IF NOT EXISTS "security_price_currency_idx" ON "security_price" ("currency");
-CREATE TABLE IF NOT EXISTS "equity_grant" (
-	"id" uuid PRIMARY KEY NOT NULL,
-	"person_id" uuid NOT NULL REFERENCES "person"("id") ON DELETE CASCADE,
-	"engagement_id" uuid REFERENCES "engagement"("id") ON DELETE SET NULL,
-	"ticker" text NOT NULL,
-	"currency" text NOT NULL REFERENCES "currency"("code"),
-	"granted_on" date NOT NULL,
-	"total_units" numeric(18, 6) NOT NULL,
-	"label" text,
-	"document_id" uuid REFERENCES "document"("id") ON DELETE SET NULL,
-	"note" text
-);
-CREATE INDEX IF NOT EXISTS "equity_grant_person_idx" ON "equity_grant" ("person_id");
-CREATE INDEX IF NOT EXISTS "equity_grant_engagement_idx" ON "equity_grant" ("engagement_id");
-CREATE INDEX IF NOT EXISTS "equity_grant_document_idx" ON "equity_grant" ("document_id");
-CREATE INDEX IF NOT EXISTS "equity_grant_currency_idx" ON "equity_grant" ("currency");
-CREATE INDEX IF NOT EXISTS "equity_grant_ticker_idx" ON "equity_grant" ("ticker");
-CREATE TABLE IF NOT EXISTS "equity_tranche" (
-	"id" uuid PRIMARY KEY NOT NULL,
-	"grant_id" uuid NOT NULL REFERENCES "equity_grant"("id") ON DELETE CASCADE,
-	"vests_on" date NOT NULL,
-	"units" numeric(18, 6) NOT NULL,
-	"settled_on" date,
-	"delivered_units" numeric(18, 6),
-	"withheld_units" numeric(18, 6),
-	"sold_units" numeric(18, 6) DEFAULT '0' NOT NULL,
-	"forfeited_on" date,
-	"on_payslip" boolean DEFAULT false NOT NULL
-);
-CREATE INDEX IF NOT EXISTS "equity_tranche_grant_idx" ON "equity_tranche" ("grant_id");
-CREATE INDEX IF NOT EXISTS "equity_tranche_vests_idx" ON "equity_tranche" ("grant_id", "vests_on");
-DROP VIEW IF EXISTS net_worth_component;
-CREATE VIEW net_worth_component AS
-	SELECT id, 'property'::text AS kind, kind::text AS subkind, owner_person_id,
-	       currency, value_minor, valued_on
-	  FROM property
-	UNION ALL
-	SELECT id, 'account', kind::text, owner_person_id,
-	       currency, balance_minor, balance_on
-	  FROM account
-	UNION ALL
-	SELECT id, 'loan', kind::text, owner_person_id,
-	       currency, -owed_minor, owed_on
-	  FROM loan
-	UNION ALL
-	SELECT id, 'holding', category, NULL,
-	       currency, value_minor, valued_at::date
-	  FROM holding
-	UNION ALL
-	SELECT t.id, 'equity', 'rsu', g.person_id,
-	       p.currency,
-	       round((coalesce(t.delivered_units, t.units) - t.sold_units) * p.close_minor)::bigint,
-	       p.day
-	  FROM equity_tranche t
-	  JOIN equity_grant g ON g.id = t.grant_id
-	  JOIN LATERAL (
-	    SELECT close_minor, currency, day FROM security_price sp
-	     WHERE sp.ticker = g.ticker ORDER BY sp.day DESC LIMIT 1
-	  ) p ON true
-	 WHERE t.forfeited_on IS NULL
-	   AND (t.settled_on IS NOT NULL OR t.vests_on <= current_date)
-	   AND (coalesce(t.delivered_units, t.units) - t.sold_units) > 0;
-```
 
 ### ✨ Added
 
@@ -114,41 +236,6 @@ CREATE VIEW net_worth_component AS
 ## 0.9.1 — 2026-09-13
 
 > Regions you can actually name and reach, places worth the detour, and a scratch you can take back.
-
-### ⬆️ Upgrading
-
-Two new tables and two new columns. Pulling the image alone leaves a 0.9.0
-database refused at boot; run this against it first (backup first, see
-[Install](docs/install.md#updating)), then `docker compose up -d`. The places
-themselves are seeded on the next boot.
-
-```sql
-CREATE TABLE IF NOT EXISTS "place" (
-	"id" text PRIMARY KEY NOT NULL,
-	"name" text NOT NULL,
-	"country" char(2) NOT NULL,
-	"region" text,
-	"kind" text NOT NULL,
-	"importance" integer NOT NULL,
-	"latitude" double precision NOT NULL,
-	"longitude" double precision NOT NULL,
-	"sort_order" integer NOT NULL,
-	"retired" boolean DEFAULT false NOT NULL,
-	CONSTRAINT place_kind_check CHECK (kind in ('city', 'town', 'village', 'landmark', 'natural_landmark', 'national_park', 'island', 'beach', 'mountain', 'lake', 'archaeological_site', 'religious_site', 'museum', 'historic_site'))
-);
-CREATE INDEX IF NOT EXISTS "place_country_idx" ON "place" ("country", "sort_order");
-CREATE INDEX IF NOT EXISTS "place_country_region_idx" ON "place" ("country", "region");
-CREATE TABLE IF NOT EXISTS "sight_visit" (
-	"id" uuid PRIMARY KEY NOT NULL,
-	"place_id" text NOT NULL REFERENCES "place"("id") ON DELETE CASCADE,
-	"year" integer NOT NULL,
-	"seen_at" timestamp with time zone NOT NULL,
-	CONSTRAINT "sight_visit_place_id_unique" UNIQUE ("place_id")
-);
-ALTER TABLE "trip_place" ADD COLUMN IF NOT EXISTS "place_id" text REFERENCES "place"("id") ON DELETE SET NULL;
-CREATE INDEX IF NOT EXISTS "trip_place_place_idx" ON "trip_place" ("place_id");
-ALTER TABLE "recipe_category" ADD COLUMN IF NOT EXISTS "series" text DEFAULT '--series-r1' NOT NULL;
-```
 
 ### ✨ Added
 

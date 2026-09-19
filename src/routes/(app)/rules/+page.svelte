@@ -52,6 +52,20 @@
 	// Local so the slider moves under the thumb rather than after a round trip.
 	let floor = $derived(data.thresholdPct);
 
+	/** The slider's own ends. Named once: the fill below has to agree with them. */
+	const FLOOR_MIN = 5;
+	const FLOOR_MAX = 95;
+
+	/**
+	 * How far along the track the thumb actually is, 0–100.
+	 *
+	 * NOT the value. A range input puts its thumb at `(value - min) / (max - min)`,
+	 * so on a 5–95 slider the value and the position are never the same number:
+	 * painting the fill at `5%` left it sticking out past a thumb parked hard
+	 * left, and at `95%` it stopped short of a thumb parked hard right.
+	 */
+	const fillPct = $derived(((floor - FLOOR_MIN) / (FLOOR_MAX - FLOOR_MIN)) * 100);
+
 	function saveFloor() {
 		const body = new FormData();
 		body.set('pct', String(floor));
@@ -155,12 +169,12 @@
 		<!-- Gradient track (yellow to green) says which end is "barely trusted". -->
 		<input
 			type="range"
-			min="5"
-			max="95"
+			min={FLOOR_MIN}
+			max={FLOOR_MAX}
 			step="5"
 			bind:value={floor}
 			aria-label="Confidence floor"
-			style:--fill="{floor}%"
+			style:--fill="{fillPct}%"
 			onchange={saveFloor}
 		/>
 		<span class="mono floor-end">100%</span>
@@ -642,9 +656,12 @@
 	}
 	.floor-value {
 		font-size: var(--text-3xl);
-		min-width: 56px;
+		/* Wide enough for "100%" at this size: a box sized for two digits made a
+		   three-character reading spill back over the track's "0%" label. */
+		min-width: 5ch;
 		text-align: right;
 		flex: none;
+		white-space: nowrap;
 	}
 	.count-line {
 		margin: 0;

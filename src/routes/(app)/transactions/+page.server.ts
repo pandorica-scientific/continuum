@@ -38,6 +38,13 @@ import { systemShelfId } from '$lib/server/documents/shelves';
 import { saveUploadAndHash } from '$lib/server/system/files';
 import { uuidv7 } from 'uuidv7';
 import { extname } from 'node:path';
+import {
+	clearOneSidedTransfer,
+	markOneSidedTransfer,
+	markUntrackedTransfer
+} from '$lib/server/import/transfer-decisions';
+import { UNTRACKED_ACCOUNT } from '$lib/import/transfer-target';
+import { activeAccount } from '$lib/server/accounts';
 import { displayCurrency, formatMinor, parseAmountToMinor } from '$lib/money';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -58,6 +65,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		db
 			.select({ id: account.id, name: account.name, currency: account.currency })
 			.from(account)
+			.where(activeAccount())
 			.orderBy(account.createdAt, account.id),
 		loadCategoryGroups(),
 		// Hidden entirely when the module is off; otherwise only loans with a balance
@@ -72,8 +80,14 @@ export const load: PageServerLoad = async ({ url }) => {
 	]);
 
 	// Only the expanded month's transactions are read, or drawing the totals table
-	// would load the whole ledger. Newest month opens by default so rows are visible.
-	const openMonth = filter.month ?? months[0]?.month ?? null;
+	// would load the whole ledger.
+	//
+	// Nothing is open until a month is asked for. Falling back to the newest
+	// month made "no month in the URL" mean two different things — "just
+	// arrived" and "the open one was just closed" — so closing a month on page
+	// two reopened the current month and dragged the pager back to page one with
+	// it. The table now opens collapsed, and closing closes.
+	const openMonth = filter.month ?? null;
 	const page = openMonth ? await registerPage({ ...filter, month: openMonth }) : null;
 
 	const categoryName = new Map(categories.map((c) => [c.id, c.name]));
@@ -204,6 +218,8 @@ export const load: PageServerLoad = async ({ url }) => {
 				categoryToken: tokenFor(r.categoryId),
 				reviewState: r.reviewState,
 				account: r.accountName,
+				// So the "moved to" picker cannot offer the account it left.
+				accountId: r.accountId,
 				isTransfer: r.isTransfer,
 				transferKind: r.transferKind,
 				// Only shown when the source was inferred rather than declared, to avoid noise on every row.
@@ -447,6 +463,44 @@ export const actions: Actions = {
 			transactionId: asRowId(form.get('transactionId')),
 			interest: String(form.get('interest') ?? '')
 		});
+		if (!result.ok) return fail(result.status, { message: result.message });
+		return { ok: true };
+	},
+
+	/**
+	 * Call a filed row an own transfer after the fact.
+	 *
+	 * The decision is offered on Import, and answering ANY question there moves
+	 * the row out of that queue — so a row filed under a category could never be
+	 * re-read as a transfer, though that is exactly the mistake worth undoing: it
+	 * leaves money moved between two of your own accounts counted as spending.
+	 * The register could already change a row's category and take a transfer
+	 * marking off; this is the direction that was missing.
+	 */
+	markTransfer: async ({ request }) => {
+		const form = await request.formData();
+		const id = asRowId(form.get('transactionId'));
+		const to = String(form.get('toAccountId') ?? '');
+		if (!to) return fail(400, { id, message: 'Pick where the money went.' });
+		const result =
+			to === UNTRACKED_ACCOUNT
+				? await markUntrackedTransfer(id)
+				: await markOneSidedTransfer(id, asRowId(to));
+		if (!result.ok) return fail(result.status, { id, message: result.message });
+		return { ok: true };
+	},
+
+	/**
+	 * Undo "not spending" on a row that was never a transfer.
+	 *
+	 * The decision is made on Import, and marking it moves the row OUT of that
+	 * queue — so the screen that offered the choice is the one screen that can
+	 * no longer take it back. Without this the mistake is permanent, and a debit
+	 * wrongly called a transfer goes on being left out of spending forever.
+	 */
+	clearTransfer: async ({ request }) => {
+		const form = await request.formData();
+		const result = await clearOneSidedTransfer(asRowId(form.get('transactionId')));
 		if (!result.ok) return fail(result.status, { message: result.message });
 		return { ok: true };
 	},

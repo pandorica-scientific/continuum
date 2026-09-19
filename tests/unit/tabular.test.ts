@@ -228,6 +228,25 @@ describe('reading a statement from a grid', () => {
 		expect(reading.questions.map((q) => q.dimension)).toContain('dateOrder');
 	});
 
+	it('keeps the sign of a fee, so one handed back on a refund is not charged twice', async () => {
+		const { readTabular } = await import('$lib/server/import/tabular/statement');
+		// Revolut refunds the fee with the payment and writes it negative. The
+		// chain nets `amount - fee` either way, so only the signed reading adds
+		// it back; a magnitude leaves the chain short by two fees.
+		const refunded = [
+			'Date;Description;Amount;Fee;Balance',
+			'02/04/2025;COFFEE;-10.00;0.98;89.02',
+			'03/04/2025;COFFEE REFUND;10.00;-0.98;100.00',
+			'17/04/2025;GROCERIES;-20.00;;80.00'
+		].join('\n');
+		const choice = chooseGrid(candidateGrids(new TextEncoder().encode(refunded)))!;
+		const reading = readTabular(choice, choice.transactions[0], { currency: 'GBP' });
+		const rows = reading.statement!.rows;
+		expect(rows[0].feeMinor).toBe(98n);
+		expect(rows[1].feeMinor).toBe(-98n);
+		expect(rows[2].feeMinor).toBeUndefined();
+	});
+
 	it('takes direction from which column holds the value, for a debit/credit pair', async () => {
 		const { readTabular } = await import('$lib/server/import/tabular/statement');
 		const uk = [

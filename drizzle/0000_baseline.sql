@@ -98,6 +98,7 @@ CREATE TABLE "document" (
 	"expiry_verb" text DEFAULT 'expires' NOT NULL,
 	"period_on" date,
 	"period_end_on" date,
+	"country" text,
 	"content_hash" text,
 	"lane_id" uuid
 );
@@ -217,6 +218,7 @@ CREATE TABLE "organisation" (
 	"name" text NOT NULL,
 	"kind" text DEFAULT 'other' NOT NULL,
 	"emoji" text DEFAULT '🏛️' NOT NULL,
+	"country" text,
 	"notes" text,
 	"shelf_id" uuid NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
@@ -258,6 +260,7 @@ CREATE TABLE "account" (
 	"numbers" jsonb DEFAULT '[]'::jsonb NOT NULL,
 	"balance_minor" bigint DEFAULT 0 NOT NULL,
 	"balance_on" date,
+	"archived_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
@@ -374,6 +377,7 @@ CREATE TABLE "transaction" (
 	"source_method" text,
 	"proof_class" text,
 	"transfer_to_account_id" uuid,
+	"transfer_to_untracked" boolean DEFAULT false NOT NULL,
 	"transfer_pair_id" uuid
 );
 --> statement-breakpoint
@@ -669,6 +673,7 @@ CREATE TABLE "equity_tranche" (
 	"delivered_units" numeric(18, 6),
 	"withheld_units" numeric(18, 6),
 	"sold_units" numeric(18, 6) DEFAULT '0' NOT NULL,
+	"moved_units" numeric(18, 6) DEFAULT '0' NOT NULL,
 	"forfeited_on" date,
 	"on_payslip" boolean DEFAULT false NOT NULL
 );
@@ -681,6 +686,14 @@ CREATE TABLE "security_price" (
 	"source" text NOT NULL,
 	"fetched_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "security_price_ticker_day_pk" PRIMARY KEY("ticker","day")
+);
+--> statement-breakpoint
+CREATE TABLE "tax_filing_override" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"year" integer NOT NULL,
+	"country" text NOT NULL,
+	"person_id" uuid,
+	"expected" boolean NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "tax_statement" (
@@ -1013,6 +1026,7 @@ ALTER TABLE "equity_grant" ADD CONSTRAINT "equity_grant_currency_currency_code_f
 ALTER TABLE "equity_grant" ADD CONSTRAINT "equity_grant_document_id_document_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."document"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "equity_tranche" ADD CONSTRAINT "equity_tranche_grant_id_equity_grant_id_fk" FOREIGN KEY ("grant_id") REFERENCES "public"."equity_grant"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "security_price" ADD CONSTRAINT "security_price_currency_currency_code_fk" FOREIGN KEY ("currency") REFERENCES "public"."currency"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "tax_filing_override" ADD CONSTRAINT "tax_filing_override_person_id_person_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."person"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tax_statement" ADD CONSTRAINT "tax_statement_person_id_person_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."person"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tax_statement" ADD CONSTRAINT "tax_statement_currency_currency_code_fk" FOREIGN KEY ("currency") REFERENCES "public"."currency"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tax_statement_line" ADD CONSTRAINT "tax_statement_line_statement_id_tax_statement_id_fk" FOREIGN KEY ("statement_id") REFERENCES "public"."tax_statement"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -1130,6 +1144,7 @@ CREATE INDEX "equity_grant_ticker_idx" ON "equity_grant" USING btree ("ticker");
 CREATE INDEX "equity_tranche_grant_idx" ON "equity_tranche" USING btree ("grant_id");--> statement-breakpoint
 CREATE INDEX "equity_tranche_vests_idx" ON "equity_tranche" USING btree ("grant_id","vests_on");--> statement-breakpoint
 CREATE INDEX "security_price_currency_idx" ON "security_price" USING btree ("currency");--> statement-breakpoint
+CREATE INDEX "tax_filing_override_person_idx" ON "tax_filing_override" USING btree ("person_id");--> statement-breakpoint
 CREATE INDEX "tax_statement_currency_idx" ON "tax_statement" USING btree ("currency");--> statement-breakpoint
 CREATE UNIQUE INDEX "tax_statement_unique_idx" ON "tax_statement" USING btree ("person_id","year","country");--> statement-breakpoint
 CREATE INDEX "tax_statement_line_statement_idx" ON "tax_statement_line" USING btree ("statement_id");--> statement-breakpoint
@@ -1374,6 +1389,12 @@ ALTER TABLE document ADD CONSTRAINT document_period_end_last_of_month
 ALTER TABLE document ADD CONSTRAINT document_period_order_check
 	CHECK (period_end_on IS NULL OR (period_on IS NOT NULL AND period_end_on >= period_on));
 --> statement-breakpoint
+-- The same shape as document_identity.country below, for the same reason: the
+-- field feeds a flag and a country name from Intl, and both need a code rather
+-- than whatever somebody typed.
+ALTER TABLE document ADD CONSTRAINT document_country_check
+	CHECK (country IS NULL OR country ~ '^[A-Z]{2}$');
+--> statement-breakpoint
 -- Two upper-case letters or nothing. The field is a picker, so this is not
 -- defending against a typist; it is what keeps the artwork lookup and the flag
 -- from being handed 'Czechia' by a future importer and drawing nothing.
@@ -1389,6 +1410,12 @@ ALTER TABLE subject ADD CONSTRAINT subject_active_period_check
 -- expect a negative number of filings.
 ALTER TABLE engagement ADD CONSTRAINT engagement_period_order_check
 	CHECK (ends_on IS NULL OR starts_on IS NULL OR ends_on >= starts_on);
+--> statement-breakpoint
+-- Two upper-case letters or nothing, as document.country and
+-- document_identity.country: the tax year card matches on it, and a card and
+-- its employer have to fold the same way or they never meet.
+ALTER TABLE organisation ADD CONSTRAINT organisation_country_check
+	CHECK (country IS NULL OR country ~ '^[A-Z]{2}$');
 --> statement-breakpoint
 -- Every N years, where N is a whole number of years. Zero would divide the
 -- ribbon by nothing and a negative would run it backwards.
@@ -1452,6 +1479,19 @@ ALTER TABLE visit ADD CONSTRAINT visit_year_check
 -- A recipe scales FROM its stored servings, so zero would divide by nothing.
 ALTER TABLE recipe ADD CONSTRAINT recipe_servings_check
 	CHECK (servings > 0);
+--> statement-breakpoint
+-- Two upper-case letters, matching document.country and document_identity.country:
+-- one folding rule has to serve all three, or a card and its paper stop matching.
+ALTER TABLE tax_filing_override ADD CONSTRAINT tax_filing_override_country_check
+	CHECK (country ~ '^[A-Z]{2}$');
+--> statement-breakpoint
+-- NULLS NOT DISTINCT, because person_id IS NULL is the card ITSELF and there is
+-- exactly one of those per year and country. Postgres treats nulls as distinct by
+-- default, which would let one card be both added and dismissed at once, and would
+-- make the upsert that writes these rows insert a second one instead of flipping
+-- the first.
+CREATE UNIQUE INDEX tax_filing_override_unique_idx
+	ON tax_filing_override (year, country, person_id) NULLS NOT DISTINCT;
 --> statement-breakpoint
 
 -- ---- One visit per trip destination ----
@@ -1530,9 +1570,12 @@ CREATE VIEW net_worth_component AS
 	       currency, value_minor, valued_on
 	  FROM property
 	UNION ALL
+	-- A closed account is not money you have. Its transactions stay in the
+	-- ledger and in cash-flow history; only the balance leaves.
 	SELECT id, 'account', kind::text, owner_person_id,
 	       currency, balance_minor, balance_on
 	  FROM account
+	 WHERE archived_at IS NULL
 	UNION ALL
 	SELECT id, 'loan', kind::text, owner_person_id,
 	       currency, -owed_minor, owed_on
@@ -1542,9 +1585,11 @@ CREATE VIEW net_worth_component AS
 	       currency, value_minor, valued_at::date
 	  FROM holding
 	UNION ALL
+	-- Still held: delivered (or scheduled) less sold, less moved to a broker
+	-- whose report already counts them under 'holding'.
 	SELECT t.id, 'equity', 'rsu', g.person_id,
 	       p.currency,
-	       round((coalesce(t.delivered_units, t.units) - t.sold_units) * p.close_minor)::bigint,
+	       round((coalesce(t.delivered_units, t.units) - t.sold_units - t.moved_units) * p.close_minor)::bigint,
 	       p.day
 	  FROM equity_tranche t
 	  JOIN equity_grant g ON g.id = t.grant_id
@@ -1554,7 +1599,7 @@ CREATE VIEW net_worth_component AS
 	  ) p ON true
 	 WHERE t.forfeited_on IS NULL
 	   AND (t.settled_on IS NOT NULL OR t.vests_on <= current_date)
-	   AND (coalesce(t.delivered_units, t.units) - t.sold_units) > 0;
+	   AND (coalesce(t.delivered_units, t.units) - t.sold_units - t.moved_units) > 0;
 --> statement-breakpoint
 
 -- ---- Seed rows ----

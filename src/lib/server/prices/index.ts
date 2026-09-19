@@ -9,11 +9,12 @@
  * Failures are per ticker — one bad symbol or a down feed must not stop the
  * others; screens show how old the price they display is.
  */
-import { and, desc, eq, gte, inArray, isNull, lte } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
 import { equityGrant, equityTranche, holding, securityPrice } from '$lib/server/db/schema';
 import { isCurrencyCode, minorDigits } from '$lib/money';
 import { priceProviders, type PriceProviderId, type Quote } from './adapter';
+import { getPriceAliases, withAlias } from './settings';
 import { STOOQ_SCALE_CURRENCY } from './stooq';
 import './yahoo';
 import './stooq';
@@ -74,15 +75,20 @@ export async function refreshPrices(
 	fetchFn: typeof fetch = fetch,
 	handle: Queryable = db
 ): Promise<{ fetched: number; skipped: string[] }> {
-	const tickers = await pricedTickers(handle);
+	const [tickers, aliases] = await Promise.all([pricedTickers(handle), getPriceAliases(handle)]);
 	let fetched = 0;
 	const skipped: string[] = [];
 	for (const { ticker, currency } of tickers) {
+		// The symbol asked FOR may differ from the ticker held: an alias swaps
+		// only the base a feed does not recognise, keeping the market suffix
+		// that already resolved correctly. Storage below still keys on the
+		// original ticker — that is what `holding` and `equityGrant` carry.
+		const asked = withAlias(ticker, aliases);
 		let quote: Quote | null = null;
 		let source: PriceProviderId | null = null;
 		for (const provider of priceProviders()) {
 			try {
-				const got = await provider.fetchClose(ticker, fetchFn);
+				const got = await provider.fetchClose(asked, fetchFn);
 				if (!got) continue;
 				const usable = inMajorCurrency(inOwnerCurrency(got, currency));
 				if (!isCurrencyCode(usable.currency)) {
@@ -159,25 +165,10 @@ export async function priceHistory(
 	return out;
 }
 
-/** The close on `day` or the nearest earlier one, for valuing a vest on a non-trading day. */
-export async function closeOnOrBefore(
-	ticker: string,
-	day: string,
-	handle: Queryable = db
-): Promise<LatestPrice | null> {
-	const rows = await handle
-		.select()
-		.from(securityPrice)
-		.where(and(eq(securityPrice.ticker, ticker), lte(securityPrice.day, day)))
-		.orderBy(desc(securityPrice.day))
-		.limit(1);
-	const row = rows[0];
-	return row ? { day: row.day, closeMinor: row.closeMinor, currency: row.currency } : null;
-}
-
 /**
- * `closeOnOrBefore` for many (ticker, day) pairs in one query, for valuing a
- * batch of vests without a round trip per tranche. Keyed by `${ticker}|${day}`.
+ * The close on each requested day or the nearest earlier one, for valuing a
+ * batch of vests on non-trading days without a round trip per tranche. Keyed
+ * by `${ticker}|${day}`.
  */
 export async function closesOnOrBefore(
 	requests: { ticker: string; day: string }[],

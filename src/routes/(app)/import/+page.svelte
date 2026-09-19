@@ -15,6 +15,9 @@
 	import SummaryBand from '$lib/components/SummaryBand.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import Field from '$lib/components/Field.svelte';
+	import { stillInQueue } from '$lib/import/queue-view';
+	import { UNTRACKED_ACCOUNT } from '$lib/import/transfer-target';
+	import { LANE_LEGEND, laneStyle } from '$lib/import/review-lane';
 
 	let { data, form } = $props();
 
@@ -52,6 +55,12 @@
 	/** Blank means "put it in an existing group"; a name here creates one. */
 	let newGroupLabel = $state('');
 	let chosen = $state<Record<string, string>>({});
+	/**
+	 * Rows where the remembered person has been waved off for this one filing.
+	 * Per row, not a screen-wide toggle: correcting one payday should not put
+	 * every other salary row back to a blank question.
+	 */
+	let overriding = $state<Record<string, boolean>>({});
 	const picked = (r: { id: string; suggestedCategoryId: string | null }) =>
 		chosen[r.id] ?? r.suggestedCategoryId ?? '';
 
@@ -73,6 +82,11 @@
 	// Poll while the queue has work; the upload returns as soon as files are
 	// accepted, so the page must find out for itself when each is read.
 	const busy = $derived(data.queue.waiting + data.queue.running > 0);
+
+	// The rule lives in `$lib/import/queue-view`, where it can be read and
+	// tested as one sentence. `data.queue.files` keeps the full list: the
+	// account-picker effect above reads results off it, settled ones included.
+	const inFlight = $derived(data.queue.files.filter(stillInQueue));
 	$effect(() => {
 		if (!busy) return;
 		const timer = setInterval(() => void invalidateAll(), 1500);
@@ -137,14 +151,14 @@
 		</label>
 	{/if}
 
-	{#if data.queue.files.length > 0}
+	{#if inFlight.length > 0}
 		<div class="card results">
 			{#if busy}
 				<p class="queue-depth">
-					Reading {data.queue.running} of {data.queue.files.length} — {data.queue.waiting} waiting.
+					Reading {data.queue.running} of {inFlight.length} — {data.queue.waiting} waiting.
 				</p>
 			{/if}
-			{#each data.queue.files as job (job.id)}
+			{#each inFlight as job (job.id)}
 				<div class="result-row">
 					<span class="r-name">{job.filename}</span>
 					<span class="r-meta mono">
@@ -183,7 +197,7 @@
 								? 'Being read right now — it can go once it finishes'
 								: job.state === 'queued'
 									? 'Cancel this file'
-									: 'Clear this from the queue'}
+									: 'Clear this failure'}
 							aria-label="Dismiss {job.filename}"
 						>
 							✕
@@ -307,8 +321,11 @@
 				<details class="import-row">
 					<summary>
 						<span class="i-name">{file.filename}</span>
+						<!-- The count in its own right-aligned cell: as one string it moved
+						     with the filename's length, so no two rows' figures lined up. -->
+						<span class="i-count mono">{file.rowsAdded}</span>
 						<span class="i-meta mono">
-							{file.rowsAdded} filed{#if file.readAs}&nbsp;· {file.readAs}{/if}
+							filed{#if file.readAs}&nbsp;· {file.readAs}{/if}
 						</span>
 						<!-- Acknowledging hides the row. It deletes nothing: the import,
 						     its transactions, its stored file and its document all stay,
@@ -369,13 +386,13 @@
 		<div class="eyebrow-row">
 			<Eyebrow hue="--yellow" icon="alert" label="Needs a decision" />
 			<span class="eyebrow-caption">
-				{data.review.length === 0
+				{data.reviewCount === 0
 					? 'nothing waiting'
-					: `${data.review.length} rows the categoriser will not guess at`}
+					: `${data.reviewCount} rows the categoriser will not guess at`}
 			</span>
 		</div>
 
-		{#if data.review.length === 0}
+		{#if data.reviewCount === 0}
 			<!-- The empty state IS the good state, so it is drawn as one: a green card
 		     saying what happened, not a grey line saying nothing did. -->
 			<div class="all-filed">
@@ -390,94 +407,234 @@
 			</div>
 		{/if}
 
-		{#each data.review as r (r.id)}
-			<div class="card review-row">
-				<div class="r-facts">
-					<span class="mono r-date">{r.date}</span>
-					<div class="r-mid">
-						<span class="r-merchant">{r.merchant}</span>
-						<span class="r-reason">{r.reason} · {r.account}</span>
-					</div>
-					<span class="mono r-amount" style:color={r.negative ? 'var(--fg1)' : 'var(--green)'}>
-						{r.amount}
+		{#if data.reviewCount > 0}
+			<div class="lane-legend">
+				{#each LANE_LEGEND as key (key.lane)}
+					<span class="lane-key" style:--lane="var({key.colour})">
+						<span class="lane-dot"></span>{key.label}
 					</span>
-				</div>
-				<div class="r-actions">
-					{#if r.isTransfer}
-						<form method="POST" action="?/confirmTransfer" use:enhance>
-							<input type="hidden" name="id" value={r.id} />
-							<button type="submit" class="btn">✓ Own transfer</button>
-						</form>
-						<form method="POST" action="?/rejectTransfer" use:enhance>
-							<input type="hidden" name="id" value={r.id} />
-							<button type="submit" class="btn">✕ Not a transfer</button>
-						</form>
-					{:else}
-						<form method="POST" action="?/categorize" use:enhance class="cat-form">
-							<input type="hidden" name="id" value={r.id} />
-							<!-- Not a native select: a long queue means the popup can open near
+				{/each}
+			</div>
+		{/if}
+
+		{#each data.reviewGroups as group (group.key)}
+			{@const lane = laneStyle(group.rows[0])}
+			<!-- One payee, one card. The strip says WHY the card is here, so a
+			     queue can be scanned instead of read; the reason text under each
+			     name still carries the detail. -->
+			<div class="card review-row" data-lane={lane.lane} style:--lane="var({lane.colour})">
+				<span class="sr-only">{lane.label}</span>
+
+				{#if group.rows.length > 1}
+					<!-- Only when there IS a group: a heading over a single row would
+					     repeat the name directly beneath it. -->
+					<div class="g-head">
+						<span class="g-label">{group.label}</span>
+						<!-- Built as one string rather than with inline {#if}s: Svelte
+						     collapses the whitespace around a block, which ran the two
+						     halves together as "4 rows· 2 at the same amount". -->
+						<span class="g-count">
+							{group.repeated.length > 0
+								? `${group.rows.length} rows · ${group.repeated.length} at the same amount`
+								: `${group.rows.length} rows`}
+						</span>
+					</div>
+				{/if}
+
+				{#each group.rows as r, index (r.id)}
+					<div class="g-row" class:subsequent={index > 0}>
+						{#if group.repeated.includes(r.id)}
+							<!-- The ledger's own signature of a standing payment: the same
+							     sum to the same place, month after month. A hint to read
+							     the group as a series, not a claim of duplication. -->
+							<span class="g-repeat">same amount again</span>
+						{/if}
+						<div class="r-facts">
+							<span class="mono r-date">{r.date}</span>
+							<div class="r-mid">
+								<span class="r-merchant">
+									{r.merchant}
+									{#if r.detail.length > 0}
+										<!-- The name on a Czech statement is often the payment method —
+								     "QR Platba", "okamžitá" — and the payee is nowhere in the
+								     document. What identifies it is the account number it went
+								     to, so that is put one keypress away rather than nowhere. -->
+										<InfoHint label="What the statement said about this row">
+											<span class="detail-list">
+												{#each r.detail as fact (fact.label)}
+													<span class="detail-row">
+														<span class="detail-label">{fact.label}</span>
+														<span class="mono detail-value">{fact.value}</span>
+													</span>
+												{/each}
+											</span>
+										</InfoHint>
+									{/if}
+								</span>
+								<span class="r-reason">{r.reason} · {r.account}</span>
+							</div>
+							<span class="mono r-amount" style:color={r.negative ? 'var(--fg1)' : 'var(--green)'}>
+								{r.amount}
+							</span>
+						</div>
+						{#if r.pairedWith}
+							<!-- The other half, stacked under this one. Same shape as the row
+					     above it, so the two read as a pair and the eye can check the
+					     date, the account and that the amounts are opposite. -->
+							<div class="r-facts paired">
+								<span class="mono r-date">{r.pairedWith.date}</span>
+								<div class="r-mid">
+									<span class="r-merchant">
+										{r.pairedWith.merchant}
+										{#if r.pairedWith.detail.length > 0}
+											<InfoHint label="What the statement said about the other leg">
+												<span class="detail-list">
+													{#each r.pairedWith.detail as fact (fact.label)}
+														<span class="detail-row">
+															<span class="detail-label">{fact.label}</span>
+															<span class="mono detail-value">{fact.value}</span>
+														</span>
+													{/each}
+												</span>
+											</InfoHint>
+										{/if}
+									</span>
+									<span class="r-reason">
+										{r.pairedWith.account} ·
+										{r.pairedWith.daysApart === 0
+											? 'same day'
+											: `${r.pairedWith.daysApart} day${r.pairedWith.daysApart === 1 ? '' : 's'} apart`}
+									</span>
+								</div>
+								<span
+									class="mono r-amount"
+									style:color={r.pairedWith.negative ? 'var(--fg1)' : 'var(--green)'}
+								>
+									{r.pairedWith.amount}
+								</span>
+							</div>
+						{/if}
+						<div class="r-actions">
+							{#if r.isTransfer}
+								<form method="POST" action="?/confirmTransfer" use:enhance>
+									<input type="hidden" name="id" value={r.id} />
+									<button type="submit" class="btn">✓ Internal transfer</button>
+								</form>
+								<form method="POST" action="?/rejectTransfer" use:enhance>
+									<input type="hidden" name="id" value={r.id} />
+									<!-- Rejecting the MATCH, not the row: both legs go back to the
+							     queue to be categorised separately, and either may still be a
+							     transfer to somewhere else. "Not a transfer" read as a claim
+							     about the one row on screen. -->
+									<button type="submit" class="btn">✕ Not the same</button>
+								</form>
+							{:else}
+								<form method="POST" action="?/categorize" use:enhance class="cat-form">
+									<input type="hidden" name="id" value={r.id} />
+									<!-- Not a native select: a long queue means the popup can open near
 						     the bottom of the viewport, so it measures its room and opens
 						     upwards when needed. -->
-							<CategoryPicker
-								name="categoryId"
-								groups={data.categories}
-								value={r.suggestedCategoryId}
-								onpick={(id) => (chosen[r.id] = id)}
-							/>
-							<!-- Only asked when the account can't say whose it is: a JOINT
+									<CategoryPicker
+										name="categoryId"
+										groups={data.categories}
+										value={r.suggestedCategoryId}
+										onpick={(id) => (chosen[r.id] = id)}
+									/>
+									<!-- Only asked when the account can't say whose it is: a JOINT
 						     account gives no owner for salary money. -->
-							{#if picked(r) === 'salary' && r.accountIsJoint && data.people.length > 1}
-								<label class="whose">
-									<span>Whose?</span>
-									<select name="salaryPersonId" required>
-										<option value="" disabled selected>Pick a person</option>
-										{#each data.people as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
-									</select>
-								</label>
-								<label class="whose remember">
-									<input type="checkbox" name="rememberWhose" checked />
-									<span>Remember for “{r.merchant}”</span>
-								</label>
-							{/if}
-							<!-- Disabled until something is chosen — the placeholder posts an
+									{#if picked(r) === 'salary' && r.accountIsJoint && data.people.length > 1}
+										{#if r.salaryFor && !overriding[r.id]}
+											<!-- It already knows, so it says so instead of asking again.
+									     Shown rather than applied silently: this decides whose
+									     salary history and whose retirement projection the money
+									     lands in, and the one screen that could show it did not. -->
+											<span class="whose settled">
+												<Icon name="check" size={14} />
+												<span><strong>{r.salaryFor.name}</strong>'s pay</span>
+												<input type="hidden" name="salaryPersonId" value={r.salaryFor.personId} />
+												<button
+													type="button"
+													class="link-btn"
+													onclick={() => (overriding[r.id] = true)}
+												>
+													{r.salaryFor.learned ? 'not theirs?' : 'change'}
+												</button>
+											</span>
+										{:else}
+											<label class="whose">
+												<span>Whose?</span>
+												<select name="salaryPersonId" required>
+													<option value="" disabled selected>Pick a person</option>
+													{#each data.people as p (p.id)}<option value={p.id}>{p.name}</option
+														>{/each}
+												</select>
+											</label>
+											<label class="whose remember">
+												<input type="checkbox" name="rememberWhose" checked />
+												<span>Remember for “{r.merchant}”</span>
+											</label>
+										{/if}
+									{/if}
+									<!-- Disabled until something is chosen — the placeholder posts an
 						     empty category, which the action would reject as an unresponsive-looking button. -->
-							<button type="submit" class="btn" disabled={!picked(r)}>Save</button>
-						</form>
-						<button type="button" class="btn" onclick={() => (addingCategory = true)}>
-							➕ New category…
-						</button>
-						<!-- For the case pairing cannot reach: a transfer whose other account's
+									<button type="submit" class="btn" disabled={!picked(r)}>Save</button>
+								</form>
+								<button type="button" class="btn" onclick={() => (addingCategory = true)}>
+									➕ New category…
+								</button>
+								<!-- For the case pairing cannot reach: a transfer whose other account's
 					     statements never arrive, so it looks like unexplained spending. -->
-						<form method="POST" action="?/markOneSided" use:enhance class="one-sided">
-							<input type="hidden" name="id" value={r.id} />
-							<InfoHint label="What “not spending” means">
-								Money moved between your own accounts is neither income nor spending, so this row
-								stops counting in either.
-								<br /><br />
-								Both sides are normally matched automatically when you import both statements. Use this
-								when the other account's statements never arrive — a savings account you do not import
-								— so there is no second half to match against.
-							</InfoHint>
-							<label class="os-phrase">
-								<span>Moved to</span>
-								<select name="toAccountId" required aria-label="Which of your accounts">
-									<option value="" disabled selected>which account?</option>
-									{#each data.accounts.filter((a) => a.id !== r.accountId) as a (a.id)}
-										<option value={a.id}>{a.name}</option>
-									{/each}
-								</select>
-							</label>
-							<!-- Named for what it does to the figures, not for what it is
+								<form method="POST" action="?/markOneSided" use:enhance class="one-sided">
+									<input type="hidden" name="id" value={r.id} />
+									<InfoHint label="What “not spending” means">
+										Money moved between your own accounts is neither income nor spending, so this
+										row stops counting in either.
+										<br /><br />
+										Both sides are normally matched automatically when you import both statements. Use
+										this when the other account's statements never arrive — a savings account you do not
+										import — so there is no second half to match against.
+									</InfoHint>
+									<!-- "to" or "from" by the SIGN of the row. Money arriving was asked
+						     "Moved to which account?" while the reader was looking at the
+						     account it had just arrived in, so the only true answer was the
+						     one the question appeared to rule out. -->
+									<label class="os-phrase">
+										<span>{r.negative ? 'Moved to' : 'Came from'}</span>
+										<select
+											name="toAccountId"
+											required
+											aria-label={r.negative
+												? 'Which of your accounts it went to'
+												: 'Which of your accounts it came from'}
+										>
+											<option value="" disabled selected={!r.recalled}>which account?</option>
+											{#each data.accounts.filter((a) => a.id !== r.accountId) as a (a.id)}
+												<option value={a.id} selected={r.recalled?.toAccountId === a.id}>
+													{a.name}
+												</option>
+											{/each}
+											<!-- For an account that was closed, or a bank never added
+									     here: still the household's own money moving, so still
+									     neither income nor spending, but there is no row to
+									     name. -->
+											<option value={UNTRACKED_ACCOUNT} selected={r.recalled?.untracked === true}>
+												another account · closed or not tracked
+											</option>
+										</select>
+									</label>
+									<!-- Named for what it does to the figures, not for what it is
 						     called internally: "It is a transfer" said nothing about why
 						     you would press it. -->
-							<button type="submit" class="btn">Not spending</button>
-						</form>
-					{/if}
-				</div>
+									<button type="submit" class="btn">Not spending</button>
+								</form>
+							{/if}
+						</div>
 
-				{#if form?.message && form?.id === r.id}
-					<p class="row-error" role="alert">{form.message}</p>
-				{/if}
+						{#if form?.message && form?.id === r.id}
+							<p class="row-error" role="alert">{form.message}</p>
+						{/if}
+					</div>
+				{/each}
 			</div>
 		{/each}
 	</section>
@@ -493,7 +650,7 @@
 		<div class="card statements">
 			{#each data.statements as a (a.id)}
 				<div class="stmt">
-					<IconTile hue="--teal" emoji={a.emoji} size={30} />
+					<IconTile hue="--teal" emoji={a.emoji} logo={a.logo} size={30} />
 					<span class="stmt-mid">
 						<span class="stmt-name">{a.name}</span>
 						<span class="stmt-sub">
@@ -762,19 +919,38 @@
 		gap: 0.25rem;
 	}
 
+	/* A grid, not space-between: the name takes what is left, the count gets a
+	   column of its own so every row's figure ends on the same edge, and the
+	   label after it starts on the same edge too. */
 	.import-row summary {
-		display: flex;
-		justify-content: space-between;
-		gap: 1rem;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto auto auto;
+		align-items: baseline;
+		gap: 0.5rem;
 		cursor: pointer;
 		padding: 0.35rem 0;
 		/* Same token .result-row uses for the queue above, so filename sizing matches. */
 		font-size: var(--text-md);
 	}
 
+	.i-name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.i-count {
+		text-align: right;
+		/* Four digits without reflowing; a wider count simply takes more. */
+		min-width: 4ch;
+		opacity: 0.75;
+	}
+
 	.i-meta {
 		opacity: 0.75;
 		font-size: var(--text-md);
+		/* Sits between the count and the ✕, with room before the button. */
+		margin-right: 0.5rem;
 	}
 
 	.i-body {
@@ -855,10 +1031,79 @@
 		min-width: 0;
 		overflow-wrap: anywhere;
 	}
+	/*
+	 * The lane colour IS the card's top border, rather than a strip drawn over
+	 * it. An absolutely positioned strip has to be clipped to the card's corner
+	 * radius or it squares the top two off, and `overflow: hidden` to do that
+	 * also clips the category popup, which opens past the card's own edge. A
+	 * border needs no clipping: the radius already curves it, and the card
+	 * cannot swallow anything that opens out of it.
+	 *
+	 * Every row has a lane — `unknown` is the fallback, not an absence — so the
+	 * extra two pixels are on every card in the list and nothing shifts.
+	 */
 	.review-row {
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-5);
+		border-top: 3px solid var(--lane);
+	}
+
+	/* Announced to a screen reader, which cannot see a colour. */
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		margin: -1px;
+		padding: 0;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	/* The answer the screen already has, stated rather than asked. */
+	.whose.settled {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2);
+		font-size: var(--text-sm);
+		color: var(--fg2);
+	}
+	.whose.settled :global(svg) {
+		color: var(--green);
+	}
+	.link-btn {
+		padding: 0;
+		border: none;
+		background: none;
+		color: var(--blue);
+		font-size: var(--text-xs);
+		cursor: pointer;
+		text-decoration: underline;
+	}
+
+	/* Same dot and words above the queue, so the colours are readable without
+	   having to work them out from context. */
+	.lane-legend {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-3) var(--space-5);
+		margin-bottom: var(--space-4);
+		font-size: var(--text-xs);
+		color: var(--fg3);
+	}
+	.lane-key {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+	.lane-dot {
+		width: 9px;
+		height: 3px;
+		border-radius: 2px;
+		background: var(--lane);
 	}
 	.one-sided {
 		display: inline-flex;
@@ -917,6 +1162,13 @@
 		gap: var(--space-6);
 		align-items: baseline;
 	}
+	/* Indented under the row it belongs to, with a rule up its left edge: the
+	   two are one decision, not two rows that happen to be adjacent. */
+	.r-facts.paired {
+		margin-top: var(--space-4);
+		padding-left: var(--space-5);
+		border-left: 2px solid color-mix(in srgb, var(--teal) 40%, transparent);
+	}
 	.r-date {
 		font-size: var(--text-sm);
 		color: var(--fg3);
@@ -930,6 +1182,70 @@
 	.r-merchant {
 		font-size: var(--text-md);
 		font-weight: 500;
+		/* The name and its (i) share a line and wrap together. */
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2);
+		flex-wrap: wrap;
+	}
+
+	/*
+	 * A grouped card: one payee heading, then its rows separated by a rule.
+	 * Every row keeps its own picker and its own Save — grouping puts the same
+	 * decision in one place, it does not make the decision once for all of them.
+	 */
+	.g-head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: var(--space-4);
+		flex-wrap: wrap;
+	}
+	.g-label {
+		font-size: var(--text-lg);
+		font-weight: 600;
+	}
+	.g-count {
+		font-size: var(--text-xs);
+		color: var(--fg3);
+	}
+	.g-row {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-5);
+	}
+	/* A hairline between rows of the same card, so they read as a list rather
+	   than as one long undifferentiated block. */
+	.g-row.subsequent {
+		border-top: 1px solid var(--bd);
+		padding-top: var(--space-5);
+	}
+	.g-repeat {
+		align-self: flex-start;
+		font-size: var(--text-xs);
+		color: var(--teal);
+	}
+
+	/* Label/value pairs inside the (i): a small two-column grid so the values
+	   line up under each other and an account number can be read at a glance. */
+	.detail-list {
+		display: grid;
+		grid-template-columns: auto 1fr;
+		gap: var(--space-2) var(--space-5);
+	}
+	.detail-row {
+		display: contents;
+	}
+	.detail-label {
+		color: var(--fg3);
+		font-size: var(--text-sm);
+		white-space: nowrap;
+	}
+	.detail-value {
+		font-size: var(--text-sm);
+		/* An "on the statement" line is a whole sentence; it wraps rather than
+		   stretching the bubble past its max-width. */
+		overflow-wrap: anywhere;
 	}
 	.r-reason {
 		font-size: var(--text-sm);
@@ -950,10 +1266,91 @@
 	.one-sided {
 		margin-left: auto;
 	}
+	/*
+	 * The picker is given a fixed width, so Save and "New category…" sit in the
+	 * same place on every row.
+	 *
+	 * Sized to its own text, the trigger was as wide as whatever it happened to
+	 * be showing — "Apple" one row, "Choose a category…" the next — and the two
+	 * buttons after it slid left and right down the list. A control you press
+	 * fifty times in a row should not move between presses. The label already
+	 * ellipsises, so a long category name is truncated rather than pushing
+	 * anything.
+	 */
 	.cat-form {
 		display: flex;
 		gap: var(--space-4);
 		flex-wrap: wrap;
+	}
+	.cat-form :global(.picker) {
+		flex: 0 0 auto;
+		width: 13rem;
+	}
+	/*
+	 * On a phone the card's controls are laid out, not left to wrap.
+	 *
+	 * Wrapping put each control wherever the one before it happened to end: the
+	 * picker took a line, "New category…" sat beside it, Save dropped below,
+	 * the (i) landed alone on a line of its own and "Not spending" on another —
+	 * four ragged rows that changed shape with the category name. Two explicit
+	 * grids instead, so every card looks the same and the tap targets are where
+	 * they were on the last one.
+	 */
+	@media (max-width: 640px) {
+		.r-actions {
+			align-items: stretch;
+		}
+		/* Choose, then save: the picker takes the line and Save sits at its end. */
+		.cat-form {
+			flex: 1 1 100%;
+			align-items: center;
+		}
+		.cat-form :global(.picker) {
+			flex: 1 1 auto;
+			/* minmax-equivalent for flex: without min-width the trigger's own
+			   content width would push Save off the screen edge instead of
+			   shrinking, and the label already ellipsises. */
+			min-width: 0;
+			width: auto;
+		}
+		/* Whose salary it is — its own line, never squeezed beside a button. */
+		.cat-form .whose {
+			flex: 1 1 100%;
+		}
+		/* "New category…" is a sibling of the form, not part of it, so it gets a
+		   line of its own rather than trailing whatever the row above ended on. */
+		.r-actions > button[type='button'] {
+			flex: 1 1 100%;
+		}
+
+		.one-sided {
+			display: flex;
+			width: 100%;
+			margin-left: 0;
+		}
+		/*
+		 * The (i) keeps its place beside the words rather than being pushed onto
+		 * a line by itself; the select takes whatever is left, down to nothing —
+		 * minmax(0, 1fr) rather than 1fr, or its own minimum width would push
+		 * the label off the screen edge instead of shrinking.
+		 */
+		.os-phrase {
+			/* Basis 0, not auto: with `auto` the phrase asks for the width its
+			   label and select would like, which is more than the line has left
+			   after the (i) — so it wrapped, and the (i) was left sitting on a
+			   line of its own. Measured at 390px: the three sit on one row. */
+			flex: 1 1 0;
+			min-width: 0;
+			display: grid;
+			grid-template-columns: auto minmax(0, 1fr);
+		}
+		.os-phrase select {
+			min-width: 0;
+		}
+		/* "Not spending" is the row's verb: its own full-width line under it. */
+		.one-sided > button[type='submit'] {
+			flex: 1 1 100%;
+		}
 	}
 	@media (max-width: 640px) {
 		.r-facts {

@@ -64,7 +64,19 @@
 	let lines = $state(start.lines);
 	let actionError = $state<string | null>(null);
 	let fileNames = $state<string[]>([]);
-	let fileKind = $state<string>('statement');
+	/** One kind per picked file, by position. See `takeUploads` on the server. */
+	let fileKinds = $state<string[]>([]);
+	/** And which country each came from; blank means the statement's own. */
+	let fileCountries = $state<string[]>([]);
+	/** The dropzone gathers files across visits; this is how one comes back off. */
+	let dropzone = $state<{ remove: (index: number) => void } | null>(null);
+
+	/** Drop a file AND the answers that belonged to it, so the rest stay paired. */
+	function dropFile(index: number) {
+		fileKinds = fileKinds.filter((_, i) => i !== index);
+		fileCountries = fileCountries.filter((_, i) => i !== index);
+		dropzone?.remove(index);
+	}
 
 	// A statement in a currency the rate source no longer quotes must still
 	// show that currency selected, not silently switch to another one.
@@ -75,7 +87,9 @@
 	// Prefill only while creating; editing an existing statement never
 	// re-derives a saved figure.
 	let grossTouched = $state(untrack(() => existing !== null));
-	const suggestion = $derived(prefillTotals[`${personId}|${Number(year)}`] ?? null);
+	// Keyed by the currency the form is CURRENTLY set to, so changing it swaps
+	// the suggested figure instead of relabelling the old one.
+	const suggestion = $derived(prefillTotals[`${personId}|${Number(year)}|${currency}`] ?? null);
 	$effect(() => {
 		if (!grossTouched) gross = suggestion?.amount ?? '';
 	});
@@ -90,7 +104,14 @@
 			// Bubbles up from the dropzone's own input; fileNames also gates the
 			// kind select and document picker below.
 			const target = event.target as HTMLInputElement;
-			if (target?.type === 'file') fileNames = [...(target.files ?? [])].map((f) => f.name);
+			if (target?.type === 'file') {
+				fileNames = [...(target.files ?? [])].map((f) => f.name);
+				// Keep a choice already made at a position when the list grows;
+				// anything new starts as the statement itself, which is the one
+				// paper every filing has.
+				fileKinds = fileNames.map((_, i) => fileKinds[i] ?? 'statement');
+				fileCountries = fileNames.map((_, i) => fileCountries[i] ?? '');
+			}
 		}}
 		use:enhance={() =>
 			async ({ update, result }) => {
@@ -173,11 +194,12 @@
 
 		<span class="section-label">The paperwork</span>
 		<div class="grid">
-			<label>
-				<!-- Several files at once, since a year's filing is several papers;
-				     one kind per batch, so a mixed batch is two saves. -->
+			<label class="wide">
+				<!-- Several files at once, since a year's filing is several papers —
+				     and they are rarely the same paper, so each says what it is. -->
 				<span>Upload the paperwork</span>
 				<UploadDropzone
+					bind:this={dropzone}
 					name="file"
 					multiple
 					accept=".pdf,.png,.jpg,.jpeg,.webp"
@@ -185,14 +207,44 @@
 					description="PDF, PNG, JPEG or WebP"
 				/>
 			</label>
-			<label>
-				<span>What these are</span>
-				<select name="fileKind" bind:value={fileKind} disabled={fileNames.length === 0}>
-					{#each ATTACHMENT_KINDS as k (k.key)}
-						<option value={k.key}>{k.label}</option>
+			{#if fileNames.length > 0}
+				<ul class="wide file-kinds">
+					{#each fileNames as name, i (`${i}|${name}`)}
+						<li>
+							<span class="f-name" title={name}>{name}</span>
+							<select
+								name="fileKind"
+								value={fileKinds[i] ?? 'statement'}
+								onchange={(e) => (fileKinds[i] = e.currentTarget.value)}
+								aria-label="What {name} is"
+							>
+								{#each ATTACHMENT_KINDS as k (k.key)}
+									<option value={k.key}>{k.label}</option>
+								{/each}
+							</select>
+							<!-- Left blank it takes the statement's own country, so a filing
+							     whose papers all come from one place needs no answer here. -->
+							<input
+								class="f-country"
+								name="fileCountry"
+								value={fileCountries[i] ?? ''}
+								oninput={(e) => (fileCountries[i] = e.currentTarget.value)}
+								placeholder={country.trim().toUpperCase() || 'CZ'}
+								maxlength="2"
+								aria-label="Which country {name} is from"
+							/>
+							<button
+								type="button"
+								class="f-drop"
+								onclick={() => dropFile(i)}
+								aria-label="Remove {name}"
+							>
+								✕
+							</button>
+						</li>
 					{/each}
-				</select>
-			</label>
+				</ul>
+			{/if}
 			<label>
 				<span>…or one already on the Finance shelf</span>
 				<select name="documentId" disabled={fileNames.length > 0}>
@@ -206,9 +258,8 @@
 		{#if fileNames.length > 0}
 			<span class="attach-note">
 				{fileNames.length}
-				{fileNames.length === 1 ? 'file' : 'files'} will be filed on the Finance shelf as “{year}
-				{country.trim().toUpperCase() || '—'}
-				{ATTACHMENT_KINDS.find((k) => k.key === fileKind)?.noun}”.
+				{fileNames.length === 1 ? 'file' : 'files'} will be filed on the Finance shelf, each named “{year}
+				{country.trim().toUpperCase() || '—'} …” after what it is.
 			</span>
 		{/if}
 
@@ -254,6 +305,61 @@
 	.section-label {
 		font-size: var(--text-sm);
 		color: var(--fg3);
+	}
+	/* Spans the auto-fit grid: the dropzone and the per-file list are full-width
+	   rows, not cells beside a select. */
+	.grid > .wide {
+		grid-column: 1 / -1;
+	}
+
+	/* Each picked file on its own line with what it is, so a mixed batch is one
+	   save rather than one save per kind. */
+	.file-kinds {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+	}
+	.file-kinds li {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(160px, auto) 4.5rem auto;
+		align-items: center;
+		gap: var(--space-4);
+	}
+	.f-country {
+		text-transform: uppercase;
+		text-align: center;
+	}
+	.f-drop {
+		border: none;
+		background: none;
+		color: var(--fg3);
+		cursor: pointer;
+		padding: 0 var(--space-2);
+		font-size: var(--text-md);
+		line-height: 1;
+	}
+	.f-drop:hover {
+		color: var(--red);
+	}
+	.f-name {
+		font-size: var(--text-sm);
+		color: var(--fg2);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	@media (max-width: 40rem) {
+		.file-kinds li {
+			grid-template-columns: minmax(0, 1fr) 4.5rem auto;
+			gap: var(--space-2) var(--space-3);
+		}
+		/* The filename takes the line; the kind and country share the next. */
+		.f-name {
+			grid-column: 1 / -1;
+		}
 	}
 	.attach-note {
 		font-size: var(--text-sm);

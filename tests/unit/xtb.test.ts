@@ -227,6 +227,25 @@ describe('parseXtb', () => {
 		expect(report.summaryValueMinor).toBe(28674618n);
 	});
 
+	it('reads the summary value under its real wording too, not just "Value"', () => {
+		// This account's actual export reads "Open position value" — the
+		// synthetic fixture above simplified it to "Value", which silently
+		// read as 0 the moment a real report used the longer label. The
+		// sibling "Open position profit" row must not be mistaken for it.
+		const wb = XLSX.utils.book_new();
+		const open = XLSX.utils.aoa_to_sheet([
+			['Product', 'Metric', 'Amount', 'Currency'],
+			['My Trades', 'Open position value', '235812.66', 'EUR'],
+			['My Trades', 'Open position profit', '-95110.25', 'EUR']
+		]);
+		XLSX.utils.book_append_sheet(wb, open, 'Open Positions');
+		XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([[]]), 'Cash Operations');
+		XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([[]]), 'Closed Positions');
+		const buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer;
+		const real = parseXtb(new Uint8Array(buf));
+		expect(real.summaryValueMinor).toBe(23581266n);
+	});
+
 	it('reads instrument rows and skips per-lot rows', () => {
 		expect(report.holdings).toHaveLength(2);
 		const rklb = report.holdings[0];

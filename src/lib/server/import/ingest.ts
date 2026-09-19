@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { uuidv7 } from 'uuidv7';
-import { and, eq, inArray, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, lt, lte, notInArray, or, sql } from 'drizzle-orm';
 import { db, inTransaction, type Db, type Queryable } from '$lib/server/db';
 import {
 	account,
@@ -19,7 +19,7 @@ import { firstOfMonth, lastOfMonth } from '$lib/statements/coverage';
 import { detectAndParseAll } from './detect';
 import { PROOF_RANK, type ProofClass } from './proof';
 import { loadProfiles } from './profiles';
-import { FINGERPRINT_VERSION, fingerprintAll } from './fingerprint';
+import { FINGERPRINT_VERSION, fingerprintAll, keyWithoutCounterparty } from './fingerprint';
 import type { ParsedRow, ParsedStatement } from './types';
 import { pairAndCategorise, pairingWindowAround } from './pairing-run';
 import { BANK_LABEL, legacyRevolutKey, resolveAccount } from './account-resolution';
@@ -189,6 +189,44 @@ async function ingestStatement(
 		}
 	}
 
+	// A ČS row with no bank reference is fingerprinted by its counterparty, and
+	// the reader's choice of counterparty changed at v4 and v5 (see
+	// FINGERPRINT_VERSION). A row stored under the old name is found by what
+	// did not change and corrected in place — same movement, the better name,
+	// the current fingerprint — so the next upload finds it the ordinary way.
+	// Rows the upload already matched by fingerprint are not candidates: a
+	// same-day twin whose name did not change must not be renamed for one that did.
+	const legacyUnnamed = new Map<string, string[]>();
+	if (statement.bank === 'cs') {
+		const replayDays = [...new Set(statement.rows.map((row) => row.bookedAt))];
+		const legacyRows = await tx
+			.select({
+				id: transaction.id,
+				bookedOn: transaction.bookedOn,
+				amountMinor: transaction.amountMinor,
+				currency: transaction.currency,
+				counterpartyAccount: transaction.counterpartyAccount,
+				balanceAfterMinor: transaction.balanceAfterMinor
+			})
+			.from(transaction)
+			.where(
+				and(
+					eq(transaction.accountId, acct.id),
+					lt(transaction.fingerprintVersion, FINGERPRINT_VERSION),
+					isNull(transaction.bankRef),
+					inArray(transaction.bookedOn, replayDays),
+					notInArray(transaction.dedupFingerprint, fingerprints)
+				)
+			)
+			.orderBy(transaction.id);
+		for (const legacy of legacyRows) {
+			const key = keyWithoutCounterparty(legacy);
+			const candidates = legacyUnnamed.get(key) ?? [];
+			candidates.push(legacy.id);
+			legacyUnnamed.set(key, candidates);
+		}
+	}
+
 	for (let i = 0; i < statement.rows.length; i++) {
 		const row = statement.rows[i];
 		const currentFingerprint = fingerprints[i];
@@ -227,6 +265,28 @@ async function ingestStatement(
 						target: [transactionFingerprintAlias.accountId, transactionFingerprintAlias.fingerprint]
 					});
 				knownAliases.set(currentFingerprint, legacyId);
+				usedLegacyIds.add(legacyId);
+				duplicate++;
+				continue;
+			}
+		}
+
+		if (statement.bank === 'cs' && !row.bankRef) {
+			const candidates = legacyUnnamed.get(
+				keyWithoutCounterparty({ ...row, bookedOn: row.bookedAt })
+			);
+			let legacyId = candidates?.shift();
+			while (legacyId && usedLegacyIds.has(legacyId)) legacyId = candidates?.shift();
+			if (legacyId) {
+				await tx
+					.update(transaction)
+					.set({
+						counterparty: row.counterparty ?? null,
+						dedupFingerprint: currentFingerprint,
+						fingerprintVersion: FINGERPRINT_VERSION
+					})
+					.where(eq(transaction.id, legacyId));
+				knownFingerprints.add(currentFingerprint);
 				usedLegacyIds.add(legacyId);
 				duplicate++;
 				continue;

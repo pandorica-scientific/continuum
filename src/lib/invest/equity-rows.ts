@@ -7,6 +7,7 @@ import {
 	grantSummary,
 	heldUnits,
 	trancheState,
+	unitsAtClose,
 	type TrancheFigures,
 	type TrancheState
 } from '$lib/equity';
@@ -33,6 +34,8 @@ export interface EquityTrancheRow {
 	delivered: string | null;
 	withheld: string | null;
 	sold: string;
+	/** Transferred to a broker that counts them now — owned, just not here. */
+	moved: string;
 	held: string;
 }
 
@@ -54,6 +57,9 @@ export interface EquityGrantRow {
 	pendingValue: string | null;
 	/** Formatted in the household base; null with no close or no rate. */
 	vestedBase: string | null;
+	/** Vested plus still-to-vest, at the same close. An estimate, by nature. */
+	totalValue: string | null;
+	totalBase: string | null;
 	priceDay: string | null;
 	priceStale: boolean;
 	tranches: EquityTrancheRow[];
@@ -68,31 +74,34 @@ export interface EquityRowsInput {
 	toBase: (amountMinor: bigint, currency: string, day: string) => bigint | null;
 }
 
-/** Units at a close, in the close's minor units. */
-export function unitsAtClose(units: number, closeMinor: bigint): bigint {
-	return BigInt(Math.round(Number(closeMinor) * units));
-}
-
 /**
- * What the household's vested, still-held shares are worth, one figure per
- * priced grant in the price's own currency. Grants with no close are left out
- * rather than counted at nothing, and the caller says how many were.
+ * What every grant is worth at the latest close, vested and pending units
+ * both added in. A grant whose first tranche vests next year is worth
+ * something now, and reporting it as nothing was the more misleading of the
+ * two — the figure a headline beside the portfolio is asking for is "what is
+ * the grant worth", not "what could be sold today".
+ *
+ * HELD, not vested: units already delivered and moved to the broker are in the
+ * portfolio total and must not be counted a second time here. Forfeited units
+ * are in neither.
  */
-export function heldEquityValues(
+export function grantEquityValues(
 	grants: { grant: { ticker: string }; tranches: TrancheFigures[] }[],
 	prices: Map<string, { day: string; closeMinor: bigint; currency: string }>,
 	today: string
-): { valueMinor: bigint; currency: string; day: string }[] {
-	const out: { valueMinor: bigint; currency: string; day: string }[] = [];
+): { valueMinor: bigint; currency: string; day: string; units: number }[] {
+	const out: { valueMinor: bigint; currency: string; day: string; units: number }[] = [];
 	for (const { grant, tranches } of grants) {
 		const price = prices.get(grant.ticker);
 		if (!price) continue;
-		const held = grantSummary(tranches, today).heldUnits;
-		if (held <= 0) continue;
+		const summary = grantSummary(tranches, today);
+		const counted = summary.heldUnits + summary.pendingUnits;
+		if (counted <= 0) continue;
 		out.push({
-			valueMinor: unitsAtClose(held, price.closeMinor),
+			valueMinor: unitsAtClose(counted, price.closeMinor),
 			currency: price.currency,
-			day: price.day
+			day: price.day,
+			units: counted
 		});
 	}
 	return out;
@@ -114,6 +123,18 @@ export function equityGrantRows(input: EquityRowsInput, today: string): EquityGr
 		// the letter said.
 		const vestedBase =
 			vested !== null && price ? input.toBase(vested, price.currency, price.day) : null;
+		/**
+		 * The whole grant at today's close — what has vested plus what has not.
+		 *
+		 * `pendingValue` was computed here from the start and shown nowhere, so
+		 * the card could report a grant as worth nothing while sixty-two units of
+		 * it sat waiting to vest. An estimate by construction: unvested units are
+		 * priced at a close that will have moved by the time they arrive, and
+		 * they may be forfeited before they do.
+		 */
+		const total = vested === null || pending === null ? null : vested + pending;
+		const totalBase =
+			total !== null && price ? input.toBase(total, price.currency, price.day) : null;
 		return {
 			id: grant.id,
 			ticker: grant.ticker,
@@ -131,6 +152,8 @@ export function equityGrantRows(input: EquityRowsInput, today: string): EquityGr
 			vestedValue: vested === null ? null : formatMinor(vested, price!.currency),
 			pendingValue: pending === null ? null : formatMinor(pending, price!.currency),
 			vestedBase: vestedBase === null ? null : formatMinor(vestedBase, input.baseCurrency),
+			totalValue: total === null ? null : formatMinor(total, price!.currency),
+			totalBase: totalBase === null ? null : formatMinor(totalBase, input.baseCurrency),
 			priceDay: price?.day ?? null,
 			priceStale: isStale(price?.day ?? null, today, input.staleAfterDays),
 			tranches: tranches.map((t) => ({
@@ -142,6 +165,7 @@ export function equityGrantRows(input: EquityRowsInput, today: string): EquityGr
 				delivered: t.deliveredUnits === null ? null : units(t.deliveredUnits),
 				withheld: t.withheldUnits === null ? null : units(t.withheldUnits),
 				sold: units(t.soldUnits),
+				moved: units(t.movedUnits),
 				held: units(heldUnits(t))
 			}))
 		};

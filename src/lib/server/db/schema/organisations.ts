@@ -36,6 +36,20 @@ export const organisation = pgTable(
 		name: text('name').notNull(),
 		kind: text('kind').$type<EnumValue<'organisation.kind'>>().notNull().default('other'),
 		emoji: text('emoji').notNull().default('🏛️'),
+		/**
+		 * Which country this organisation is in, upper-case ISO 3166-1 alpha-2.
+		 *
+		 * What makes an employer say which tax year it belongs to: a role period
+		 * with a Czech employer is a year a Czech return is owed, and the tax year
+		 * cards are derived from exactly that. Null for a household that has not
+		 * said — an organisation with no country contributes no card, which is a
+		 * quieter failure than a card for the wrong country.
+		 *
+		 * `text` with a CHECK in the appendix, the same shape as
+		 * `document.country` and `document_identity.country`, so one folding
+		 * rule serves all three.
+		 */
+		country: text('country'),
 		notes: text('notes'),
 		// The shelf whose cards this organisation is one of. An employer and the
 		// tax office are cards on Income & Tax; a household that files its car
@@ -179,6 +193,12 @@ export const organisationsCheckSql = `
 -- expect a negative number of filings.
 ALTER TABLE engagement ADD CONSTRAINT engagement_period_order_check
 	CHECK (ends_on IS NULL OR starts_on IS NULL OR ends_on >= starts_on);
+--> statement-breakpoint
+-- Two upper-case letters or nothing, as document.country and
+-- document_identity.country: the tax year card matches on it, and a card and
+-- its employer have to fold the same way or they never meet.
+ALTER TABLE organisation ADD CONSTRAINT organisation_country_check
+	CHECK (country IS NULL OR country ~ '^[A-Z]{2}$');
 --> statement-breakpoint
 -- Every N years, where N is a whole number of years. Zero would divide the
 -- ribbon by nothing and a negative would run it backwards.

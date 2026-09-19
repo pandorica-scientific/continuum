@@ -78,7 +78,7 @@ function meaningfulLength(text: string): number {
 	return text.replace(/[^\p{L}\p{N}]/gu, '').length;
 }
 
-async function ocrLanguages(handle: Db = db): Promise<string> {
+export async function ocrLanguages(handle: Db = db): Promise<string> {
 	return getSetting('ocr.languages', 'ces+eng', handle);
 }
 

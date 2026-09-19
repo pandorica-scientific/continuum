@@ -9,7 +9,12 @@
  * erase every missing year before it.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { currentRole, engagementSpan, engagementsFor } from '$lib/server/organisations/engagements';
+import {
+	currentEngagement,
+	engagementSpan,
+	engagementsFor
+} from '$lib/server/organisations/engagements';
+import { updateEngagement } from '$lib/server/organisations/mutations';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 import { makeEngagement, makeOrganisation, makePerson } from './fixtures';
 
@@ -65,7 +70,7 @@ describe('an engagement', () => {
 		const rows = await engagementsFor(org.id, db);
 		// 2018, not 2021: the span is the employment, and a lane counts from it.
 		expect(engagementSpan(rows)).toEqual({ startsOn: '2018-09-01', endsOn: null });
-		expect(currentRole(rows, TODAY)).toBe('Research scientist');
+		expect(currentEngagement(rows, TODAY)?.role).toBe('Research scientist');
 	});
 
 	it('says a relationship has ended only once every period has closed', async () => {
@@ -79,7 +84,7 @@ describe('an engagement', () => {
 		});
 		const rows = await engagementsFor(org.id, db);
 		expect(engagementSpan(rows)).toEqual({ startsOn: '2015-01-01', endsOn: '2018-06-30' });
-		expect(currentRole(rows, TODAY)).toBeNull();
+		expect(currentEngagement(rows, TODAY)?.role).toBeUndefined();
 	});
 
 	it('stays current while one period is still open, whatever the others say', async () => {
@@ -112,7 +117,7 @@ describe('an engagement', () => {
 		const rows = await engagementsFor(org.id, db);
 		expect(engagementSpan(rows)).toEqual({ startsOn: null, endsOn: null });
 		// Undated is current, not absent: it runs from for ever.
-		expect(currentRole(rows, TODAY)).toBeNull();
+		expect(currentEngagement(rows, TODAY)?.role).toBeNull();
 	});
 
 	it('refuses a period that ends before it starts', async () => {
@@ -135,5 +140,17 @@ describe('an engagement', () => {
 		await makeEngagement(db, { organisationId: org.id, personId: person.id });
 		await harness.sql`delete from organisation where id = ${org.id}`;
 		expect(await engagementsFor(org.id, db)).toEqual([]);
+	});
+
+	it('corrects a role period entered without a start date', async () => {
+		// The real case: recorded the day started but the exact date was not
+		// to hand, and never came back to fill it in.
+		const org = await makeOrganisation(db, { name: 'MSD Czech Republic' });
+		const person = await makePerson(db, { name: 'Robert' });
+		const period = await makeEngagement(db, { organisationId: org.id, personId: person.id });
+		await updateEngagement(period.id, { role: 'Research scientist', startsOn: '2026-07-01' }, db);
+		const [row] = await engagementsFor(org.id, db);
+		expect(row.role).toBe('Research scientist');
+		expect(row.startsOn).toBe('2026-07-01');
 	});
 });

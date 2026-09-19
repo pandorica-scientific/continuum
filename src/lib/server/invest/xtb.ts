@@ -46,7 +46,13 @@ export function parseXtb(buffer: Uint8Array): XtbReport {
 		if (row[0] === 'Data as of report generated' && row[1]) {
 			generatedAt = row[1].replace(' ', 'T') + 'Z';
 		}
-		if (row[0] === 'My Trades' && row[1] === 'Value' && row[2]) {
+		// Matched loosely on purpose: this line has read "Value" in one export
+		// and "Open position value" in another (this account's real one), and
+		// the row beside it ("Open position profit") shares the "My Trades"
+		// prefix, so `.includes('value')` is what tells the two apart without
+		// pinning to whichever exact wording XTB happens to print today. A
+		// summary silently read as 0 is far worse than one read for either.
+		if (row[0] === 'My Trades' && row[1]?.toLowerCase().includes('value') && row[2]) {
 			accountCurrency = (row[3] || 'EUR').trim().toUpperCase();
 			summaryValueMinor = toMinor(row[2], accountCurrency);
 		}

@@ -54,8 +54,10 @@
 
 			{#if isAdmin && p.id !== me?.id}
 				<span class="row-actions">
-					<!-- Not for a deactivated account: the server refuses to mint a new link. -->
-					{#if p.pending && !p.deactivatedAt}
+					<!-- Not for a deactivated account: the server refuses to mint a new link.
+					     Not in open mode either: everyone can already sign in as themselves
+					     with no password and set one directly in their own Settings. -->
+					{#if p.pending && !p.deactivatedAt && !openMode}
 						<form method="POST" action="?/reissueEnrollment" use:enhance>
 							<input type="hidden" name="personId" value={p.id} />
 							<button type="submit" class="btn">New link</button>

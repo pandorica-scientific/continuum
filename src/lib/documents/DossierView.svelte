@@ -7,9 +7,11 @@
 	// What a lane EXPECTS comes from when the relationship began rather than
 	// from the paper: a year before the first filed document still reads as
 	// missing, which is why a card carries a bound.
+	import { countryName, countryOptions, flagEmoji } from '$lib/countries';
 	import Icon from '$lib/components/Icon.svelte';
 	import PeriodListing from '$lib/statements/PeriodListing.svelte';
 	import { enhance } from '$app/forms';
+	import { submitAction } from '$lib/actions/result';
 	import type { DossierLane, DossierPayload } from '$lib/server/documents/dossier-load';
 	import type { ProposalRow } from '$lib/server/organisations/proposals-load';
 
@@ -18,6 +20,7 @@
 		proposals,
 		closed,
 		shelfKey,
+		people,
 		onopen,
 		onyear,
 		onclosed
@@ -28,6 +31,8 @@
 		/** Card ids collapsed to one line, from the address. */
 		closed: string[];
 		shelfKey: string;
+		/** Who a role period on an organisation card can be added for. */
+		people: { id: string; name: string }[];
 		onopen: (documentId: string) => void;
 		onyear: (year: number) => void;
 		onclosed: (ids: string[]) => void;
@@ -41,7 +46,36 @@
 	/** The card whose "New card" form is showing. */
 	let adding = $state(false);
 	/** Which card's rename/archive menu is open. */
+	/**
+	 * The loose card's paper in two lanes — waiting for a tax year, and already
+	 * on one — so filing or moving a document visibly relocates its row. Every
+	 * other card keeps its one History.
+	 */
+	function historyGroups(card: (typeof dossier.cards)[number]) {
+		const label = dossier.historyOrder === 'oldest' ? 'Records' : 'History';
+		const cadence = dossier.historyOrder === 'oldest' ? 'oldest first' : 'no rhythm';
+		if (card.id !== null || dossier.unit !== 'organisation')
+			return [{ key: 'history', label, cadence, docs: card.history }];
+		const waiting = card.history.filter((d) => !d.onTaxYear);
+		const placed = card.history.filter((d) => d.onTaxYear);
+		return [
+			{
+				key: 'waiting',
+				label: 'Waiting for a tax year',
+				cadence: 'press a row to file it',
+				docs: waiting
+			},
+			{ key: 'placed', label: 'On a tax year', cadence: 'press a row to move it', docs: placed }
+		].filter((g) => g.key === 'waiting' || g.docs.length > 0);
+	}
+
 	let menuFor = $state<string | null>(null);
+	/** The loose row whose file-to-a-year form is open, if any. */
+	let movingId = $state<string | null>(null);
+	/** Which card's "Add a role period" form is showing. */
+	let addingRoleFor = $state<string | null>(null);
+	/** Which role period is being corrected — role and start date, not the end. */
+	let editingRoleId = $state<string | null>(null);
 
 	const isOpen = (laneId: string, key: string): boolean =>
 		open?.laneId === laneId && open.key === key;
@@ -62,6 +96,47 @@
 			? closed.filter((id) => id !== cardId)
 			: [...closed, cardId];
 		onclosed(next);
+	}
+
+	// Drag-and-drop: a desktop shortcut over `?/attachToCard`, the same manual
+	// override "File it" and the inspector's own checkbox already reach —
+	// nothing here that a click couldn't already do. Not attempted on touch:
+	// the row's own open button and "File it" keep working exactly as before.
+	let draggingId = $state<string | null>(null);
+	let dragOverCardId = $state<string | null>(null);
+
+	function startDrag(event: DragEvent, documentId: string) {
+		draggingId = documentId;
+		event.dataTransfer?.setData('text/plain', documentId);
+		if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+	}
+
+	function endDrag() {
+		draggingId = null;
+		dragOverCardId = null;
+	}
+
+	function dragOverCard(event: DragEvent, cardId: string) {
+		if (!draggingId) return;
+		event.preventDefault();
+		if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+		dragOverCardId = cardId;
+	}
+
+	function leaveCard(cardId: string) {
+		if (dragOverCardId === cardId) dragOverCardId = null;
+	}
+
+	async function dropOnCard(event: DragEvent, cardId: string) {
+		event.preventDefault();
+		const documentId = event.dataTransfer?.getData('text/plain') || draggingId;
+		dragOverCardId = null;
+		draggingId = null;
+		if (!documentId) return;
+		const form = new FormData();
+		form.set('documentId', documentId);
+		form.set('targetId', cardId);
+		await submitAction('/documents?/attachToCard', form);
 	}
 
 	/** How often a lane expects paper, in words. */
@@ -117,6 +192,11 @@
 			: []
 	);
 
+	/** Every role period on the card has closed — same rule the server sorts by. */
+	function cardEnded(card: DossierPayload['cards'][number]): boolean {
+		return card.roles.length > 0 && card.roles.every((r) => r.endsOn !== null);
+	}
+
 	/** The worst thing a collapsed card is hiding, in one phrase. */
 	function finding(card: DossierPayload['cards'][number]): string {
 		if (card.findings === 0) return `${card.documentCount} filed`;
@@ -162,7 +242,13 @@
 				<span class="mono proposals-count">{proposals.length}</span>
 			</div>
 			{#each proposals as proposal (proposal.documentId)}
-				<div class="proposal">
+				<div
+					class="proposal"
+					role="listitem"
+					draggable="true"
+					ondragstart={(e) => startDrag(e, proposal.documentId)}
+					ondragend={endDrag}
+				>
 					<button type="button" class="proposal-name" onclick={() => onopen(proposal.documentId)}>
 						{proposal.documentName}
 					</button>
@@ -187,11 +273,22 @@
 	{/if}
 
 	{#each dossier.cards as card (card.id ?? 'unassigned')}
-		{@const shut = card.id !== null && closed.includes(card.id)}
+		<!-- A finished employment defaults to collapsed, everything else to open —
+		     `closed` still just toggles, it flips AWAY from whichever default this
+		     card has rather than always meaning "shut". -->
+		{@const shut = card.id !== null && cardEnded(card) !== closed.includes(card.id)}
 		<article class="card" class:shut>
-			<!-- The header is the collapse control. A card with a finding sorts to
-			     the top and says what it is hiding even when it is one line. -->
-			<div class="card-head">
+			<!-- The header is the collapse control, and — for a real card — a drop
+			     target: dragging a document here is `?/attachToCard`, the same
+			     manual override "File it" and the inspector's checkbox already do. -->
+			<div
+				class="card-head"
+				role="group"
+				class:drop-target={card.id !== null && dragOverCardId === card.id}
+				ondragover={card.id !== null ? (e) => dragOverCard(e, card.id!) : undefined}
+				ondragleave={card.id !== null ? () => leaveCard(card.id!) : undefined}
+				ondrop={card.id !== null ? (e) => dropOnCard(e, card.id!) : undefined}
+			>
 				<span class="emoji" aria-hidden="true">{card.emoji}</span>
 				{#if card.id === null}
 					<h3>{card.name}</h3>
@@ -208,10 +305,18 @@
 				{#if card.kind !== 'other' && card.kind !== card.name.toLowerCase()}
 					<span class="mono chip">{card.kind}</span>
 				{/if}
+				{#if card.country}
+					<span class="mono chip" title={countryName(card.country)}>
+						{flagEmoji(card.country)}
+						{card.country}
+					</span>
+				{/if}
 				<span class="mono card-count" class:alert={card.findings > 0}>
 					{shut
 						? finding(card)
-						: `${card.documentCount} ${card.documentCount === 1 ? 'document' : 'documents'}`}
+						: card.id === null && dossier.unit === 'organisation'
+							? `${historyGroups(card)[0].docs.length} waiting`
+							: `${card.documentCount} ${card.documentCount === 1 ? 'document' : 'documents'}`}
 				</span>
 				{#if card.id !== null && dossier.canCreate}
 					<!-- Rename and archive live on the card, which is where the thing is. -->
@@ -249,7 +354,15 @@
 						>
 							<input type="hidden" name="id" value={cardId} />
 							<input name="name" value={card.name} aria-label="Name" />
-							<button type="submit" class="btn small btn-primary">Rename</button>
+							{#if dossier.unit === 'organisation'}
+								<select name="country" aria-label="Country" value={card.country ?? ''}>
+									<option value="">Country —</option>
+									{#each countryOptions() as c (c.code)}
+										<option value={c.code}>{c.name}</option>
+									{/each}
+								</select>
+							{/if}
+							<button type="submit" class="btn small btn-primary">Save</button>
 						</form>
 						<form
 							method="POST"
@@ -288,13 +401,103 @@
 					</button>
 				{/if}
 
+				{#if dossier.unit === 'organisation' && card.id !== null}
+					<!-- Who this card is for, and since when — a household of more than
+					     one person otherwise has no way to say whose employer this is,
+					     or to record that somebody left. -->
+					<div class="roles">
+						{#each card.roles as role (role.id)}
+							{#if editingRoleId === role.id}
+								<form
+									method="POST"
+									action="?/updateEngagement"
+									use:enhance={() =>
+										({ result, update }) => {
+											if (result.type === 'success') editingRoleId = null;
+											return update();
+										}}
+									class="role-row role-edit"
+								>
+									<input type="hidden" name="id" value={role.id} />
+									<span class="role-person">{role.personName}</span>
+									<input name="role" placeholder="Role" value={role.role ?? ''} />
+									<input
+										type="date"
+										name="startsOn"
+										aria-label="Started on"
+										value={role.startsOn ?? ''}
+									/>
+									<button type="submit" class="btn small btn-primary">Save</button>
+									<button type="button" class="btn small" onclick={() => (editingRoleId = null)}
+										>Cancel</button
+									>
+								</form>
+							{:else}
+								<div class="role-row">
+									<span class="role-person">{role.personName}</span>
+									{#if role.role}<span class="quiet">{role.role}</span>{/if}
+									<span class="quiet mono role-span">
+										{role.startsOn ?? 'no known start'} – {role.endsOn ?? 'ongoing'}
+									</span>
+									<button type="button" class="btn small" onclick={() => (editingRoleId = role.id)}
+										>Edit</button
+									>
+									{#if !role.endsOn}
+										<form method="POST" action="?/endEngagement" use:enhance class="role-end">
+											<input type="hidden" name="id" value={role.id} />
+											<input type="date" name="endsOn" required aria-label="Last day" />
+											<button type="submit" class="btn small">Ended</button>
+										</form>
+									{/if}
+								</div>
+							{/if}
+						{/each}
+
+						{#if addingRoleFor === card.id}
+							<form
+								method="POST"
+								action="?/addEngagement"
+								use:enhance={() =>
+									({ result, update }) => {
+										if (result.type === 'success') addingRoleFor = null;
+										return update();
+									}}
+								class="role-add"
+							>
+								<input type="hidden" name="organisationId" value={card.id} />
+								<select name="personId" required aria-label="Who">
+									<option value="">Who</option>
+									{#each people as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
+								</select>
+								<input name="role" placeholder="Role (optional)" />
+								<input type="date" name="startsOn" aria-label="Started on" />
+								<button type="submit" class="btn small btn-primary">Add</button>
+								<button type="button" class="btn small" onclick={() => (addingRoleFor = null)}
+									>Cancel</button
+								>
+							</form>
+						{:else}
+							<button
+								type="button"
+								class="btn small role-add-toggle"
+								onclick={() => (addingRoleFor = card.id)}
+							>
+								+ Add a role period
+							</button>
+						{/if}
+					</div>
+				{/if}
+
 				{#each card.lanes as lane (lane.id)}
 					<div class="lane">
 						<div class="lane-head">
 							<span class="lane-label">{lane.label}</span>
 							{#if lane.personName}<span class="quiet lane-who">{lane.personName}</span>{/if}
-							<span class="quiet lane-cadence">{cadencePhrase(lane)}</span>
+							<!-- A count or a cadence word only makes sense next to a schedule:
+							     "no rhythm" told a reader nothing they could act on, and read as
+							     jargon rather than as an answer. -->
 							{#if lane.cadence !== 'none'}
+								<span class="quiet lane-cadence">{cadencePhrase(lane)}</span>
 								<span class="mono lane-count" class:short={lane.gaps > 0}>
 									{lane.filed}/{lane.expected}
 								</span>
@@ -310,7 +513,14 @@
 							{:else}
 								<div class="loose">
 									{#each lane.documents as doc (doc.id)}
-										<button type="button" class="loose-row" onclick={() => onopen(doc.id)}>
+										<button
+											type="button"
+											class="loose-row"
+											draggable="true"
+											ondragstart={(e) => startDrag(e, doc.id)}
+											ondragend={endDrag}
+											onclick={() => onopen(doc.id)}
+										>
 											<span class="loose-name">{doc.name}</span>
 											<span class="quiet loose-type">{doc.typeLabel}</span>
 											<span class="mono loose-date">{doc.periodOn ?? doc.addedOn}</span>
@@ -407,26 +617,117 @@
 				{#if card.history.length > 0}
 					<!-- Everything on the card is either in a lane above or here. An
 					     invisible document is worse than a missing one. -->
-					<div class="lane">
-						<div class="lane-head">
-							<span class="lane-label">
-								{dossier.historyOrder === 'oldest' ? 'Records' : 'History'}
-							</span>
-							<span class="quiet lane-cadence">
-								{dossier.historyOrder === 'oldest' ? 'oldest first' : 'no rhythm'}
-							</span>
-							<span class="mono lane-count">{card.history.length}</span>
+					{#each historyGroups(card) as group (group.key)}
+						<div class="lane">
+							<div class="lane-head">
+								<span class="lane-label">{group.label}</span>
+								<span class="quiet lane-cadence">{group.cadence}</span>
+								<span
+									class="mono lane-count"
+									class:short={group.key === 'waiting' && group.docs.length > 0}
+								>
+									{group.docs.length}
+								</span>
+							</div>
+							{#if group.docs.length === 0}
+								<p class="quiet lane-empty">Nothing waiting.</p>
+							{/if}
+							<div class="loose">
+								{#each group.docs as doc (doc.id)}
+									<div class="loose-line" class:placed={card.id === null && doc.onTaxYear !== null}>
+										<button
+											type="button"
+											class="loose-row"
+											draggable="true"
+											ondragstart={(e) => startDrag(e, doc.id)}
+											ondragend={endDrag}
+											onclick={() =>
+												card.id === null && dossier.unit === 'organisation'
+													? (movingId = movingId === doc.id ? null : doc.id)
+													: onopen(doc.id)}
+											ondblclick={(e) => e.preventDefault()}
+										>
+											<span class="loose-name">{doc.name}</span>
+											<span class="quiet loose-type">{doc.typeLabel}</span>
+											{#if card.id === null && doc.onTaxYear}
+												<!-- Paper with a year and a country is PLACED — on the Tax years
+											     tab — whether or not it names an employer. Said as where it
+											     lives, not left reading as an orphan. Pressing the ROW is how
+											     it moves. -->
+												<span class="mono chip placed-chip">
+													{flagEmoji(doc.onTaxYear.country)}
+													{doc.onTaxYear.year} · on Tax years
+												</span>
+											{:else if card.id === null && dossier.unit === 'organisation'}
+												<span class="mono chip placed-chip"> File to a tax year </span>
+											{/if}
+											<span class="mono loose-date">{doc.periodOn ?? doc.addedOn}</span>
+										</button>
+										{#if card.id === null && dossier.unit === 'organisation' && movingId === doc.id}
+											<!-- Filing to a year, or moving to another, from the row the paper is
+										     on — instead of only by dragging across a tab it cannot see. Year
+										     and country are what put it on a card; naming a person makes it
+										     their return, and leaving that alone keeps whatever it already is. -->
+											<form
+												method="POST"
+												action="?/assignTaxYear"
+												use:enhance={() =>
+													async ({ update }) => {
+														movingId = null;
+														await update();
+													}}
+												class="file-year"
+											>
+												<input type="hidden" name="documentId" value={doc.id} />
+												<input
+													type="number"
+													name="year"
+													min="1900"
+													max="2200"
+													value={doc.onTaxYear?.year ??
+														Number((doc.periodOn ?? doc.addedOn).slice(0, 4))}
+													aria-label="Tax year"
+												/>
+												<select
+													name="country"
+													aria-label="Country"
+													value={doc.onTaxYear?.country ?? ''}
+												>
+													{#if !doc.onTaxYear}<option value="">Country…</option>{/if}
+													{#each countryOptions() as c (c.code)}
+														<option value={c.code}>{c.name}</option>
+													{/each}
+												</select>
+												<select name="personId" aria-label="Whose return">
+													{#if doc.onTaxYear}
+														<option value="">Keep what it is</option>
+														<option value="supporting">Supporting paper — not a return</option>
+													{:else}
+														<option value="supporting">Supporting paper</option>
+													{/if}
+													{#each people as person (person.id)}
+														<option value={person.id}>{person.name}'s return</option>
+													{/each}
+												</select>
+												<button type="submit" class="btn small btn-primary"
+													>{doc.onTaxYear ? 'Move' : 'File'}</button
+												>
+												<button type="button" class="btn small" onclick={() => onopen(doc.id)}>
+													Open document
+												</button>
+												<a class="quiet" href="?shelf={shelfKey}&view=shelf&tab=years"
+													>Open Tax years</a
+												>
+												<button type="button" class="btn small" onclick={() => (movingId = null)}
+													>Cancel</button
+												>
+											</form>
+										{/if}
+									</div>
+								{/each}
+							</div>
 						</div>
-						<div class="loose">
-							{#each card.history as doc (doc.id)}
-								<button type="button" class="loose-row" onclick={() => onopen(doc.id)}>
-									<span class="loose-name">{doc.name}</span>
-									<span class="quiet loose-type">{doc.typeLabel}</span>
-									<span class="mono loose-date">{doc.periodOn ?? doc.addedOn}</span>
-								</button>
-							{/each}
-						</div>
-					</div>
+					{/each}
 				{/if}
 
 				{#if card.lanes.length === 0 && card.history.length === 0 && !card.pinned}
@@ -445,11 +746,19 @@
 				<input type="hidden" name="shelf" value={shelfKey} />
 				<label>
 					<span class="eyebrow">Name</span>
-					<input name="name" placeholder="Škoda Octavia" required />
+					<input
+						name="name"
+						placeholder={dossier.unit === 'organisation' ? 'Acme s.r.o.' : 'Škoda Octavia'}
+						required
+					/>
 				</label>
 				<label class="narrow">
 					<span class="eyebrow">Emoji</span>
-					<input name="emoji" placeholder="🚗" maxlength="4" />
+					<input
+						name="emoji"
+						placeholder={dossier.unit === 'organisation' ? '🏢' : '🚗'}
+						maxlength="4"
+					/>
 				</label>
 				{#if dossier.unit === 'organisation'}
 					<label class="narrow">
@@ -459,6 +768,18 @@
 							<option value="authority">Authority</option>
 							<option value="insurer">Insurer</option>
 							<option value="other">Other</option>
+						</select>
+					</label>
+					<label class="narrow">
+						<span class="eyebrow">Country</span>
+						<!-- What puts this organisation's role periods on a tax year card:
+						     a Czech employer's year is a Czech return's year. Left blank it
+						     contributes no card, which is quieter than a wrong one. -->
+						<select name="country">
+							<option value="">—</option>
+							{#each countryOptions() as c (c.code)}
+								<option value={c.code}>{c.name}</option>
+							{/each}
 						</select>
 					</label>
 				{/if}
@@ -648,6 +969,42 @@
 		font-size: var(--text-sm);
 		color: var(--fg3);
 	}
+	.roles {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+		padding: 8px 14px;
+		border-bottom: 1px solid var(--bd);
+	}
+	.role-row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-4);
+		font-size: var(--text-sm);
+	}
+	.role-person {
+		font-weight: 600;
+	}
+	.role-span {
+		margin-left: auto;
+	}
+	.role-end,
+	.role-add {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+	}
+	.role-end input[type='date'],
+	.role-edit input[type='date'] {
+		width: 140px;
+	}
+	.role-edit input[name='role'] {
+		flex: 1;
+		min-width: 0;
+	}
+	.role-add-toggle {
+		align-self: flex-start;
+	}
 	.lane-who,
 	.lane-cadence {
 		font-size: var(--text-xs);
@@ -740,6 +1097,15 @@
 		gap: var(--space-5);
 		padding: var(--space-6) var(--space-7);
 		border-bottom: 1px solid var(--bd);
+	}
+	.card-head.drop-target {
+		background: var(--brand-tint);
+		outline: 2px dashed var(--brand);
+		outline-offset: -2px;
+	}
+	.proposal[draggable='true'],
+	.loose-row[draggable='true'] {
+		cursor: grab;
 	}
 	/* A fixed-size tile, not a bare glyph, so the name sits at the same left
 	   edge regardless of how wide the emoji renders. */
@@ -904,6 +1270,35 @@
 	}
 	.loose-row:hover {
 		background: var(--card2);
+	}
+	.loose-line {
+		display: flex;
+		flex-direction: column;
+	}
+	.loose-line.placed .loose-name {
+		color: var(--fg2);
+	}
+	.placed-chip {
+		font-size: var(--text-2xs);
+		color: var(--fg3);
+		border: 1px solid var(--bd);
+		border-radius: var(--radius-pill);
+		padding: 1px 8px;
+		text-decoration: none;
+	}
+	.placed-chip:hover {
+		color: var(--fg1);
+		border-color: var(--bd2);
+	}
+	.file-year {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: var(--space-4);
+		padding: 0 0 var(--space-4);
+	}
+	.file-year input[type='number'] {
+		width: 80px;
 	}
 	.loose-name {
 		font-size: var(--text-md);

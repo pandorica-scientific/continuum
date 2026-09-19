@@ -118,6 +118,14 @@ export const ENUMS = {
 	 * for the same reason a document does. `document` is the Inbox, which is
 	 * organised by the paper itself because nothing about it is decided yet.
 	 */
+	/**
+	 * What a card on a shelf IS.
+	 *
+	 * `account` means an account OR a loan — anything a bank numbers and sends
+	 * statements about. Widened rather than split into a fifth value: the
+	 * alternative was migrating the seeded `statements` shelf onto a new unit and
+	 * leaving every household-built shelf on the old, narrower one.
+	 */
 	'shelf.unit': ['document', 'person', 'account', 'organisation', 'property', 'subject'],
 
 	/**

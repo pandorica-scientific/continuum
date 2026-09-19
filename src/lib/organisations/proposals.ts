@@ -13,7 +13,7 @@
  *
  * A LANE WITH NO CONDITIONS PROPOSES NOTHING. Claiming everything is correct
  * for sorting what is already filed against an organisation, and catastrophic
- * for deciding what to file: the `Changes to pay` lane would take every
+ * for deciding what to file: the `Contract & HR` lane would take every
  * unfiled document in the archive.
  */
 import { matchesLane, type LaneCandidate } from './lane-match';

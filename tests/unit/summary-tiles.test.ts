@@ -40,6 +40,7 @@ describe('summary tiles', () => {
 				bonusTotalMinor: '100000',
 				equityTotalMinor: '0',
 				equityOnPayslipMinor: '0',
+				equityUnvestedMinor: '0',
 				netTotalMinor: '900000',
 				grossMonths: 12,
 				netMonths: 12,
@@ -52,15 +53,44 @@ describe('summary tiles', () => {
 			'Earned since 2025',
 			'Average year',
 			'Last year · 2025',
-			'Equity vested · 2025'
+			'Equity awarded · 2025',
+			'Equity to vest'
 		]);
 		expect(salarySummaryTiles(years, 'CZK', 'person').map((t) => t.label)).toEqual([
 			'Earned since 2025',
 			'Average month',
 			'Last increase',
 			'Average month, 2025',
-			'Equity vested · 2025'
+			'Equity awarded · 2025',
+			'Equity to vest'
 		]);
+	});
+
+	it('salary: what is still to vest is its own tile, at today’s close', () => {
+		// Never added to the vested figure beside it: one is fixed at each vest
+		// day and already earned, the other is a live quote on shares nobody has.
+		const [tile] = salarySummaryTiles([], 'CZK', 'person', {
+			heldMinor: '200000',
+			heldUnits: 20,
+			pendingMinor: '420000',
+			pendingUnits: 42,
+			unpricedUnits: 0
+		}).filter((t) => t.label === 'Equity to vest');
+		expect(tile.value).toBe('4\u0027200');
+		expect(tile.note).toBe("42 units at today's close");
+	});
+
+	it('salary: units no feed prices are named, not quietly valued at nothing', () => {
+		const [tile] = salarySummaryTiles([], 'CZK', 'person', {
+			heldMinor: '0',
+			heldUnits: 0,
+			pendingMinor: '0',
+			pendingUnits: 42,
+			unpricedUnits: 42
+		}).filter((t) => t.label === 'Equity to vest');
+		// A zero here would read as "worth nothing", which is a different claim.
+		expect(tile.value).toBe('—');
+		expect(tile.note).toBe('42 units, no price for them yet');
 	});
 
 	it('salary: the equity tile says what vested and how much a payslip already carried', () => {
@@ -73,6 +103,7 @@ describe('summary tiles', () => {
 			baseTotalMinor: '1200000',
 			bonusTotalMinor: '0',
 			netTotalMinor: '0',
+			equityUnvestedMinor: '0',
 			grossMonths: 12,
 			netMonths: 0,
 			netComplete: false,
@@ -83,16 +114,16 @@ describe('summary tiles', () => {
 			[{ ...base, equityTotalMinor: '0', equityOnPayslipMinor: '0' }],
 			'CZK',
 			'person'
-		).at(-1)!;
+		).find((t) => t.label.startsWith('Equity awarded'))!;
 		expect(none.value).toBe('—');
-		expect(none.note).toBe('no grant vested');
+		expect(none.note).toBe('no grant that year');
 		const some = salarySummaryTiles(
 			[{ ...base, equityTotalMinor: '350000', equityOnPayslipMinor: '50000' }],
 			'CZK',
 			'person'
-		).at(-1)!;
-		expect(some.label).toBe('Equity vested · 2026');
-		expect(some.value).toBe('3\u202f500');
+		).find((t) => t.label.startsWith('Equity awarded'))!;
+		expect(some.label).toBe('Equity awarded · 2026');
+		expect(some.value).toBe('3\u0027500');
 		expect(some.note).toBe('500 of it on payslips');
 	});
 

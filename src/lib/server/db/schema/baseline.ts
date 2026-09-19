@@ -18,6 +18,7 @@ import { contactFoldSql, contactsSql } from './contacts';
 import { documentsCheckSql, documentsIndexSql, documentsSeedSql } from './documents';
 import { entitySql } from './entity';
 import { organisationsCheckSql } from './organisations';
+import { taxCheckSql } from './tax';
 import { investmentsSql } from './investments';
 import { lifeCheckSql, lifeIndexSql, lifeSeedSql } from './life';
 import { moneySeedSql } from './money';
@@ -81,9 +82,12 @@ CREATE VIEW net_worth_component AS
 	       currency, value_minor, valued_on
 	  FROM property
 	UNION ALL
+	-- A closed account is not money you have. Its transactions stay in the
+	-- ledger and in cash-flow history; only the balance leaves.
 	SELECT id, 'account', kind::text, owner_person_id,
 	       currency, balance_minor, balance_on
 	  FROM account
+	 WHERE archived_at IS NULL
 	UNION ALL
 	SELECT id, 'loan', kind::text, owner_person_id,
 	       currency, -owed_minor, owed_on
@@ -93,9 +97,11 @@ CREATE VIEW net_worth_component AS
 	       currency, value_minor, valued_at::date
 	  FROM holding
 	UNION ALL
+	-- Still held: delivered (or scheduled) less sold, less moved to a broker
+	-- whose report already counts them under 'holding'.
 	SELECT t.id, 'equity', 'rsu', g.person_id,
 	       p.currency,
-	       round((coalesce(t.delivered_units, t.units) - t.sold_units) * p.close_minor)::bigint,
+	       round((coalesce(t.delivered_units, t.units) - t.sold_units - t.moved_units) * p.close_minor)::bigint,
 	       p.day
 	  FROM equity_tranche t
 	  JOIN equity_grant g ON g.id = t.grant_id
@@ -105,7 +111,7 @@ CREATE VIEW net_worth_component AS
 	  ) p ON true
 	 WHERE t.forfeited_on IS NULL
 	   AND (t.settled_on IS NOT NULL OR t.vests_on <= current_date)
-	   AND (coalesce(t.delivered_units, t.units) - t.sold_units) > 0;
+	   AND (coalesce(t.delivered_units, t.units) - t.sold_units - t.moved_units) > 0;
 `;
 
 /**
@@ -143,7 +149,14 @@ export const BASELINE_SECTIONS: BaselineSection[] = [
 	{ title: 'Enum CHECK constraints', sql: enumChecksSql() },
 	{
 		title: 'Singletons and shapes',
-		sql: join([authSql, investmentsSql, documentsCheckSql, organisationsCheckSql, lifeCheckSql])
+		sql: join([
+			authSql,
+			investmentsSql,
+			documentsCheckSql,
+			organisationsCheckSql,
+			lifeCheckSql,
+			taxCheckSql
+		])
 	},
 	{ title: 'One visit per trip destination', sql: lifeIndexSql },
 	{ title: 'The entity supertype', sql: entitySql },

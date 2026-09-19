@@ -22,6 +22,7 @@
 	import CoverageView from '$lib/statements/CoverageView.svelte';
 	import DossierView from '$lib/documents/DossierView.svelte';
 	import QueueView from '$lib/documents/QueueView.svelte';
+	import TaxYearView from '$lib/documents/TaxYearView.svelte';
 	import WalletView from '$lib/documents/WalletView.svelte';
 	import DocumentsRail from '$lib/documents/DocumentsRail.svelte';
 	import { documentFileHref } from '$lib/ui/file-viewer';
@@ -33,11 +34,12 @@
 		mayProposeType,
 		typeOptionsFor
 	} from '$lib/documents';
-	import { countryName, flagEmoji } from '$lib/countries';
+	import { countryName, countryOptions, flagEmoji } from '$lib/countries';
 	import IdentityFields from '$lib/documents/IdentityFields.svelte';
 	import { ENGINE_LABELS } from '$lib/documents/templates';
 	import {
 		aboutOptionLabel,
+		documentChips,
 		expiryTreatment,
 		groupAboutOptions,
 		groupDocuments,
@@ -52,6 +54,7 @@
 		subLine,
 		typeLabel,
 		typeLabels,
+		type DocChip,
 		type GroupKey,
 		type SortKey
 	} from '$lib/documents/view';
@@ -181,8 +184,29 @@
 		'type',
 		'entity',
 		'tag',
+		'period',
+		'country',
 		'archived'
 	];
+
+	/** Whether anything is narrowing the list. Derived once: the filter bar asks
+	 *  twice, and two copies of a five-way condition drift apart. */
+	const filtered = $derived(
+		data.filters.tags.length > 0 ||
+			Boolean(data.filters.type) ||
+			Boolean(data.filters.entity) ||
+			Boolean(data.filters.period) ||
+			Boolean(data.filters.country)
+	);
+
+	/** The URL a fact chip points at, so it is a real link and not a div. */
+	function chipHref(chip: DocChip): string {
+		if (!chip.filter) return '#';
+		const next = new URL(page.url);
+		next.searchParams.set(chip.filter.key, chip.filter.value);
+		next.searchParams.delete('doc');
+		return `${next.pathname}${next.search}`;
+	}
 
 	/** Whether the pending navigation is about to change the document set —
 	 *  not, say, just the coverage ribbon's year, which shouldn't blank the column. */
@@ -253,9 +277,17 @@
 			groups.push(fresh);
 			return fresh;
 		};
+		// `data.pickableTargets` is scoped to the shelf on screen (an
+		// organisation-unit shelf offers only organisations, never people), so
+		// a link's KIND being pickable in general does not mean THIS link has a
+		// checkbox here. Testing the id against what is actually offered is
+		// what keeps a person link from disappearing — with no checkbox and no
+		// hidden input — the moment the document is viewed from a shelf whose
+		// picker doesn't cover that kind.
+		const offeredIds = new Set(data.pickableTargets.map((t) => t.id));
 		for (const target of data.pickableTargets) groupFor(target.groupLabel, true).items.push(target);
 		for (const link of data.selected?.links ?? []) {
-			if (link.pickable || unlinked.includes(link.id)) continue;
+			if (offeredIds.has(link.id) || unlinked.includes(link.id)) continue;
 			groupFor(link.groupLabel, false).items.push(link);
 		}
 		return groups.filter((g) => g.items.length > 0);
@@ -429,6 +461,21 @@
 	</form>
 {/if}
 
+{#snippet tabs()}
+	<!-- The same control the Cards/List switch is: two views of one shelf,
+	     not two loose buttons. -->
+	<div class="tabs">
+		<Segmented
+			options={[
+				{ value: 'employers', label: 'Employers' },
+				{ value: 'years', label: 'Tax years' }
+			]}
+			value={data.tab ?? 'employers'}
+			onchange={(value) => navigate({ tab: value === 'years' ? 'years' : null, doc: null })}
+		/>
+	</div>
+{/snippet}
+
 <section class="layout" class:with-inspector={data.selected}>
 	<DocumentsRail {data} />
 
@@ -500,7 +547,7 @@
 				</div>
 			{/if}
 
-			{#if data.rows.length > 0 || data.filters.tags.length || data.filters.type || data.filters.entity}
+			{#if data.rows.length > 0 || filtered}
 				<!-- Filters narrow the list and never the rail. Each offers only what is
 			     on the shelf in view, with the count it would leave, so no choice
 			     empties the screen. Every filter is in the URL: a bookmark is the
@@ -544,11 +591,34 @@
 							onchange={(tags) => navigate({ tag: tags, doc: null })}
 						/>
 					</div>
-					{#if data.filters.tags.length || data.filters.type || data.filters.entity}
+					{#if data.filters.period}
+						<!-- Set by a row's own period chip rather than by a picker: the
+						     list of months a household has paper for is long, and the
+						     chip is where somebody already is when they want it. -->
+						<button
+							type="button"
+							class="btn small active"
+							onclick={() => navigate({ period: null, doc: null })}
+						>
+							{data.filters.period} ✕
+						</button>
+					{/if}
+					{#if data.filters.country}
+						<button
+							type="button"
+							class="btn small active"
+							onclick={() => navigate({ country: null, doc: null })}
+						>
+							{flagEmoji(data.filters.country)}
+							{countryName(data.filters.country)} ✕
+						</button>
+					{/if}
+					{#if filtered}
 						<button
 							type="button"
 							class="link"
-							onclick={() => navigate({ tag: null, type: null, entity: null })}
+							onclick={() =>
+								navigate({ tag: null, type: null, entity: null, period: null, country: null })}
 						>
 							Clear filters
 						</button>
@@ -697,13 +767,28 @@
 					selectedId={data.selected?.id}
 					onopen={(id) => navigate({ doc: id })}
 				/>
+			{:else if data.view === 'shelf' && data.tab === 'years' && data.taxYears}
+				<!-- An employer card answers "which payslip never arrived"; a tax year
+				     card answers "is this year filed". Two questions, one shelf,
+				     because the paper moves between them and a shelf is where paper
+				     lives. -->
+				{@render tabs()}
+				<TaxYearView
+					years={data.taxYears}
+					view={data.taxView}
+					thisYear={Number(today.slice(0, 4))}
+					onopen={(id) => navigate({ doc: id })}
+					onview={(view) => navigate({ people: view === 'person' ? '1' : null, doc: null })}
+				/>
 			{:else if data.view === 'shelf' && data.layout === 'dossier' && data.dossier}
+				{#if data.tab}{@render tabs()}{/if}
 				<!-- One card per unit, with what it owes you and what never arrived. -->
 				<DossierView
 					dossier={data.dossier}
 					proposals={data.proposals}
 					closed={data.closed}
 					shelfKey={data.shelf}
+					people={data.householdPeople}
 					onopen={(id) => navigate({ doc: id })}
 					onyear={(year) => navigate({ year: String(year) })}
 					onclosed={(ids) => navigate({ closed: ids.join(',') || null })}
@@ -811,19 +896,31 @@
 											</span>
 											<span class="sub">
 												<span class="sub-text">{subLine(d)}</span>
-												{#if d.tags.length}
-													<!-- As many as fit on the line, the rest counted. -->
-													<span class="row-tags" use:fitChips={d.tags}>
-														{#each d.tags as tagName (tagName)}<span
-																class="chip tag"
-																data-chip
-																style:color="var({tagHue(tagName)})"
-																style:border-color="color-mix(in srgb, var({tagHue(tagName)}) 45%,
-																transparent)">{tagName}</span
-															>{/each}
-														<span class="chip tag" data-more hidden></span>
-													</span>
-												{/if}
+												<!-- What the document already SAYS, then what somebody chose
+												     to call it. Two vocabularies, two treatments: a derived
+												     fact is an outline, a tag keeps its colour. As many as
+												     fit on the line, the rest counted. -->
+												<span class="row-tags" use:fitChips={[d.id, d.tags]}>
+													{#each documentChips(d, labels) as chip (chip.kind + chip.text)}<a
+															class="chip fact"
+															data-chip
+															style:color="var({tagHue(chip.text)})"
+															style:border-color="color-mix(in srgb, var({tagHue(chip.text)}) 45%,
+															transparent)"
+															href={chipHref(chip)}
+															onclick={(e) => {
+																e.preventDefault();
+																if (chip.filter) navigate({ [chip.filter.key]: chip.filter.value });
+															}}>{chip.text}</a
+														>{/each}{#each d.tags as tagName (tagName)}<span
+															class="chip tag"
+															data-chip
+															style:color="var({tagHue(tagName)})"
+															style:border-color="color-mix(in srgb, var({tagHue(tagName)}) 45%,
+															transparent)">{tagName}</span
+														>{/each}
+													<span class="chip tag" data-more hidden></span>
+												</span>
 											</span>
 											{#if variant !== 'metadata' && d.match?.snippet}
 												<span class="snippet">
@@ -1226,33 +1323,45 @@
 							<input type="date" name="expiresOn" value={d.expiresOn ?? ''} />
 						</div>
 					</div>
-					{#if d.type === 'bank_statement'}
-						<!-- Which months this statement covers, for one nobody imported.
-						     An accepted import fills both from the file, so these are
-						     almost always already answered — but the reader refuses more
-						     scanned statements than it reads, and a person holding a scan
-						     their bank really sent has nowhere else to say which month it
-						     is. Without them the document is filed and invisible: the
-						     coverage ribbon draws periods, and nothing but an import can
-						     write one. -->
-						<div class="sec">
-							<span class="eyebrow">Covers</span>
-							<div class="expiry-grid">
-								<input
-									type="date"
-									name="periodOn"
-									value={d.periodOn ?? ''}
-									aria-label="First day covered"
-								/>
-								<input
-									type="date"
-									name="periodEndOn"
-									value={d.periodEndOn ?? ''}
-									aria-label="Last day covered"
-								/>
-							</div>
+					<label class="sec">
+						<span class="eyebrow">Country</span>
+						<!-- Which country's paper this is, where that is a fact about the
+						     document. The same picker an identity document's country uses:
+						     codes, with names from Intl, so nothing here is a list anybody
+						     has to maintain. -->
+						<select name="country" value={d.country ?? ''}>
+							<option value="">—</option>
+							{#each countryOptions() as c (c.code)}
+								<option value={c.code}>{c.name}</option>
+							{/each}
+						</select>
+					</label>
+					<!-- Which months this document covers. EVERY type, not only a bank
+					     statement: a yearly lane and a tax year card can place only a
+					     dated document, and a tax return filed by hand had nowhere at
+					     all to say which year it was for. An empty second date already
+					     means "the single month of the first" in the schema, so no list
+					     of types that may have a period needs to exist, and none gets
+					     invented. An accepted import and the salary tracker fill both
+					     from the file, so for a statement or a payslip these are almost
+					     always already answered. -->
+					<div class="sec">
+						<span class="eyebrow">Covers</span>
+						<div class="expiry-grid">
+							<input
+								type="date"
+								name="periodOn"
+								value={d.periodOn ?? ''}
+								aria-label="First day covered"
+							/>
+							<input
+								type="date"
+								name="periodEndOn"
+								value={d.periodEndOn ?? ''}
+								aria-label="Last day covered"
+							/>
 						</div>
-					{/if}
+					</div>
 					<div class="sec">
 						<span class="eyebrow">Tags</span>
 						<TagField tags={[...d.tags]} known={data.knownTags} />
@@ -1503,6 +1612,13 @@
 		height: var(--control-h);
 		max-width: 240px;
 	}
+	/* A row of two, above the cards. The button treatment is the app's; `active`
+	   is the only state this adds. */
+	.tabs {
+		display: flex;
+		margin-bottom: var(--space-6);
+	}
+
 	.tag-filter {
 		flex: 1 1 260px;
 		max-width: 520px;
@@ -1714,6 +1830,16 @@
 		gap: var(--space-2);
 		overflow: hidden;
 		margin-left: var(--space-2);
+	}
+	/* A derived fact wears the same colour a tag with that text would — "Alphabet"
+	   is one hue wherever it appears, so a column can be scanned by colour. It
+	   is a link, and the underline stays off: the chip shape already says
+	   "press me". */
+	.row-tags .chip.fact {
+		text-decoration: none;
+	}
+	.row-tags .chip.fact:hover {
+		filter: brightness(1.25);
 	}
 	.row-tags .chip {
 		flex: none;

@@ -21,6 +21,11 @@ import { archiveFacts, shelfFacts } from '$lib/server/documents/shelf-tiles';
 import { createCard } from '$lib/server/documents/cards';
 import { loadQueue } from '$lib/server/documents/queue-load';
 import {
+	assignToTaxYear,
+	loadTaxYears,
+	setTaxFilingExpected
+} from '$lib/server/documents/tax-years';
+import {
 	dossierMissing,
 	lanesForDocument,
 	loadDossier,
@@ -39,8 +44,10 @@ import {
 	endEngagement,
 	listOrganisations,
 	renameOrganisation,
+	setOrganisationCountry,
 	setOrganisationEmoji,
-	setOrganisationKind
+	setOrganisationKind,
+	updateEngagement
 } from '$lib/server/organisations/mutations';
 import {
 	coverageAccountCount,
@@ -48,7 +55,12 @@ import {
 	loadCoverage
 } from '$lib/server/statements/coverage-load';
 import { firstOfMonth, lastOfMonth } from '$lib/statements/coverage';
-import { assignLane, createDocument, replaceDocumentFile } from '$lib/server/documents/mutations';
+import {
+	assignLane,
+	autoAssignLane,
+	createDocument,
+	replaceDocumentFile
+} from '$lib/server/documents/mutations';
 import {
 	identityNumbersFor,
 	readIdentityFields,
@@ -90,6 +102,7 @@ import {
 	unarchiveSubject
 } from '$lib/server/documents/subjects';
 import {
+	attachDocument,
 	documentTargetSpec,
 	DOCUMENT_TARGET_KINDS,
 	isDocumentTargetKind,
@@ -99,6 +112,8 @@ import {
 	type TargetRow
 } from '$lib/server/documents/targets';
 import { linkDiff } from '$lib/documents/links';
+import { coversPeriod, periodLabel } from '$lib/documents/view';
+import { foldCountry, isCountryCode } from '$lib/countries';
 import { deleteTag, upsertTag } from '$lib/server/tags';
 import { loadTagsScreen } from '$lib/server/tags/screen';
 import {
@@ -206,6 +221,10 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const tagFilters = url.searchParams.getAll('tag').filter(Boolean);
 	const typeFilter = url.searchParams.get('type') ?? '';
 	const entityFilter = url.searchParams.get('entity') ?? '';
+	// A year (`2025`) or a month (`2025-03`). The chip that sets it decides which,
+	// so a yearly document filters by its year and a payslip by its month.
+	const periodFilter = url.searchParams.get('period') ?? '';
+	const countryFilter = (url.searchParams.get('country') ?? '').toUpperCase();
 	const includeArchived = url.searchParams.get('archived') === '1';
 	const openDocumentId = url.searchParams.get('doc') ?? '';
 	const isAdmin = locals.person?.role === 'admin';
@@ -258,6 +277,16 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 					bannerToday()
 				)
 			: null;
+
+	// Two tabs, and only on the one shelf the application writes tax paper to.
+	// The tab is where in a screen a person is, which is what the URL is for —
+	// the same place the view, the filters, the group and the sort already live.
+	const hasTabs = shelfRow?.key === SYSTEM_SHELF_KEYS.incomeTax && engine === 'dossier';
+	const tab = hasTabs ? (url.searchParams.get('tab') === 'years' ? 'years' : 'employers') : null;
+	const taxYears = tab === 'years' ? await loadTaxYears(db, bannerToday()) : null;
+	// Household or per person — the same question two ways, so the same URL.
+	const taxView: 'household' | 'person' =
+		url.searchParams.get('people') === '1' ? 'person' : 'household';
 
 	/** One record a document is filed against, ready to draw as a chip. */
 	interface DocumentLinkRow extends TargetRow {
@@ -380,6 +409,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		if (typeFilter && d.type !== typeFilter) return false;
 		if (entityFilter && !(targetsByDoc.get(d.id) ?? []).some((t) => t.id === entityFilter))
 			return false;
+		if (periodFilter && !coversPeriod(d, periodFilter)) return false;
+		if (countryFilter && d.country !== countryFilter) return false;
 		return true;
 	});
 
@@ -388,6 +419,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const tagCounts = new Map<string, number>();
 	const typeCounts = new Map<string, number>();
 	const entityCounts = new Map<string, { row: DocumentLinkRow; count: number }>();
+	const periodCounts = new Map<string, number>();
+	const countryCounts = new Map<string, number>();
 	for (const d of onShelf) {
 		for (const t of tagsByDoc.get(d.id) ?? []) tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1);
 		typeCounts.set(d.type, (typeCounts.get(d.type) ?? 0) + 1);
@@ -395,6 +428,11 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			const seen = entityCounts.get(t.id);
 			entityCounts.set(t.id, { row: t, count: (seen?.count ?? 0) + 1 });
 		}
+		// Counted by the same label the chip prints, so the option and the chip
+		// that sets it can never disagree about what a period is.
+		const period = periodLabel(d.periodOn, d.periodEndOn);
+		if (period) periodCounts.set(period.filter, (periodCounts.get(period.filter) ?? 0) + 1);
+		if (d.country) countryCounts.set(d.country, (countryCounts.get(d.country) ?? 0) + 1);
 	}
 	const filterOptions = {
 		tags: [...tagCounts.entries()]
@@ -423,7 +461,15 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 				kind: e.row.kind,
 				groupLabel: e.row.groupLabel,
 				count: e.count
-			}))
+			})),
+		// Newest period first: somebody looking for a period is almost always
+		// looking for a recent one.
+		periods: [...periodCounts.entries()]
+			.sort((a, b) => b[0].localeCompare(a[0]))
+			.map(([value, count]) => ({ value, count })),
+		countries: [...countryCounts.entries()]
+			.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+			.map(([code, count]) => ({ code, count }))
 	};
 
 	const rowOf = (d: (typeof docs)[number]) => {
@@ -442,6 +488,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			addedOn: d.addedOn,
 			periodOn: d.periodOn,
 			periodEndOn: d.periodEndOn,
+			country: d.country,
 			expiresOn: d.expiresOn,
 			expiryVerb: d.expiryVerb,
 			subjectArchived: archivedByDoc.has(d.id),
@@ -484,10 +531,19 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		tagsScreen: view === 'tags' ? await loadTagsScreen() : null,
 		shelf,
 		query,
-		filters: { tags: tagFilters, type: typeFilter, entity: entityFilter },
+		filters: {
+			tags: tagFilters,
+			type: typeFilter,
+			entity: entityFilter,
+			period: periodFilter,
+			country: countryFilter
+		},
 		filterOptions,
 		includeArchived,
 		isAdmin,
+		tab,
+		taxYears,
+		taxView,
 		// The shelf's own default, so Finance opens by year and Identity by who
 		// it is about.
 		group: url.searchParams.get('group') ?? DEFAULT_GROUP,
@@ -696,6 +752,74 @@ export const actions: Actions = {
 		return { ok: true, addedIds, addedShelf: shelfKey };
 	},
 
+	/**
+	 * Dropping a document on a tax year card, or on one person's row.
+	 *
+	 * A desktop shortcut over writes the inspector can already make — the type,
+	 * the period, the country and a link — the same relationship `attachToCard`
+	 * has with the About checkbox.
+	 */
+	assignTaxYear: async ({ request }) => {
+		const form = await request.formData();
+		const documentId = String(form.get('documentId') ?? '').trim();
+		const year = Number(form.get('year'));
+		const country = String(form.get('country') ?? '')
+			.trim()
+			.toUpperCase();
+		const chosen = form.getAll('personId').map((v) => String(v).trim());
+		// One select carries three answers: a person, "supporting" (drop every
+		// person it names), or nothing (leave who it names alone).
+		const supporting = chosen.includes('supporting');
+		const personIds = chosen.filter((v) => v && v !== 'supporting');
+
+		if (!documentId) return fail(400, { message: 'Which document?' });
+		const present = await assertDocumentExists(documentId);
+		if (!present.ok) return fail(present.status, { message: present.message });
+		if (!Number.isInteger(year) || year < 1900 || year > 2200)
+			return fail(400, { message: 'That year does not look right.' });
+		if (!isCountryCode(country)) return fail(400, { message: 'Name the country as a code.' });
+
+		await assignToTaxYear({ documentId, year, country, personIds, supporting }, db);
+		return { ok: true };
+	},
+
+	/** "Add a tax year", and the per-person add on a card. */
+	addTaxYear: async ({ request }) => {
+		const form = await request.formData();
+		const year = Number(form.get('year'));
+		const country = String(form.get('country') ?? '')
+			.trim()
+			.toUpperCase();
+		const personId = String(form.get('personId') ?? '').trim();
+		if (!Number.isInteger(year) || year < 1900 || year > 2200)
+			return fail(400, { message: 'That year does not look right.' });
+		if (!isCountryCode(country)) return fail(400, { message: 'Name the country as a code.' });
+
+		await setTaxFilingExpected(
+			{ year, country, personId: personId || undefined, expected: true },
+			db
+		);
+		return { ok: true };
+	},
+
+	/** Hiding a card the derivation got wrong, or taking one person off a return. */
+	dismissTaxYear: async ({ request }) => {
+		const form = await request.formData();
+		const year = Number(form.get('year'));
+		const country = String(form.get('country') ?? '')
+			.trim()
+			.toUpperCase();
+		const personId = String(form.get('personId') ?? '').trim();
+		if (!Number.isInteger(year) || !isCountryCode(country))
+			return fail(400, { message: 'Which year, and where?' });
+
+		await setTaxFilingExpected(
+			{ year, country, personId: personId || undefined, expected: false },
+			db
+		);
+		return { ok: true };
+	},
+
 	/** The inspector's Save: metadata only, never the file. */
 	updateDocument: async ({ request }) => {
 		const form = await request.formData();
@@ -723,7 +847,13 @@ export const actions: Actions = {
 		const guarded = await salaryGuardedDocuments([id], { type, keptTargetIds: wanted });
 		if (guarded.length > 0) return fail(409, { message: SALARY_ENTRY_REFUSAL });
 
-		const period = coveredMonths(form);
+		// The Covers fields render for every document now, so the inspector always
+		// posts them and this guard is belt and braces. It stays because a form
+		// that is NOT the inspector — a bulk edit, a future capture — may still
+		// omit the field, and `coveredMonths` on a form with no such field reads
+		// exactly like one cleared by hand. That is how every payslip's period
+		// used to be wiped on an unrelated edit.
+		const period = form.has('periodOn') ? coveredMonths(form) : null;
 		if (period === PERIOD_BACKWARDS) {
 			return fail(400, { message: 'A statement cannot stop covering months before it starts.' });
 		}
@@ -742,7 +872,12 @@ export const actions: Actions = {
 						String(form.get('expiryVerb') ?? 'expires'),
 						'expires'
 					),
-					...period
+					// Absent is not blank: a form without the field must not read as
+					// "clear it", the rule `periodOn` above already follows.
+					...(form.has('country')
+						? { country: foldCountry(String(form.get('country') ?? '')) }
+						: {}),
+					...(period ? period : {})
 				})
 				.where(eq(document.id, id));
 
@@ -787,6 +922,14 @@ export const actions: Actions = {
 			for (const tagName of form.getAll('tags').map(String).filter(Boolean)) {
 				const resolved = await upsertTag(tagName, tx);
 				await tx.insert(tagLink).values({ tagId: resolved.id, targetId: id }).onConflictDoNothing();
+			}
+
+			// A freshly-linked card had no lane picker to offer — the picker only
+			// exists once the link is already saved — so a first filing gets its
+			// lane guessed for it, when there is only one honest answer. Skipped
+			// entirely when the picker WAS shown: an explicit pick always wins.
+			if (!form.has('laneId')) {
+				for (const targetId of add) await autoAssignLane(targetId, id, tx);
 			}
 
 			// Last, and only when the picker was shown: the lane is checked
@@ -907,6 +1050,13 @@ export const actions: Actions = {
 					.insert(tagLink)
 					.values(ids.map((id) => ({ tagId: resolved.id, targetId: id })))
 					.onConflictDoNothing();
+			}
+			// The bulk bar has no lane picker at all — every new link gets its
+			// lane guessed for it, same restraint as the inspector's own first
+			// filing (see autoAssignLane): only when exactly one lane on that
+			// card fits.
+			for (const id of ids) {
+				for (const targetId of linkIds) await autoAssignLane(targetId, id, tx);
 			}
 		});
 		return {
@@ -1062,6 +1212,10 @@ export const actions: Actions = {
 			if (kind !== null) {
 				await setOrganisationKind(id, asEnumValue('organisation.kind', String(kind), 'other'), db);
 			}
+			// Present-but-empty clears it; absent leaves it alone, so a form that
+			// never showed the field cannot wipe a country somebody else set.
+			if (form.has('country'))
+				await setOrganisationCountry(id, foldCountry(String(form.get('country') ?? '')), db);
 		} catch (error) {
 			return fail(400, {
 				message: error instanceof Error ? error.message : 'Could not rename it.'
@@ -1106,6 +1260,23 @@ export const actions: Actions = {
 		return { ok: true };
 	},
 
+	/**
+	 * Drag a document straight onto a card — a manual override, not just a
+	 * confirmation. Unlike `acceptProposal`, this never claims to have been
+	 * proposed: it works for any card, guessed or not, and for a document
+	 * proposeFor left alone entirely (ambiguous, or nothing matched).
+	 */
+	attachToCard: async ({ request }) => {
+		const form = await request.formData();
+		const documentId = String(form.get('documentId') ?? '').trim();
+		const targetId = String(form.get('targetId') ?? '').trim();
+		if (!documentId || !targetId) return fail(400, { message: 'Nothing to file.' });
+		const result = await attachDocument(targetId, documentId, db);
+		if (!result.ok) return fail(result.status, { message: result.message });
+		await autoAssignLane(targetId, documentId, db);
+		return { ok: true };
+	},
+
 	addEngagement: async ({ request }) => {
 		const form = await request.formData();
 		const organisationId = String(form.get('organisationId') ?? '').trim();
@@ -1126,6 +1297,24 @@ export const actions: Actions = {
 		} catch (error) {
 			return fail(400, {
 				message: error instanceof Error ? error.message : 'Could not add the role.'
+			});
+		}
+		return { ok: true };
+	},
+
+	/** Corrects a role or start date recorded without one, or wrongly. */
+	updateEngagement: async ({ request }) => {
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '').trim();
+		if (!id) return fail(400, { message: 'Which role period?' });
+		try {
+			await updateEngagement(id, {
+				role: String(form.get('role') ?? ''),
+				startsOn: String(form.get('startsOn') ?? '') || null
+			});
+		} catch (error) {
+			return fail(400, {
+				message: error instanceof Error ? error.message : 'Could not update the role.'
 			});
 		}
 		return { ok: true };
@@ -1254,7 +1443,8 @@ export const actions: Actions = {
 				shelfId,
 				name,
 				emoji: String(form.get('emoji') ?? '') || undefined,
-				kind: kindField ? asEnumValue('organisation.kind', String(kindField), 'other') : undefined
+				kind: kindField ? asEnumValue('organisation.kind', String(kindField), 'other') : undefined,
+				country: foldCountry(String(form.get('country') ?? ''))
 			});
 			return { ok: true, cardId: card.id };
 		} catch (error) {

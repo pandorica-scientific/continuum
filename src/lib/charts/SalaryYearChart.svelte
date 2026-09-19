@@ -29,6 +29,7 @@
 
 	const anyBonus = $derived(years.some((y) => BigInt(y.bonusTotalMinor) > 0n));
 	const anyEquity = $derived(years.some((y) => BigInt(y.equityTotalMinor) > 0n));
+	const anyUnvested = $derived(years.some((y) => BigInt(y.equityUnvestedMinor) > 0n));
 
 	/**
 	 * Bars in minor units, which is what the ledger stores and what the readout
@@ -48,25 +49,32 @@
 				}))
 	);
 
-	// Base answers "did my salary go up"; total moves with a one-off bonus and misreads as a raise.
+	/**
+	 * Two lines, and only two: the salary, and everything.
+	 *
+	 * Salary is the base — no bonus, no grant — which is the figure that answers
+	 * "did my pay go up", because a one-off award moves a total up one year and
+	 * down the next and reads as a raise followed by a cut. Total is the whole
+	 * package beside it: pay, bonus and whatever was granted that year.
+	 *
+	 * The gap between them IS the variable pay, which is the thing worth seeing.
+	 * A third line for gross-with-bonus-but-not-equity used to sit between them
+	 * and answered no question anybody asks.
+	 */
 	const series = $derived<LineSeries[]>([
+		{
+			key: 'base',
+			colorVar: '--series-health',
+			dashed: true,
+			endLabel: 'salary',
+			points: years.map((y) => ({ value: y.baseDeltaPct }))
+		},
 		{
 			key: 'total',
 			colorVar: '--teal',
-			endLabel: anyBonus ? 'total' : 'change',
-			points: years.map((y) => ({ value: y.deltaPct }))
-		},
-		...(anyBonus
-			? [
-					{
-						key: 'base',
-						colorVar: '--series-health',
-						dashed: true,
-						endLabel: 'base',
-						points: years.map((y) => ({ value: y.baseDeltaPct }))
-					}
-				]
-			: [])
+			endLabel: 'total',
+			points: years.map((y) => ({ value: y.compDeltaPct }))
+		}
 	]);
 
 	/** What the money axis counts in — the unit moves into the axis title so labels stay short. */
@@ -89,7 +97,8 @@
 		total:
 			'A year with fewer than twelve months is marked in its readout — a partial year is not a small one',
 		avg: 'Averaged over the months actually recorded, so a part year compares as a monthly rate',
-		change: 'Base excludes bonuses, so a one-off award does not read as a raise and then a cut'
+		change:
+			'Salary is base pay alone, so a one-off award does not read as a raise and then a cut; total adds the bonus and anything granted'
 	};
 </script>
 
@@ -141,6 +150,22 @@
 					<stop offset="1" style="stop-color: var(--purple); stop-opacity: 0.15" />
 				</linearGradient>
 				<pattern
+					id="salary-equity-unvested"
+					width="6"
+					height="6"
+					patternUnits="userSpaceOnUse"
+					patternTransform="rotate(45)"
+				>
+					<rect width="6" height="6" style="fill: var(--purple); fill-opacity: 0.06" />
+					<line
+						x1="0"
+						y1="0"
+						x2="0"
+						y2="6"
+						style="stroke: var(--purple); stroke-opacity: 0.32; stroke-width: 1.6"
+					/>
+				</pattern>
+				<pattern
 					id="salary-bonus"
 					width="7"
 					height="7"
@@ -180,6 +205,20 @@
 					<span>gross</span>
 					<strong class="mono">{formatMinor(v.base + v.bonus, currency)}</strong>
 				</div>
+				{#if v.equity > 0n}
+					<div class="r-row">
+						<span class="swatch equity"></span>
+						<span>equity vested</span>
+						<strong class="mono">{formatMinor(v.equity, currency)}</strong>
+					</div>
+				{/if}
+				{#if v.equityUnvested > 0n}
+					<div class="r-row">
+						<span class="swatch equity-unvested"></span>
+						<span>equity to vest</span>
+						<strong class="mono">{formatMinor(v.equityUnvested, currency)}</strong>
+					</div>
+				{/if}
 				{#if v.net !== null}
 					<div class="r-row">
 						<span class="swatch net"></span>
@@ -188,11 +227,11 @@
 					</div>
 				{/if}
 				<div class="r-foot">
-					{#if row.deltaPct !== null}
-						<span>{row.deltaPct > 0 ? '+' : ''}{row.deltaPct}% total</span>
+					{#if row.baseDeltaPct !== null}
+						<span>{row.baseDeltaPct > 0 ? '+' : ''}{row.baseDeltaPct}% salary</span>
 					{/if}
-					{#if row.baseDeltaPct !== null && anyBonus}
-						<span>{row.baseDeltaPct > 0 ? '+' : ''}{row.baseDeltaPct}% base</span>
+					{#if row.compDeltaPct !== null}
+						<span>{row.compDeltaPct > 0 ? '+' : ''}{row.compDeltaPct}% total</span>
 					{/if}
 					<span class="months">
 						{row.grossMonths} gross · {row.netMonths} net
@@ -211,12 +250,21 @@
 					{#if anyEquity}
 						<span class="key"><span class="swatch equity"></span> equity vested</span>
 					{/if}
+					{#if anyUnvested}
+						<span class="key">
+							<span class="swatch equity-unvested"></span> equity to vest · at today's close
+						</span>
+					{/if}
 					<span class="key"><span class="swatch net"></span> net</span>
 				{/if}
-				<span class="key"><span class="swatch line-total"></span> change, total</span>
-				{#if anyBonus}
-					<span class="key"><span class="swatch line-base"></span> change, base only</span>
-				{/if}
+				<span class="key">
+					<span class="swatch line-base"></span> salary only · no bonus{anyEquity
+						? ' or equity'
+						: ''}
+				</span>
+				<span class="key">
+					<span class="swatch line-total"></span> total · bonus{anyEquity ? ' and equity' : ''} included
+				</span>
 				<span class="footnote">{FOOTNOTE[mode]}</span>
 			{/snippet}
 		</LineChart>
@@ -287,17 +335,21 @@
 	.chart :global(.swatch.equity) {
 		background: color-mix(in srgb, var(--purple) 45%, transparent);
 	}
+	.chart :global(.swatch.equity-unvested) {
+		background: color-mix(in srgb, var(--purple) 16%, transparent);
+		border: 1px dashed color-mix(in srgb, var(--purple) 55%, transparent);
+	}
 	.chart :global(.swatch.gross) {
 		background: var(--bd2);
 	}
 	.chart :global(.swatch.net) {
 		background: var(--fg1);
 	}
-	.chart :global(.swatch.line-total) {
-		background: var(--teal);
-	}
 	.chart :global(.swatch.line-base) {
 		background: var(--series-health);
+	}
+	.chart :global(.swatch.line-total) {
+		background: var(--teal);
 	}
 
 	.chart :global(.key) {

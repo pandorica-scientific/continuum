@@ -11,6 +11,7 @@ import {
 	grantOwner,
 	grantsWithTranches,
 	parseSchedule,
+	recordMove,
 	recordSale,
 	recordSettlement,
 	replaceSchedule,
@@ -31,7 +32,8 @@ import {
 	readPayslip,
 	readStoredPayslip,
 	recordSalary,
-	slipDocument
+	slipDocument,
+	equityNowValues
 } from '$lib/server/salary';
 import { removeDocument } from '$lib/server/documents/lifecycle';
 import { mergeSalaryYears, type SalaryYear } from '$lib/salary';
@@ -56,10 +58,12 @@ function serialiseYear(y: SalaryYear) {
 		netTotalMinor: y.netTotalMinor.toString(),
 		equityTotalMinor: y.equityTotalMinor.toString(),
 		equityOnPayslipMinor: y.equityOnPayslipMinor.toString(),
+		equityUnvestedMinor: y.equityUnvestedMinor.toString(),
 		grossMonths: y.grossMonths,
 		netMonths: y.netMonths,
 		netComplete: y.netComplete,
 		deltaPct: y.deltaPct,
+		compDeltaPct: y.compDeltaPct,
 		baseDeltaPct: y.baseDeltaPct
 	};
 }
@@ -74,7 +78,10 @@ export const load: PageServerLoad = async ({ url }) => {
 		convertOrFace(rates, amount, from, to, day);
 
 	// A member gets every month/figure; slips they may not see arrive with no file behind them.
-	const vests = await vestValues(baseCurrency, convert);
+	const [vests, equityNow] = await Promise.all([
+		vestValues(baseCurrency, convert),
+		equityNowValues(baseCurrency, convert)
+	]);
 	const history = await loadSalaryHistory(baseCurrency, convert, db, vests);
 
 	// For the grant dialog: jobs a grant can hang off, plus grants already recorded.
@@ -104,6 +111,17 @@ export const load: PageServerLoad = async ({ url }) => {
 	// Computed here, not in markup: merging must sum totals, not average the per-person averages.
 	const household = mergeSalaryYears(history.map((p) => p.years));
 
+	// The grants as they stand today. Serialised like every other figure —
+	// bigint does not cross — and given per person AND summed, because the
+	// screen's filter asks both questions.
+	const serialiseEquityNow = (rows: typeof equityNow) => ({
+		heldMinor: rows.reduce((sum, r) => sum + r.heldMinor, 0n).toString(),
+		heldUnits: rows.reduce((sum, r) => sum + r.heldUnits, 0),
+		pendingMinor: rows.reduce((sum, r) => sum + r.pendingMinor, 0n).toString(),
+		pendingUnits: rows.reduce((sum, r) => sum + r.pendingUnits, 0),
+		unpricedUnits: rows.reduce((sum, r) => sum + r.unpricedUnits, 0)
+	});
+
 	return {
 		// ?add=1 opens the upload form on arrival, same convention as /documents.
 		openAdd: url.searchParams.get('add') === '1',
@@ -115,10 +133,12 @@ export const load: PageServerLoad = async ({ url }) => {
 		currencies,
 		people: history.map((p) => ({ id: p.id, name: p.name })),
 		household: household.map(serialiseYear),
+		householdEquityNow: serialiseEquityNow(equityNow),
 		history: history.map((p) => ({
 			id: p.id,
 			name: p.name,
 			years: p.years.map(serialiseYear),
+			equityNow: serialiseEquityNow(equityNow.filter((e) => e.personId === p.id)),
 			payslips: p.payslips.map((s) => ({
 				id: s.id,
 				periodMonth: s.periodMonth,
@@ -704,6 +724,20 @@ export const actions: Actions = {
 			await recordSale(trancheId, unitsField(form, 'soldUnits'));
 		} catch (err) {
 			return fail(400, { message: userSentence(err, 'That sale did not save.') });
+		}
+		return { ok: true };
+	},
+
+	recordMove: async ({ request, locals }) => {
+		const form = await request.formData();
+		const trancheId = asRowId(form.get('trancheId'));
+		const owner = await trancheOwner(trancheId);
+		if (!owner) return fail(404, { message: 'That tranche is no longer here.' });
+		if (!mayActFor(locals.person, owner)) return fail(403, { message: NOT_YOUR_EQUITY });
+		try {
+			await recordMove(trancheId, unitsField(form, 'movedUnits'));
+		} catch (err) {
+			return fail(400, { message: userSentence(err, 'That move did not save.') });
 		}
 		return { ok: true };
 	},

@@ -99,6 +99,13 @@ COPY --from=build /app/docker/mdns.mjs ./mdns.mjs
 # not re-push or re-pull the lot, and layer order is the whole of that fix.
 COPY --from=build /app/assets/place-icons ./assets/place-icons
 
+# Bank logos, committed like the engravings above and fetched by
+# scripts/fetch-bank-logos.mjs when a bank rebrands. They are the trademarks of
+# the organisations in assets/bank-logos/CREDITS.md, carried to identify the
+# bank an account is held with; that file states each one's terms. A bank with
+# no logo here falls back to its emoji.
+COPY --from=build /app/assets/bank-logos ./assets/bank-logos
+
 # Uploaded files (property photos, documents, statements) live on this volume.
 # /run/continuum is where the announcer leaves the machine's name and
 # addresses for the app; owned by node here so a fresh volume inherits it.

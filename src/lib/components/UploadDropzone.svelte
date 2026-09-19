@@ -3,6 +3,7 @@
 	import type { ActionOutcome } from '$lib/actions/result';
 	import Icon from '$lib/components/Icon.svelte';
 	import { admitsImages, admitsPdf, isImageFile } from '$lib/scan/core/accept';
+	import { mergePicked } from '$lib/uploads';
 	import { isSecureForCamera } from '$lib/scan/client/camera.svelte';
 
 	let {
@@ -106,6 +107,43 @@
 	 *  the editor that made it. */
 	let fromEditor = false;
 
+	/**
+	 * A multi-file field ACCUMULATES across visits to the picker.
+	 *
+	 * A file input replaces its selection every time, which is right for "choose
+	 * a file" and wrong for "gather the year's paperwork": adding one document,
+	 * then another, silently threw the first away. Held alongside the input
+	 * because the browser has already replaced `input.files` by the time the
+	 * change event arrives, so there is nothing left to merge with.
+	 *
+	 * Field mode only. In callback mode the files are uploaded and forgotten on
+	 * arrival, so there is nothing to accumulate.
+	 */
+	const accumulates = $derived(Boolean(name) && multiple);
+	let held: File[] = [];
+
+	function putOnInput(files: File[]) {
+		if (!input) return;
+		const transfer = new DataTransfer();
+		for (const file of files) transfer.items.add(file);
+		// Assigning `.files` fires no event, so this cannot re-enter the change
+		// handler that called it.
+		input.files = transfer.files;
+	}
+
+	/** Drop one file from a gathered batch. Called by name from the call site. */
+	export function remove(index: number) {
+		held = held.filter((_, i) => i !== index);
+		putOnInput(held);
+		chosen = held.map((file) => file.name);
+		input?.dispatchEvent(new Event('change', { bubbles: true }));
+	}
+
+	/** Everything gathered so far, for a call site that lists them. */
+	export function files(): File[] {
+		return [...held];
+	}
+
 	async function receive(files: FileList | File[]) {
 		const picked = list(files);
 
@@ -125,6 +163,7 @@
 		} finally {
 			busy = false;
 			chosen = [];
+			held = [];
 			if (input) input.value = '';
 		}
 	}
@@ -280,7 +319,22 @@
 		{multiple}
 		tabindex="-1"
 		aria-label={idleText}
-		onchange={() => input?.files?.length && void receive(input.files)}
+		onchange={() => {
+			if (!input) return;
+			const incoming = [...(input.files ?? [])];
+			if (!accumulates) {
+				if (incoming.length) void receive(incoming);
+				return;
+			}
+			// Merge before anything else reads the input: this handler runs on
+			// the target, ancestors (an enclosing form's onchange) run after, so
+			// they see the gathered list rather than the browser's replacement.
+			const merged = mergePicked(held, incoming);
+			held = merged;
+			putOnInput(merged);
+			if (merged.length) void receive(merged);
+			else chosen = [];
+		}}
 	/>
 </div>
 {#if scanning && ScanFlow}

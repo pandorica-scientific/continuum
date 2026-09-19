@@ -17,13 +17,28 @@
 		icon?: IconName;
 		/** Data-level identity — an account's, a shelf's, a module's. Wins over `icon`. */
 		emoji?: string;
+		/**
+		 * A bank's logo, which wins over both.
+		 *
+		 * Drawn on a light chip rather than the hue: half these marks are black
+		 * on transparent, and on a dark ground they disappear.
+		 */
+		logo?: string | null;
 		/** The stronger mix, for a selected nav row or an active tab. */
 		active?: boolean;
 		/** Decoration beside a name that already says it. */
 		label?: string;
 	}
 
-	let { hue = '--fg3', size = 30, icon, emoji, active = false, label }: Props = $props();
+	let {
+		hue = '--fg3',
+		size = 30,
+		icon,
+		emoji,
+		logo = null,
+		active = false,
+		label
+	}: Props = $props();
 
 	const token = $derived(hue.startsWith('--') ? hue : `--${hue}`);
 
@@ -47,6 +62,7 @@
 
 <span
 	class="tile"
+	class:has-logo={logo}
 	class:active
 	style:--tile-hue="var({token})"
 	style:--tile-size="{size}px"
@@ -56,7 +72,10 @@
 	aria-label={label}
 	role={label ? 'img' : undefined}
 >
-	{#if emoji}
+	{#if logo}
+		<!-- Decorative: the name it sits beside already says which bank. -->
+		<img src={logo} alt="" class="logo" loading="lazy" />
+	{:else if emoji}
 		<span class="emoji">{emoji}</span>
 	{:else if icon}
 		<Icon name={icon} size={glyph} />
@@ -75,6 +94,17 @@
 		/* Never squeezed by the flexible column beside it. */
 		flex: none;
 		transition: background-color var(--dur) var(--ease);
+	}
+	/* A mark on light, whatever the theme — see the `logo` prop. */
+	.tile.has-logo {
+		background: #f4f5f7;
+	}
+	/* Whole rather than cropped: a bank mark is a fixed shape, and most are
+	   wide wordmarks, so the width leads and the height follows. */
+	.logo {
+		width: calc(var(--tile-size) * 0.8);
+		height: calc(var(--tile-size) * 0.8);
+		object-fit: contain;
 	}
 	.tile.active {
 		background: color-mix(in srgb, var(--tile-hue) var(--tile-alpha-active), transparent);

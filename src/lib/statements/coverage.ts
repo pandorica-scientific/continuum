@@ -104,12 +104,20 @@ export function monthsCovered(statement: CoverageStatement): string[] {
  * first statement or its first movement, whichever came first. Null means no
  * evidence at all, and the whole year then reads `before-account`: an account
  * nobody has imported anything for is not missing twelve statements.
+ *
+ * `lastEvidence`, when given, is the same idea at the other end — the day the
+ * relationship itself ended (a closed engagement's last day, say). A month
+ * after it reads `before-account` too: switching employer mid-year must not
+ * leave the one just left expecting payslips nobody will ever file for the
+ * months after you went. An account has no such date and passes null, which
+ * is exactly today's behaviour unchanged.
  */
 export function coverageRow(
 	statements: CoverageStatement[],
 	year: number,
 	firstEvidence: string | null,
-	today: string
+	today: string,
+	lastEvidence: string | null = null
 ): CoverageBox[] {
 	// Month index within THIS year to the ids covering it. A month belonging to
 	// another year simply falls outside the range, which is the New Year clipping.
@@ -124,6 +132,7 @@ export function coverageRow(
 
 	const currentKey = monthKey(today);
 	const evidenceKey = firstEvidence ? monthKey(firstEvidence) : null;
+	const endKey = lastEvidence ? monthKey(lastEvidence) : null;
 
 	const boxes: CoverageBox[] = [];
 	for (let index = 0; index < 12; index++) {
@@ -146,7 +155,7 @@ export function coverageRow(
 
 		// Every empty month is its own box. See the note at the top of the file.
 		const state: MonthState =
-			evidenceKey === null || key < evidenceKey
+			evidenceKey === null || key < evidenceKey || (endKey !== null && key > endKey)
 				? 'before-account'
 				: key >= currentKey
 					? 'not-arrived'

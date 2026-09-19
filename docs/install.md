@@ -83,10 +83,10 @@ release's columns and is refused by the new schema — see [Backups](backups.md)
 ## Settings
 
 Everything about the household — people, currency, modules, calendar and
-Home Assistant connections, backup cadence — lives in the app under Settings
-and in your own database. The few things that have to be known before the app
-starts go in a `.env` file next to `compose.yaml`, and all of them are
-optional:
+Home Assistant connections, backup cadence, the languages scanned paper is
+read in — lives in the app under Settings and in your own database. The few
+things that have to be known before the app starts go in a `.env` file next
+to `compose.yaml`, and all of them are optional:
 
 | Variable               | Default             | What it does                                                                                                       |
 | ---------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------ |

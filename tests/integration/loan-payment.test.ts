@@ -23,6 +23,7 @@ const LOAN = rowId('loan-payment-loan');
 const DEBIT = rowId('loan-payment-debit');
 const CREDIT = rowId('loan-payment-credit');
 const FOREIGN = rowId('loan-payment-foreign');
+const UNTRACKED = rowId('loan-payment-untracked');
 
 /** What the loan owes before anything is recorded, to compare against after. */
 const OWED_MINOR = 927_000_000n;
@@ -133,6 +134,25 @@ describe('recordLinkedPayment', () => {
 		const [after] = await testDb.select().from(loan);
 		expect(after.owedMinor).toBe(OWED_MINOR);
 		expect(after.owedOn).toBe('2026-08-01');
+	});
+
+	it('refuses a debit moved to an account nobody tracks, as it refuses any own transfer', async () => {
+		await makeTransaction(testDb, {
+			id: UNTRACKED,
+			accountId: ACCOUNT,
+			bookedOn: '2026-08-06',
+			amountMinor: -5_449_600n,
+			currency: 'CZK',
+			counterparty: 'Own savings elsewhere',
+			transferToUntracked: true,
+			dedupFingerprint: 'loan-payment-untracked'
+		});
+		expect(await recordLinkedPayment({ loanId: LOAN, transactionId: UNTRACKED }, testDb)).toEqual({
+			ok: false,
+			status: 400,
+			message: 'A transfer between your own accounts is not a loan payment.'
+		});
+		expect(await testDb.select().from(loanEvent)).toHaveLength(0);
 	});
 
 	it('refuses a second recording of the same transaction', async () => {

@@ -225,10 +225,15 @@ export async function recordLinkedPayment(
 			};
 		}
 		// `notOwnTransfer()` as a predicate over one loaded row rather than as SQL,
-		// and it has to exclude both kinds for the same reason that helper does: a
-		// matched pair proved by two statements, and a one-sided transfer asserted
-		// by a person. Neither left the household, so neither paid anybody's loan.
-		if (movement.transferPairId !== null || movement.transferToAccountId !== null) {
+		// and it has to exclude every kind that helper does: a matched pair proved
+		// by two statements, a one-sided transfer to a named account, and one to
+		// an account nobody tracks. None left the household, so none paid
+		// anybody's loan.
+		if (
+			movement.transferPairId !== null ||
+			movement.transferToAccountId !== null ||
+			movement.transferToUntracked
+		) {
 			return {
 				ok: false,
 				status: 400,

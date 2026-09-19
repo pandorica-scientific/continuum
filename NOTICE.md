@@ -73,7 +73,14 @@ Crimea and Sevastopol are filed under Ukraine rather than Russia — see
 ## Optical character recognition
 
 - [Tesseract](https://github.com/tesseract-ocr/tesseract) trained language data
-  for English, Czech, Polish, German and Spanish, Apache License 2.0.
+  for English, Czech, Polish, German, Spanish and Ukrainian, Apache License 2.0.
+
+## Bank logos
+
+- The marks in `assets/bank-logos/` are trademarks of the banks named, taken
+  from Wikimedia Commons through Wikidata's logo property. They identify the
+  bank an account is held with and nothing else. `assets/bank-logos/CREDITS.md`
+  lists each file, its source and the terms Commons states for it.
 
 ## Fonts
 

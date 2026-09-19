@@ -41,3 +41,41 @@ export const UPLOAD_EXTENSIONS = [
  * scan button on a phone while every other upload site had one.
  */
 export const DOCUMENT_ACCEPT = UPLOAD_EXTENSIONS.join(',');
+
+/** The parts of a File that say whether two picks are the same file. */
+export interface PickedFile {
+	name: string;
+	size: number;
+	lastModified: number;
+}
+
+/**
+ * Gathering files across several visits to the picker.
+ *
+ * A file input replaces its selection every time, which is right for "choose a
+ * file" and wrong for "gather the year's paperwork": adding one document and
+ * then another silently threw the first away. A multi-file FIELD therefore
+ * merges instead, and this is the rule it merges by.
+ *
+ * Order is arrival order — the answers beside each file (what it is, which
+ * country it came from) are paired with it by position, so a merge that
+ * reordered would move somebody's answer onto another document.
+ *
+ * The same file picked twice is one file. There is no identity to go on beyond
+ * what the browser exposes, so name, size and modified time together stand in
+ * for one: two genuinely different files agreeing on all three would have to be
+ * copies of each other.
+ */
+export function mergePicked<T extends PickedFile>(held: readonly T[], incoming: readonly T[]): T[] {
+	const merged = [...held];
+	for (const file of incoming) {
+		const seen = merged.some(
+			(other) =>
+				other.name === file.name &&
+				other.size === file.size &&
+				other.lastModified === file.lastModified
+		);
+		if (!seen) merged.push(file);
+	}
+	return merged;
+}

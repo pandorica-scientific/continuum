@@ -24,6 +24,7 @@ export interface SerialisedSalaryYear {
 	netTotalMinor: string;
 	equityTotalMinor: string;
 	equityOnPayslipMinor: string;
+	equityUnvestedMinor: string;
 	grossMonths: number;
 	netMonths: number;
 	netComplete: boolean;
@@ -31,11 +32,29 @@ export interface SerialisedSalaryYear {
 	baseDeltaPct: number | null;
 }
 
+/** The grants as they stand today — see `equityNowValues`. */
+export interface SerialisedEquityNow {
+	heldMinor: string;
+	heldUnits: number;
+	pendingMinor: string;
+	pendingUnits: number;
+	unpricedUnits: number;
+}
+
+export const NO_EQUITY_NOW: SerialisedEquityNow = {
+	heldMinor: '0',
+	heldUnits: 0,
+	pendingMinor: '0',
+	pendingUnits: 0,
+	unpricedUnits: 0
+};
+
 export function salarySummaryTiles(
 	years: SerialisedSalaryYear[],
 	currency: string,
 	/** 'household' when the filter says Both, 'person' when it names one. */
-	scope: 'household' | 'person'
+	scope: 'household' | 'person',
+	equityNow: SerialisedEquityNow = NO_EQUITY_NOW
 ): Tile[] {
 	const symbol = displayCurrency(currency);
 	const money = (v: bigint | null) => (v === null ? '—' : formatMinor(v, currency));
@@ -80,22 +99,43 @@ export function salarySummaryTiles(
 	/** `⚠` where a year's net is short of its gross months. */
 	const incomplete = latest && !latest.netComplete ? '⚠ ' : '';
 
-	// Shares that vested in the latest year, at the close on each vest day.
-	// Its own tile rather than a line under gross: a grant is compensation,
-	// and it is not salary — folding it into either average would misstate both.
+	// Shares AWARDED in the latest year, whatever year they pay out in. Its own
+	// tile rather than a line under gross: a grant is compensation, and it is
+	// not salary — folding it into either average would misstate both.
 	const latestEquity = latest ? BigInt(latest.equityTotalMinor) : 0n;
 	const latestOnPayslip = latest ? BigInt(latest.equityOnPayslipMinor) : 0n;
+	const latestUnvested = latest ? BigInt(latest.equityUnvestedMinor) : 0n;
 	const equity: Tile = {
 		wash: 'purple',
-		label: latest ? `Equity vested · ${latest.year}` : 'Equity vested',
+		label: latest ? `Equity awarded · ${latest.year}` : 'Equity awarded',
 		value: latestEquity > 0n ? money(latestEquity) : '—',
 		unit: latestEquity > 0n ? symbol : undefined,
 		note:
-			latestEquity > 0n
-				? latestOnPayslip > 0n
-					? `${money(latestOnPayslip)} of it on payslips`
-					: 'at the close on each vest day'
-				: 'no grant vested'
+			latestEquity === 0n
+				? 'no grant that year'
+				: latestUnvested > 0n
+					? `${money(latestUnvested)} of it still to vest`
+					: latestOnPayslip > 0n
+						? `${money(latestOnPayslip)} of it on payslips`
+						: 'at the close on each vest day'
+	};
+
+	// Beside the vested tile, never inside it: one is fixed at each vest day and
+	// already earned, the other is a live quote on shares nobody has yet. Adding
+	// them would make a figure that is neither.
+	const pendingMinor = BigInt(equityNow.pendingMinor);
+	const priced = equityNow.unpricedUnits === 0 && equityNow.pendingUnits > 0;
+	const unvestedTile: Tile = {
+		wash: 'purple',
+		label: 'Equity to vest',
+		value: priced ? money(pendingMinor) : '—',
+		unit: priced ? symbol : undefined,
+		note:
+			equityNow.pendingUnits === 0
+				? 'nothing left to vest'
+				: priced
+					? `${equityNow.pendingUnits} units at today's close`
+					: `${equityNow.pendingUnits} units, no price for them yet`
 	};
 
 	const earned: Tile = {
@@ -125,7 +165,8 @@ export function salarySummaryTiles(
 				unit: latest ? symbol : undefined,
 				note: latest ? `${incomplete}gross · ${money(latest.net)} net` : 'no year on record'
 			},
-			equity
+			equity,
+			unvestedTile
 		];
 	}
 
@@ -159,6 +200,7 @@ export function salarySummaryTiles(
 			unit: latestAvgGross === null ? undefined : symbol,
 			note: latest ? `${incomplete}gross · ${money(latestAvgNet)} net` : 'no month on record'
 		},
-		equity
+		equity,
+		unvestedTile
 	];
 }

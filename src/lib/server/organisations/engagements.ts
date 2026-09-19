@@ -59,15 +59,19 @@ export function engagementSpan(rows: readonly EngagementRow[]): {
 }
 
 /**
- * What the person is called there today, or null once it is all history.
+ * The role period live today, or null once every one of them has closed.
  *
  * A period with no start runs from for ever — undated does not mean absent.
  */
-export function currentRole(rows: readonly EngagementRow[], today: string): string | null {
-	const live = rows.find(
-		(row) =>
-			(row.startsOn === null || row.startsOn <= today) &&
-			(row.endsOn === null || row.endsOn >= today)
+export function currentEngagement(
+	rows: readonly EngagementRow[],
+	today: string
+): EngagementRow | null {
+	return (
+		rows.find(
+			(row) =>
+				(row.startsOn === null || row.startsOn <= today) &&
+				(row.endsOn === null || row.endsOn >= today)
+		) ?? null
 	);
-	return live?.role ?? null;
 }

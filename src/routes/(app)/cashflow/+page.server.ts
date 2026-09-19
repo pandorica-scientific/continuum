@@ -1,11 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { flowData, monthlyHistory } from '$lib/server/cashflow';
-import { parsePeriodParams } from '$lib/cashflow/period';
+import { parsePeriodParams, periodRange } from '$lib/cashflow/period';
 import { getBaseCurrency } from '$lib/server/settings';
 import type { PageServerLoad } from './$types';
 
-/** How many months the "Month by month" panel draws. */
-const HISTORY_MONTHS = 6;
+/**
+ * The most months the "Month by month" panel will draw.
+ *
+ * A ceiling, not a window: the panel shows the period the rest of the screen is
+ * showing, and this only stops a ten-year record turning into a picket fence of
+ * bars too thin to read.
+ */
+const HISTORY_MONTHS_MAX = 24;
 
 export const load: PageServerLoad = async ({ url }) => {
 	const { period, anchor } = parsePeriodParams(url.searchParams);
@@ -19,9 +25,12 @@ export const load: PageServerLoad = async ({ url }) => {
 		.flatMap((g) => g.leaves.map((l) => ({ group: g.label, ...l })))
 		.sort((a, b) => b.value - a.value)[0];
 
-	// The six months up to the one the screen is anchored on, so stepping the
-	// window back walks the bars back with it.
-	const upTo = flow.anchor ? history.filter((m) => m.month <= flow.anchor!) : history;
+	// The SAME window the figures above and the breakdown beside them are for.
+	// A fixed six months read as a mistake next to a panel captioned January to
+	// September: two panels on one screen, each covering a different half-year,
+	// with nothing saying why.
+	const { start, end } = periodRange(flow.period, flow.anchor);
+	const within = history.filter((m) => m.month >= start.slice(0, 7) && m.month <= end.slice(0, 7));
 
 	return {
 		flow,
@@ -32,6 +41,6 @@ export const load: PageServerLoad = async ({ url }) => {
 			saved: flow.totals.saved,
 			biggest: biggest ?? null
 		},
-		history: upTo.slice(-HISTORY_MONTHS)
+		history: within.slice(-HISTORY_MONTHS_MAX)
 	};
 };

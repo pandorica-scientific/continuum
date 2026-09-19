@@ -159,10 +159,16 @@ export const CATEGORY_SEED: CategoryDef[] = [
 	// health & care
 	{ id: 'pharmacy', groupKey: 'health', name: 'Pharmacy', sort: 0 },
 	{ id: 'doctor-dentist', groupKey: 'health', name: 'Doctor & dentist', sort: 1 },
-	// transport
-	{ id: 'car-loan', groupKey: 'transport', name: 'Car loan', sort: 0 },
-	{ id: 'fuel-tolls', groupKey: 'transport', name: 'Fuel & tolls', sort: 1 },
-	{ id: 'car-service', groupKey: 'transport', name: 'Car service', sort: 2 },
+	// Transport — getting about, as a thing you BUY. Owning a vehicle is not
+	// seeded: a car is one household's loan, fuel, servicing, insurance and
+	// tax and another household's nothing at all, and seeding it puts four
+	// empty categories in front of everyone who does not drive. A household
+	// with a car makes a group for it, which is also how they get to keep the
+	// two cars apart.
+	{ id: 'public-transport', groupKey: 'transport', name: 'Public transport', sort: 0 },
+	{ id: 'taxi', groupKey: 'transport', name: 'Taxi & ride-hailing', sort: 1 },
+	{ id: 'car-rental', groupKey: 'transport', name: 'Car rental', sort: 2 },
+	{ id: 'parking-tolls', groupKey: 'transport', name: 'Parking & tolls', sort: 3 },
 	// food & lifestyle
 	{ id: 'groceries', groupKey: 'living', name: 'Groceries', sort: 0 },
 	{ id: 'eating-out', groupKey: 'living', name: 'Eating out', sort: 1 },
@@ -173,8 +179,13 @@ export const CATEGORY_SEED: CategoryDef[] = [
 	{ id: 'mortgage-main', groupKey: 'housing', name: 'Mortgage · home', sort: 0 },
 	{ id: 'mortgage-rental', groupKey: 'housing', name: 'Mortgage · rental', sort: 1 },
 	{ id: 'svj-insurance', groupKey: 'housing', name: 'SVJ & insurance', sort: 2 },
-	// saved & invested
+	// Saved & invested — money that left the current account without being
+	// spent. "Money set aside" is the one that is neither a brokerage deposit
+	// nor a loan repayment: a standing order into a savings pot, a transfer to
+	// an account this household has not added. It was called "Cash buffer",
+	// which named a thing rather than an act and left people guessing what
+	// belonged in it.
 	{ id: 'brokerage', groupKey: 'savings', name: 'Brokerage transfers', sort: 0 },
-	{ id: 'cash-buffer', groupKey: 'savings', name: 'Cash buffer', sort: 1 },
+	{ id: 'cash-buffer', groupKey: 'savings', name: 'Money set aside', sort: 1 },
 	{ id: LOAN_PRINCIPAL_CATEGORY, groupKey: 'savings', name: 'Loan principal', sort: 2 }
 ];

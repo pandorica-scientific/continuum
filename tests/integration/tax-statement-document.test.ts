@@ -94,6 +94,19 @@ beforeEach(async () => {
 });
 
 describe('a statement that brings its own document', () => {
+	it('refuses a country that is not a code, as a message rather than a constraint', async () => {
+		// `document.country` takes two letters or nothing; anything else used to
+		// reach the person as a 500 after the statement itself had saved.
+		expect(await saveStatement({ ...base, country: 'Czechia' }, testDb)).toMatchObject({
+			ok: false,
+			status: 400
+		});
+		expect(
+			await saveStatement({ ...base, attachments: [{ ...upload, country: 'Czechia' }] }, testDb)
+		).toMatchObject({ ok: false, status: 400 });
+		expect(await testDb.select().from(schema.document)).toHaveLength(0);
+	});
+
 	it('files the upload on the Finance shelf and links the statement to it', async () => {
 		expect(await saveStatement({ ...base, attachments: [upload] }, testDb)).toEqual({ ok: true });
 
@@ -448,5 +461,30 @@ describe('deleteAttachment', () => {
 	it('reports a miss rather than succeeding silently, for a document that is not there', async () => {
 		const result = await postDeleteAttachment(rowId('no-such-document'));
 		expect(result).toMatchObject({ status: 404 });
+	});
+});
+
+describe('what a filed attachment says about itself', () => {
+	it('is dated to the whole statement year, at both ends', async () => {
+		expect(await saveStatement({ ...base, attachments: [upload] }, testDb)).toEqual({ ok: true });
+
+		const [doc] = await testDb.select().from(schema.document);
+		// Both ends, not just the first: `period_on` alone means the single month
+		// it names, so a return dated 2025-01-01 would read as January 2025 — and
+		// a filing with no period at all cannot be placed on a year at all.
+		expect(doc.periodOn).toBe('2025-01-01');
+		expect(doc.periodEndOn).toBe('2025-12-31');
+	});
+
+	it('records the statement’s country as a field, not only in its name', async () => {
+		await saveStatement({ ...base, attachments: [upload] }, testDb);
+		const [doc] = await testDb.select().from(schema.document);
+		expect(doc.country).toBe('CZ');
+	});
+
+	it('takes the attachment’s own country over the statement’s', async () => {
+		await saveStatement({ ...base, attachments: [{ ...upload, country: 'at' }] }, testDb);
+		const [doc] = await testDb.select().from(schema.document);
+		expect(doc.country).toBe('AT');
 	});
 });

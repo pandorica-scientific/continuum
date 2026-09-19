@@ -681,8 +681,10 @@ export function readTabular(
 			...(() => {
 				if (feeColumn < 0) return {};
 				const charged = amountFromCell(row[feeColumn]?.text ?? '', decimalMark, digits);
-				// Fees are stated as magnitudes; the direction is the movement's.
-				return charged ? { feeMinor: charged < 0n ? -charged : charged } : {};
+				// Signed, as `ParsedRow.feeMinor` is: a charge is positive, a fee
+				// handed back on a refund is negative, and the chain nets both the
+				// same way. Taking the magnitude charged a refunded fee twice.
+				return charged ? { feeMinor: charged } : {};
 			})(),
 			// The ledger entry is denominated in the ACCOUNT's currency, always.
 			// A per-row currency column names the ORIGINAL of a foreign movement,

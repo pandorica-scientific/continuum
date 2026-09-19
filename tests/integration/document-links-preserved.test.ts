@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { rowId } from '../row-id';
-import { documentLink, taxStatement } from '$lib/server/db/schema';
+import { document, documentLink, taxStatement } from '$lib/server/db/schema';
 
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 import { makeAccount, makeDocument, makePerson, makeProperty, makeTransaction } from './fixtures';
@@ -319,5 +319,36 @@ describe('saving a document', () => {
 		const id = await seedDocument('Household letter', [target.person]);
 		await save(id, [target.person, target.property]);
 		expect(await linkedTargets(id)).toEqual([target.person, target.property].sort());
+	});
+
+	it('does not wipe periodOn on a document whose type has no Covers section', async () => {
+		// The Covers date fields only render for `type === 'bank_statement'`, so
+		// saving anything else never posts `periodOn` at all — which must not be
+		// read as "clear it". A payslip's periodOn is set once, by
+		// filePayslipDocument, and nothing here sets it again.
+		const id = rowId('dlp-payslip');
+		await makeDocument(testDb, {
+			id,
+			name: 'Payslip 2026-03 · Robert',
+			shelfKey: 'income_tax',
+			type: 'payslip',
+			addedOn: '2026-01-01',
+			periodOn: '2026-03-01'
+		});
+		const { actions } = await import('../../src/routes/(app)/documents/+page.server');
+		const form = new FormData();
+		form.set('id', id);
+		form.set('name', 'Payslip 2026-03 · Robert');
+		form.set('type', 'payslip');
+		const request = new Request('http://localhost/documents?/updateDocument', {
+			method: 'POST',
+			body: form
+		});
+		await (actions.updateDocument as unknown as (event: unknown) => Promise<unknown>)({
+			request,
+			locals: asAdmin
+		});
+		const [row] = await testDb.select().from(document).where(eq(document.id, id));
+		expect(row?.periodOn).toBe('2026-03-01');
 	});
 });

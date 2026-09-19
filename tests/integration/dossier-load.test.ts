@@ -14,7 +14,7 @@ import { dossierMissing, loadDossier } from '$lib/server/documents/dossier-load'
 import { lanesFor } from '$lib/server/organisations/mutations';
 import { listShelves } from '$lib/server/documents/shelves';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
-import { makeDocument, makeDocumentLink, makePerson } from './fixtures';
+import { makeDocument, makeDocumentLink, makeEngagement, makeLane, makePerson } from './fixtures';
 
 vi.mock('$env/dynamic/private', () => ({
 	env: new Proxy({} as Record<string, string | undefined>, {
@@ -96,6 +96,9 @@ describe('the dossier loader', () => {
 	it('draws a two-year lane as two-year cells', async () => {
 		const vehicles = await shelfBy('vehicles');
 		const car = await createCard({ shelfId: vehicles.id, name: 'Octavia' }, testDb);
+		// Owned since 2022, so the lane has a real gap to draw — an empty lane
+		// with no evidence at all does not render (see "hides a lane" below).
+		await testDb.update(subject).set({ activeFrom: '2022-06-01' }).where(eq(subject.id, car.id));
 		const inspection = (await lanesFor(car.id, testDb)).find(
 			(l) => l.label === 'Technical inspection'
 		)!;
@@ -125,6 +128,32 @@ describe('the dossier loader', () => {
 		await createCard({ shelfId: inventory.id, name: 'Boiler' }, testDb);
 		const payload = await loadDossier(inventory, 2026, testDb, TODAY);
 		expect(payload.cards.every((c) => c.id !== null)).toBe(true);
+	});
+
+	it("hides an empty SCHEDULED lane, but keeps the cadence-less one as the card's general place", async () => {
+		const incomeTax = await shelfBy('income_tax');
+		const msd = await createCard(
+			{ shelfId: incomeTax.id, name: 'MSD Czech Republic', kind: 'employer' },
+			testDb
+		);
+		const lanes = await lanesFor(msd.id, testDb);
+		const payslips = lanes.find((l) => l.label === 'Payslips')!;
+		const doc = await makeDocument(testDb, {
+			shelfKey: 'income_tax',
+			type: 'payslip',
+			periodOn: '2026-01-01'
+		});
+		await makeDocumentLink(testDb, { documentId: doc.id, targetId: msd.id });
+		await assignLane(doc.id, payslips.id, testDb);
+
+		const payload = await loadDossier(incomeTax, 2026, testDb, TODAY);
+		const drawnLabels = payload.cards[0].lanes.map((l) => l.label);
+		// Payslips has something filed, so it draws. The yearly declaration has
+		// neither a filing nor a gap, so it does not. "Contract & HR" is
+		// cadence-less — the card's one general place for a contract or an HR
+		// letter — and stays visible even with nothing in it yet, or there
+		// would be no sign that place exists.
+		expect(drawnLabels).toEqual(['Payslips', 'Contract & HR']);
 	});
 
 	it('a kit card shows three slots and counts the empty ones as missing', async () => {
@@ -222,5 +251,169 @@ describe('the dossier loader', () => {
 		expect(payload.cards[0].pinned?.name).toBe('Purchase contract');
 		// The pinned document is drawn once, at the top — not again in history.
 		expect(payload.cards[0].history.map((d) => d.name)).toEqual(['Later amendment']);
+	});
+});
+
+describe('year navigation and a role period ending', () => {
+	it('lets "Previous year" go all the way back to the earliest paper actually filed', async () => {
+		// Regression: firstYear used to be read off the monthly cells `buildLane`
+		// draws for the year ON SCREEN — which always carry that same year, so
+		// the bound was always wherever you already were, and "Previous year"
+		// stayed disabled forever the moment any card had a monthly lane.
+		const incomeTax = await shelfBy('income_tax');
+		const person = await makePerson(testDb, { name: 'Robert' });
+		const msd = await createCard(
+			{ shelfId: incomeTax.id, name: 'MSD Czech Republic', kind: 'employer' },
+			testDb
+		);
+		await makeEngagement(testDb, {
+			personId: person.id,
+			organisationId: msd.id,
+			startsOn: '2025-01-01'
+		});
+		const payslips = (await lanesFor(msd.id, testDb)).find((l) => l.label === 'Payslips')!;
+		const slip = await makeDocument(testDb, {
+			shelfKey: 'income_tax',
+			type: 'payslip',
+			periodOn: '2025-06-01'
+		});
+		await makeDocumentLink(testDb, { documentId: slip.id, targetId: msd.id });
+		await assignLane(slip.id, payslips.id, testDb);
+
+		const payload = await loadDossier(incomeTax, 2026, testDb, TODAY);
+		expect(payload.firstYear).toBeLessThanOrEqual(2025);
+	});
+
+	it('stops expecting monthly paper the month after a role period closed', async () => {
+		// Regression: switching employer mid-year left the one just left
+		// "missing" payslips for every month after, since only the start of an
+		// engagement bounded a monthly lane, never its end.
+		const incomeTax = await shelfBy('income_tax');
+		const person = await makePerson(testDb, { name: 'Robert' });
+		const previous = await createCard(
+			{ shelfId: incomeTax.id, name: 'Old Employer', kind: 'employer' },
+			testDb
+		);
+		await makeEngagement(testDb, {
+			personId: person.id,
+			organisationId: previous.id,
+			startsOn: '2025-01-01',
+			endsOn: '2026-06-15'
+		});
+		const payslips = (await lanesFor(previous.id, testDb)).find((l) => l.label === 'Payslips')!;
+		for (const periodOn of [
+			'2026-01-01',
+			'2026-02-01',
+			'2026-03-01',
+			'2026-04-01',
+			'2026-05-01',
+			'2026-06-01'
+		]) {
+			const doc = await makeDocument(testDb, { shelfKey: 'income_tax', type: 'payslip', periodOn });
+			await makeDocumentLink(testDb, { documentId: doc.id, targetId: previous.id });
+			await assignLane(doc.id, payslips.id, testDb);
+		}
+
+		const payload = await loadDossier(incomeTax, 2026, testDb, TODAY);
+		const drawn = payload.cards[0].lanes.find((l) => l.label === 'Payslips')!;
+		const byMonth = Object.fromEntries(drawn.cells.map((c) => [c.key, c.state]));
+		for (const m of ['01', '02', '03', '04', '05', '06'])
+			expect(byMonth[`2026-${m}`]).toBe('filed');
+		for (const m of ['07', '08', '09']) expect(byMonth[`2026-${m}`]).toBe('before');
+		// The Payslips lane itself has nothing missing — the "declaration" lane
+		// (bounded at the year the role ended, not the month, see buildLane) is
+		// a separate matter and isn't what this test is about.
+		expect(drawn.gaps).toBe(0);
+	});
+
+	it('stops expecting a yearly declaration after the year a role period closed', async () => {
+		// Regression: a yearly lane correctly still expects the partial year a
+		// job ended in (a declaration is owed however early in the year someone
+		// left), but kept running every year up to today after that — a job
+		// left in 2023 read as missing a 2024 and 2025 declaration forever.
+		const incomeTax = await shelfBy('income_tax');
+		const person = await makePerson(testDb, { name: 'Robert' });
+		const previous = await createCard(
+			{ shelfId: incomeTax.id, name: 'Old Employer', kind: 'employer' },
+			testDb
+		);
+		await makeEngagement(testDb, {
+			personId: person.id,
+			organisationId: previous.id,
+			startsOn: '2021-12-01',
+			endsOn: '2023-09-29'
+		});
+		// Added rather than seeded: an employer no longer expects a yearly
+		// declaration (that is the tax year card's job now), but the rule this
+		// test holds governs EVERY yearly lane — an authority's return, a car's
+		// road tax — so the lane is built here instead of being borrowed from a
+		// preset that no longer has one.
+		const declaration = await makeLane(testDb, {
+			entityId: previous.id,
+			label: 'Once a year · declaration, annual settlement',
+			cadence: 'yearly',
+			every: 1,
+			sortOrder: 5
+		});
+		const doc = await makeDocument(testDb, {
+			shelfKey: 'income_tax',
+			type: 'tax_document',
+			periodOn: '2021-01-01'
+		});
+		await makeDocumentLink(testDb, { documentId: doc.id, targetId: previous.id });
+		await assignLane(doc.id, declaration.id, testDb);
+
+		const payload = await loadDossier(incomeTax, 2026, testDb, TODAY);
+		const drawn = payload.cards[0].lanes.find((l) => l.id === declaration.id)!;
+		const byYear = Object.fromEntries(drawn.cells.map((c) => [c.key, c.state]));
+		expect(byYear['2021']).toBe('filed');
+		expect(byYear['2022']).toBe('gap');
+		// The role ended partway through 2023 — still owed, still drawn.
+		expect(byYear['2023']).toBe('gap');
+		// Nothing after: the relationship was over, so there is nothing to owe.
+		expect(byYear['2024']).toBeUndefined();
+		expect(byYear['2025']).toBeUndefined();
+		expect(byYear['2026']).toBeUndefined();
+	});
+
+	it('reads employment history the way it was lived: current job(s) first, then newest-ended to oldest-ended', async () => {
+		const incomeTax = await shelfBy('income_tax');
+		const person = await makePerson(testDb, { name: 'Robert' });
+		const current = await createCard(
+			{ shelfId: incomeTax.id, name: 'MSD Czech Republic', kind: 'employer' },
+			testDb
+		);
+		const recentlyLeft = await createCard(
+			{ shelfId: incomeTax.id, name: 'Oyster Czech Republic', kind: 'employer' },
+			testDb
+		);
+		const leftLongAgo = await createCard(
+			{ shelfId: incomeTax.id, name: 'Institute of Physics CAS', kind: 'employer' },
+			testDb
+		);
+		await makeEngagement(testDb, {
+			personId: person.id,
+			organisationId: current.id,
+			startsOn: '2026-07-01'
+		});
+		await makeEngagement(testDb, {
+			personId: person.id,
+			organisationId: recentlyLeft.id,
+			startsOn: '2025-01-01',
+			endsOn: '2026-06-30'
+		});
+		await makeEngagement(testDb, {
+			personId: person.id,
+			organisationId: leftLongAgo.id,
+			startsOn: '2018-09-01',
+			endsOn: '2021-08-31'
+		});
+
+		const payload = await loadDossier(incomeTax, 2026, testDb, TODAY);
+		expect(payload.cards.map((c) => c.name)).toEqual([
+			'MSD Czech Republic',
+			'Oyster Czech Republic',
+			'Institute of Physics CAS'
+		]);
 	});
 });

@@ -54,3 +54,85 @@ describe('attachmentKind', () => {
 		expect(new Set(nouns).size).toBe(nouns.length);
 	});
 });
+
+describe('pairing a batch of uploads with what each one is', () => {
+	/**
+	 * The pairing `takeUploads` does, as a pure function of the three lists a
+	 * multi-file form sends. Written out here because the failure is silent: a
+	 * mismatched index files a Czech employer report as an Austrian statement
+	 * and nothing complains.
+	 */
+	const pair = (
+		files: { name: string; size: number }[],
+		kinds: string[],
+		countries: string[],
+		fallbackCountry: string
+	) =>
+		files
+			.map((file, index) => ({
+				file,
+				kind: attachmentKind(kinds[index] ?? kinds[0] ?? 'statement').key,
+				country: (countries[index] ?? countries[0] ?? '').trim().toUpperCase() || fallbackCountry
+			}))
+			.filter((row) => row.file.size > 0);
+
+	it('gives each file its own kind and country', () => {
+		const out = pair(
+			[
+				{ name: 'return.pdf', size: 10 },
+				{ name: 'employer.pdf', size: 10 }
+			],
+			['statement', 'employer'],
+			['CZ', 'at'],
+			'CZ'
+		);
+		expect(out.map((r) => [r.file.name, r.kind, r.country])).toEqual([
+			['return.pdf', 'statement', 'CZ'],
+			['employer.pdf', 'employer', 'AT']
+		]);
+	});
+
+	it('falls back to the statement’s own country where none was typed', () => {
+		const out = pair([{ name: 'a.pdf', size: 1 }], ['statement'], [''], 'PL');
+		expect(out[0].country).toBe('PL');
+	});
+
+	it('keeps a form that sends a single kind working for every file', () => {
+		// The shape the dialog sent before it asked per file.
+		const out = pair(
+			[
+				{ name: 'a.pdf', size: 1 },
+				{ name: 'b.pdf', size: 1 }
+			],
+			['broker'],
+			[],
+			'CZ'
+		);
+		expect(out.map((r) => r.kind)).toEqual(['broker', 'broker']);
+	});
+
+	it('does not let an empty file shift the ones after it onto the wrong kind', () => {
+		// The reason the pairing runs before the size filter, not after: dropping
+		// the empty first would slide every later kind up by one.
+		const out = pair(
+			[
+				{ name: 'empty.pdf', size: 0 },
+				{ name: 'employer.pdf', size: 10 }
+			],
+			['statement', 'employer'],
+			['CZ', 'AT'],
+			'CZ'
+		);
+		expect(out).toHaveLength(1);
+		expect([out[0].file.name, out[0].kind, out[0].country]).toEqual([
+			'employer.pdf',
+			'employer',
+			'AT'
+		]);
+	});
+
+	it('names each document after its own country, not the statement’s', () => {
+		expect(statementDocumentName(2025, 'AT', 'employer')).toBe('2025 AT employer earnings report');
+		expect(statementDocumentName(2025, 'CZ', 'statement')).toBe('2025 CZ tax statement');
+	});
+});

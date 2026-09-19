@@ -15,15 +15,26 @@
 	let open = $state<string | null>(null);
 	let settling = $state<string | null>(null);
 	let selling = $state<string | null>(null);
+	let moving = $state<string | null>(null);
 
+	/*
+	 * "Pending" as its own units column is dropped: "0 / 62" already says that
+	 * sixty-two are granted and none vested, so the column repeated the
+	 * subtraction and took width the values needed. What was missing was the
+	 * estimated value of the whole grant, which is the figure somebody holding
+	 * an unvested grant actually wants.
+	 */
 	const COLUMNS: Column[] = $derived<Column[]>([
 		{ key: 'grant', label: 'Grant', width: 'minmax(0, 1.6fr)' },
-		{ key: 'vested', label: 'Vested', align: 'end', width: 'minmax(90px, auto)' },
-		{ key: 'pending', label: 'Pending', align: 'end', width: 'minmax(90px, auto)', hideBelow: 760 },
-		{ key: 'next', label: 'Next vest', width: 'minmax(140px, auto)', hideBelow: 900 },
+		{ key: 'vested', label: 'Vested', align: 'end', width: 'minmax(96px, auto)' },
+		{ key: 'next', label: 'Next vest', width: 'minmax(150px, auto)', hideBelow: 900 },
 		{ key: 'value', label: 'Vested value', align: 'end', width: 'minmax(120px, auto)' },
+		{ key: 'total', label: 'Grant value', align: 'end', width: 'minmax(120px, auto)' },
 		{ key: 'base', label: `In ${unit}`, align: 'end', width: 'minmax(110px, auto)', hideBelow: 900 }
 	]);
+
+	/** The close every value on the card is struck at, named once. */
+	const pricedOn = $derived([...new Set(rows.map((r) => r.priceDay).filter(Boolean))].join(' · '));
 
 	const STATE_HUE: Record<EquityTrancheRow['state'], Hue> = {
 		vested: 'purple',
@@ -56,14 +67,20 @@
 					<span class="mono ticker">{r.ticker}</span>
 					<span class="name">{r.label}{r.employer ? ` · ${r.employer}` : ''} · {r.person}</span>
 				</button>
-				<span class="mono r">{r.vestedUnits}<span class="muted"> / {r.grantedUnits}</span></span>
-				{#if visible.has('pending')}<span class="mono r muted">{r.pendingUnits}</span>{/if}
+				<!-- Written as one string: Svelte collapses the whitespace around a
+				     nested element, which ran this together as "0/ 62". -->
+				<span class="mono r">{`${r.vestedUnits} / ${r.grantedUnits}`}</span>
 				{#if visible.has('next')}<span class="mono small muted">{r.nextVest ?? '—'}</span>{/if}
+				<!-- The price day used to sit inside this cell, which made the
+				     column long enough to crowd its neighbours. It is the same day
+				     for every row, so it is named once under the table instead. -->
 				<span class="mono r">
-					{#if r.vestedValue}{r.vestedValue}
-						{r.currency}<span class="quiet">&nbsp;· {r.priceDay}</span>{:else}—{/if}
+					{#if r.vestedValue}{`${r.vestedValue} ${r.currency}`}{:else}—{/if}
 				</span>
-				{#if visible.has('base')}<span class="mono r muted">{r.vestedBase ?? '—'}</span>{/if}
+				<span class="mono r">
+					{#if r.totalValue}{`${r.totalValue} ${r.currency}`}{:else}—{/if}
+				</span>
+				{#if visible.has('base')}<span class="mono r muted">{r.totalBase ?? '—'}</span>{/if}
 				{#if r.priceStale}
 					<form method="POST" action="/investments?/setPrice" use:enhance class="wide price-prompt">
 						<input type="hidden" name="ticker" value={r.ticker} />
@@ -94,6 +111,9 @@
 										<span class="muted">{t.delivered} delivered · {t.withheld} withheld</span>
 									{/if}
 									{#if Number(t.sold) > 0}<span class="muted">{t.sold} sold</span>{/if}
+									{#if Number(t.moved) > 0}
+										<span class="muted">{t.moved} at the broker</span>
+									{/if}
 									{#if t.state === 'vested'}
 										<span class="actions">
 											{#if t.delivered === null}
@@ -104,6 +124,12 @@
 													>Record settlement</button
 												>
 											{/if}
+											<button
+												type="button"
+												class="btn"
+												onclick={() => (moving = moving === t.id ? null : t.id)}
+												>Moved to broker</button
+											>
 											<button
 												type="button"
 												class="btn"
@@ -148,6 +174,22 @@
 										<button type="submit" class="btn btn-primary">Save</button>
 									</form>
 								{/if}
+								{#if moving === t.id}
+									<form method="POST" action="/salary?/recordMove" use:enhance class="inline-form">
+										<input type="hidden" name="trancheId" value={t.id} />
+										<span class="quiet"
+											>Still yours — the broker's report counts them from now on.</span
+										>
+										<input
+											name="movedUnits"
+											inputmode="decimal"
+											placeholder="units moved (held {t.held})"
+											aria-label="Units moved to the broker"
+											required
+										/>
+										<button type="submit" class="btn btn-primary">Save</button>
+									</form>
+								{/if}
 								{#if selling === t.id}
 									<form method="POST" action="/salary?/recordSale" use:enhance class="inline-form">
 										<input type="hidden" name="trancheId" value={t.id} />
@@ -167,6 +209,10 @@
 				{/if}
 			{/snippet}
 		</DataTable>
+		<p class="quiet priced-on">
+			{pricedOn ? `valued at the close of ${pricedOn}` : 'no close yet'} · grant value counts units that
+			have not vested, at that same close
+		</p>
 	{:else}
 		<p class="quiet">
 			No equity grants yet — add one from Salary when an employer grants you shares.
@@ -177,6 +223,14 @@
 <style>
 	.equity {
 		margin-top: var(--space-6);
+	}
+	/* The close every figure in the table is struck at, said once under it
+	   rather than repeated inside each value cell. */
+	.priced-on {
+		margin: var(--space-4) 0 0;
+		text-align: right;
+		font-size: var(--text-xs);
+		color: var(--fg3);
 	}
 	.grant {
 		display: flex;
