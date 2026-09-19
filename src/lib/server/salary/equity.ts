@@ -95,12 +95,7 @@ export async function equityNowValues(
 		if (close) {
 			const at = (units: number) =>
 				units > 0
-					? convert(
-							unitsAtClose(units, close.closeMinor),
-							close.currency,
-							baseCurrency,
-							close.day
-						)
+					? convert(unitsAtClose(units, close.closeMinor), close.currency, baseCurrency, close.day)
 					: 0n;
 			found.heldMinor += at(row.heldUnits);
 			found.pendingMinor += at(row.pendingUnits);
