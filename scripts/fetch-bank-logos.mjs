@@ -182,11 +182,35 @@ async function bytesOf(file, width) {
  * terms have to travel with them. `CREDITS.md` beside them is written from
  * this, which is the same job `NOTICE.md` does for the place engravings.
  */
-const strip = (html) =>
-	(html ?? '')
-		.replace(/<[^>]+>/g, '')
-		.replace(/\s+/g, ' ')
-		.trim();
+const strip = (html) => {
+	let text = String(html ?? '');
+	// Until it stops changing, not once: one pass over "<<b>b>" removes the
+	// inner tag and closes the outer one up into a whole new tag, and a
+	// "<script" that never closes is not a tag to this pattern at all.
+	for (let previous = null; previous !== text;) {
+		previous = text;
+		text = text.replace(/<[^>]*>/g, '');
+	}
+	// Entities after the tags, so a decoded bracket still meets the removal
+	// below rather than arriving as markup once the stripping is over.
+	text = text.replace(
+		/&(?:#(\d+)|#[xX]([0-9a-fA-F]+)|(amp|lt|gt|quot|apos|nbsp));/g,
+		(match, dec, hex, name) => {
+			if (dec) return String.fromCodePoint(Number(dec));
+			if (hex) return String.fromCodePoint(parseInt(hex, 16));
+			return { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' }[name] ?? match;
+		}
+	);
+	return (
+		text
+			// What is left is prose for CREDITS.md, a licence and an author's
+			// name, and prose there has no use for a bracket that a reader or a
+			// renderer might take for markup.
+			.replace(/[<>]/g, '')
+			.replace(/\s+/g, ' ')
+			.trim()
+	);
+};
 
 async function credit(file) {
 	const api =
