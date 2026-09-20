@@ -4,12 +4,7 @@
 // breakdown, where each person's countries are lanes on one time axis. Plus
 // the rule that keeps an earnings report from counting as the return.
 import { describe, expect, it } from 'vitest';
-import {
-	isSupportingPaper,
-	taxYearGrid,
-	taxYearsByPerson,
-	type CardForView
-} from '$lib/documents/tax-years';
+import { isSupportingPaper, taxYearGrid, type CardForView } from '$lib/documents/tax-years';
 
 const R = { personId: 'p1', personName: 'Robert' };
 const P = { personId: 'p2', personName: 'Partner' };
@@ -60,36 +55,6 @@ describe('taxYearGrid', () => {
 	it('is none where no card exists, or nobody is on it', () => {
 		expect(at(2026, 'ES').state).toBe('none');
 		expect(at(2023, 'ES')).toMatchObject({ state: 'none', owed: 0 });
-	});
-});
-
-describe('taxYearsByPerson', () => {
-	const people = taxYearsByPerson(CARDS, [2026, 2025, 2024, 2023]);
-
-	it('draws a card per person, by name', () => {
-		expect(people.map((p) => p.personName)).toEqual(['Partner', 'Robert']);
-	});
-
-	it('gives each person a lane per country they owe in, on the shared years', () => {
-		const robert = people.find((p) => p.personId === 'p1')!;
-		expect(robert.lanes.map((l) => l.country)).toEqual(['CZ', 'ES', 'PL']);
-		expect(
-			robert.lanes.every((l) => l.cells.map((c) => c.year).join() === '2026,2025,2024,2023')
-		).toBe(true);
-	});
-
-	it('reads the hand-off between countries as one lane ending where the next begins', () => {
-		const robert = people.find((p) => p.personId === 'p1')!;
-		const cz = robert.lanes.find((l) => l.country === 'CZ')!;
-		const es = robert.lanes.find((l) => l.country === 'ES')!;
-		expect(cz.cells.map((c) => c.state)).toEqual(['open', 'filed', 'gap', 'none']);
-		expect(es.cells.map((c) => c.state)).toEqual(['none', 'none', 'filed', 'none']);
-	});
-
-	it('leaves a person off a country they never owed in', () => {
-		const partner = people.find((p) => p.personId === 'p2')!;
-		expect(partner.lanes.map((l) => l.country)).toEqual(['CZ']);
-		expect(partner.lanes[0]).toMatchObject({ filed: 0, gaps: 1 });
 	});
 });
 

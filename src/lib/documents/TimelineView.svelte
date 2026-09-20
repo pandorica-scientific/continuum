@@ -19,9 +19,24 @@
 	// shelf already had; the tax half is the tax-year payload. What is new is that
 	// they are on one screen, in one colour scheme, keyed by country.
 	import { enhance } from '$app/forms';
+	import Icon from '$lib/components/Icon.svelte';
 	import { countryName, countryOptions, flagEmoji } from '$lib/countries';
-	import { hueTokens } from '$lib/tax-hues';
+	import { countryHues } from '$lib/tax-hues';
+	import {
+		householdResidence,
+		type HouseholdResidence,
+		type ResidenceEvidence
+	} from '$lib/tax-residence';
 	import { submitAction } from '$lib/actions/result';
+	import {
+		cardPaper,
+		paperCount,
+		returnKindWords,
+		STATE_WORDS,
+		yearsOf
+	} from '$lib/documents/tax-years';
+	import { MONTHS } from '$lib/documents/dossier-cells';
+	import { INCOME_KINDS } from '$lib/documents/templates';
 	import EmploymentRecord from '$lib/documents/EmploymentRecord.svelte';
 	import ObligationPanel from '$lib/documents/ObligationPanel.svelte';
 	import type { DossierCard, DossierPayload } from '$lib/server/documents/dossier-load';
@@ -64,14 +79,9 @@
 	const column = (year: number) => axis.indexOf(year) + 2;
 
 	/** One hue per country, assigned by the palette that already serves the Tax screen. */
-	const hues = $derived(hueTokens([...years.grid.countries, ...countriesOnCards()]));
-	const hueFor = (country: string | null) => (country && hues.get(country)) || '--series-r10';
-
-	function countriesOnCards(): string[] {
-		return dossier.cards
-			.map((card) => card.country)
-			.filter((code): code is string => code !== null);
-	}
+	const hueFor = $derived(
+		countryHues([...years.grid.countries, ...dossier.cards.map((card) => card.country)])
+	);
 
 	// ---- The income half ----
 
@@ -84,14 +94,11 @@
 	 * row appearing with no span at all.
 	 */
 	function spanYears(card: DossierCard): number[] {
-		const dated = card.roles.flatMap((role) => {
-			if (role.startsOn === null) return [];
-			const from = Number(role.startsOn.slice(0, 4));
-			const to = role.endsOn ? Number(role.endsOn.slice(0, 4)) : thisYear;
-			const run: number[] = [];
-			for (let year = from; year <= to; year++) run.push(year);
-			return run;
-		});
+		// `yearsOf` is the rule the tax cards are counted from, so a span and the
+		// years it raises cannot disagree about where a role period reaches.
+		const dated = card.roles
+			.filter((role) => role.startsOn !== null)
+			.flatMap((role) => yearsOf(role, thisYear, thisYear));
 		if (dated.length > 0) return unique(dated);
 		return unique(paperDays(card).map((day) => Number(day.slice(0, 4))));
 	}
@@ -118,20 +125,6 @@
 			.filter((day): day is string => day !== null)
 			.sort();
 		if (starts.length === 0) return place;
-		const MONTHS = [
-			'Jan',
-			'Feb',
-			'Mar',
-			'Apr',
-			'May',
-			'Jun',
-			'Jul',
-			'Aug',
-			'Sep',
-			'Oct',
-			'Nov',
-			'Dec'
-		];
 		const first = starts[0];
 		const month = MONTHS[Number(first.slice(5, 7)) - 1];
 		if (ongoing(card)) return `${place} · from ${month} ${first.slice(0, 4)}`;
@@ -151,7 +144,7 @@
 	const employment = $derived(dossier.cards.filter((c) => c.kind === 'employer'));
 	const brokerage = $derived(dossier.cards.filter((c) => c.kind === 'broker'));
 	const elsewhere = $derived(
-		dossier.cards.filter((c) => c.id !== null && c.kind !== 'employer' && c.kind !== 'broker')
+		dossier.cards.filter((c) => c.id !== null && !INCOME_KINDS.has(c.kind))
 	);
 	/** The implicit "Not assigned yet" card, which is a pile and not a counterparty. */
 	const unassigned = $derived(dossier.cards.find((c) => c.id === null) ?? null);
@@ -165,77 +158,59 @@
 	 */
 	const bare = $derived(dossier.cards.length === 0 && years.cards.length === 0);
 
-	/** Which record is open, at most one — the whole point of opening it in place. */
+	/**
+	 * Which record is open, at most one — the whole point of opening it in place.
+	 *
+	 * The pile of unfiled paper has no id, so it keys on a word. One rule for both
+	 * rows, rather than each snippet keying itself and the first one guarding
+	 * against a null the second one handles.
+	 */
 	let opened = $state<string | null>(null);
-	const toggleCard = (id: string) => (opened = opened === id ? null : id);
+	const keyOf = (card: DossierCard) => card.id ?? 'unassigned';
+	const toggleCard = (card: DossierCard) => (opened = opened === keyOf(card) ? null : keyOf(card));
 
 	// ---- The tax half ----
 
 	const cardAt = (year: number, country: string): TaxYearCardPayload | undefined =>
 		years.cards.find((c) => c.year === year && c.country === country);
 
-	/** What a filled cell would list, for the count it carries. */
-	function paperCount(card: TaxYearCardPayload | undefined): number {
-		if (!card) return 0;
-		const ids = new Set(card.rows.flatMap((r) => r.documents.map((d) => d.id)));
-		return ids.size + card.supporting.length;
-	}
+	/**
+	 * Residence for every year, folded across the household once.
+	 *
+	 * The fold itself lives beside the per-person rule it sits on, so the Year
+	 * dossier reads the same answer rather than a second opinion. Computed into a
+	 * map here because the unproved count and the markup both want every year's.
+	 */
+	const marks = $derived(
+		new Map(
+			axis.map((year) => [
+				year,
+				householdResidence(years.residences.filter((r) => r.year === year).map((r) => r.residence))
+			])
+		)
+	);
 
 	/**
-	 * Residence for one year, folded across the household.
+	 * What the tier that answered is called, in the cell's own width.
 	 *
-	 * Two people resident in two countries is a couple living apart, not a
-	 * question: only a tier that could not choose makes a year unsettled.
+	 * Short enough to survive a year-wide column — about seventeen characters at
+	 * six years across. A caption clipped to "citizenship · pro…" tells a reader
+	 * less than three true words, and the nudge to prove it is carried by the
+	 * "N unproved" chip beside the label rather than repeated in every cell.
 	 */
-	type Mark = {
-		countries: string[];
-		state: 'proved' | 'inferred' | 'unsettled';
-		words: string;
+	const EVIDENCE_WORDS: Record<ResidenceEvidence, string> = {
+		citizenship: 'from citizenship',
+		employment: 'from work',
+		statement: 'from the return',
+		declared: 'you said so'
 	};
-	function residenceMark(year: number): Mark {
-		const rows = years.residences.filter((r) => r.year === year);
-		// A tier that offered a CHOICE is the year somebody moved. A person with no
-		// evidence at all offered nothing, which is not the same thing — and
-		// folding the two together made one person with an empty record turn every
-		// settled year in the household amber.
-		const torn = [
-			...new Set(
-				rows.flatMap((r) =>
-					r.residence.ambiguous && r.residence.candidates.length > 1 ? r.residence.candidates : []
-				)
-			)
-		].sort();
-		if (torn.length > 1)
-			return { countries: torn, state: 'unsettled', words: 'both owe something' };
 
-		// Only the people something is known about can settle the year; the rest
-		// are silent rather than contradicting.
-		const known = rows.filter((r) => r.residence.periods.length > 0);
-		const countries = [
-			...new Set(known.flatMap((r) => r.residence.periods.map((p) => p.country)))
-		].sort();
-		if (countries.length === 0)
-			return { countries: [], state: 'unsettled', words: 'nothing on record' };
-
-		// The weakest tier standing decides the word: a year proved for one person
-		// and guessed for another is still a guess about the household.
-		const tiers = known.map((r) => r.residence.evidence);
-		// Short enough to survive a year-wide column — about seventeen characters at
-		// six years across. A caption clipped to "citizenship · pro…" tells a reader
-		// less than three true words, and the nudge to prove it is carried by the
-		// "N unproved" chip beside the label rather than repeated in every cell.
-		const words = tiers.includes('citizenship')
-			? 'from citizenship'
-			: tiers.includes('employment')
-				? 'from work'
-				: tiers.includes('statement')
-					? 'from the return'
-					: 'you said so';
-		const proved = !tiers.includes('employment') && !tiers.includes('citizenship');
-		return { countries, state: proved ? 'proved' : 'inferred', words };
+	function markWords(mark: HouseholdResidence): string {
+		if (mark.evidence) return EVIDENCE_WORDS[mark.evidence];
+		return mark.countries.length > 1 ? 'both owe something' : 'nothing on record';
 	}
 
-	const unproved = $derived(axis.filter((year) => residenceMark(year).state !== 'proved').length);
+	const unproved = $derived([...marks.values()].filter((m) => m.state !== 'proved').length);
 
 	/** The year whose residence form is open, at most one. */
 	let declaring = $state<number | null>(null);
@@ -269,38 +244,9 @@
 		open = isOpen(year, country) ? null : { year, country };
 	}
 	const openCard = $derived(open ? cardAt(open.year, open.country) : undefined);
-	const openDocuments = $derived.by(() => {
-		if (!openCard) return [];
-		// A joint return sits on two rows; list it once.
-		const all = [...openCard.rows.flatMap((r) => r.documents), ...openCard.supporting];
-		return all.filter((d, i) => all.findIndex((x) => x.id === d.id) === i);
-	});
+	const openDocuments = $derived(openCard ? cardPaper(openCard) : []);
 
 	/** What kind of return a cell is short of, under the state word. */
-	const KIND_WORD: Record<string, string> = {
-		residence: 'residence return',
-		unclear: 'residence unclear',
-		// Nothing, on purpose: a household that has recorded no residence anywhere
-		// would otherwise read the same alarm on every cell it owns.
-		unknown: ''
-	};
-	function kindWords(card: TaxYearCardPayload | undefined): string {
-		if (!card) return '';
-		// Just "second return": the lane it sits in is already labelled with the
-		// country, so naming it again only costs the characters that made this clip.
-		if (card.returnKind === 'source') return 'second return';
-		return KIND_WORD[card.returnKind];
-	}
-
-	/** Five words for five states. "not due yet" is not "never filed". */
-	const STATE_WORD: Record<string, string> = {
-		filed: 'filed',
-		partial: 'partly filed',
-		gap: 'never filed',
-		open: 'not due yet',
-		none: 'nothing owed'
-	};
-
 	// ---- Dropping paper ----
 	//
 	// Two targets, two meanings, one protocol: the id travels as `text/plain` and
@@ -437,17 +383,7 @@
 			<div class="derivation">
 				<span class="rule"></span>
 				<span class="arrow">
-					<svg
-						width="14"
-						height="14"
-						viewBox="0 0 16 16"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="1.5"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						aria-hidden="true"><path d="M8 3v10M4.5 9.5 8 13l3.5-3.5" /></svg
-					>
+					<Icon name="arrowDown" size={14} />
 					everything above decides everything below
 				</span>
 				<span class="rule"></span>
@@ -472,7 +408,7 @@
 					{/if}
 				</span>
 				{#each axis as year (year)}
-					{@const mark = residenceMark(year)}
+					{@const mark = marks.get(year)!}
 					<button
 						type="button"
 						class="tall res {mark.state}"
@@ -497,7 +433,7 @@
 								{mark.countries.map(countryName).join(' · ')}
 							</span>
 						{/if}
-						<span class="cell-note">{mark.words}</span>
+						<span class="cell-note">{markWords(mark)}</span>
 					</button>
 				{/each}
 			</div>
@@ -510,16 +446,7 @@
 		     off a filed statement, and the years in question have none. -->
 			<div class="note">
 				<span class="note-icon" aria-hidden="true">
-					<svg
-						width="14"
-						height="14"
-						viewBox="0 0 16 16"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="1.5"
-						stroke-linecap="round"
-						><circle cx="8" cy="8" r="5.5" /><path d="M8 7.4v3.4M8 5.2v.1" /></svg
-					>
+					<Icon name="info" size={14} />
 				</span>
 				<span class="note-body">
 					<span>
@@ -579,22 +506,13 @@
 								ondrop={(e) =>
 									dropOnYear(e, year, country, card?.rows.map((r) => r.personId) ?? [])}
 								onclick={() => press(year, country)}
-								aria-label="{STATE_WORD[cell.state]}: {year} {countryName(country)}"
+								aria-label="{STATE_WORDS[cell.state]}: {year} {countryName(country)}"
 							>
 								<span class="cell-word">
 									{#if cell.state === 'filed'}
-										<svg
-											width="13"
-											height="13"
-											viewBox="0 0 16 16"
-											fill="none"
-											stroke="currentColor"
-											stroke-width="1.8"
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											aria-hidden="true"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" /></svg
-										>
-										filed{paperCount(card) > 1 ? ` · ${paperCount(card)}` : ''}
+										{@const held = card ? paperCount(card) : 0}
+										<Icon name="check" size={13} />
+										filed{held > 1 ? ` · ${held}` : ''}
 									{:else if cell.state === 'partial'}
 										{cell.filed}/{cell.owed} filed
 									{:else}
@@ -602,7 +520,7 @@
 									{/if}
 								</span>
 								<span class="cell-note" class:warnword={card?.returnKind === 'unclear'}>
-									{kindWords(card)}
+									{returnKindWords(card?.returnKind)}
 								</span>
 							</button>
 						{/if}
@@ -612,7 +530,6 @@
 					<ObligationPanel
 						card={openCard}
 						documents={openDocuments}
-						residences={years.residences.filter((r) => r.year === open!.year)}
 						{people}
 						{onopen}
 						onclose={() => (open = null)}
@@ -649,6 +566,19 @@
 
 {@render addYear()}
 
+{#snippet chevron(card: DossierCard)}
+	<button
+		type="button"
+		class="chev"
+		class:on={opened === keyOf(card)}
+		aria-expanded={opened === keyOf(card)}
+		aria-label="{opened === keyOf(card) ? 'Collapse' : 'Expand'} {card.name}"
+		onclick={() => toggleCard(card)}
+	>
+		<Icon name={opened === keyOf(card) ? 'chevronDown' : 'chevronRight'} size={13} />
+	</button>
+{/snippet}
+
 {#snippet incomeRow(card: DossierCard)}
 	{@const span = spanYears(card)}
 	<div
@@ -660,42 +590,11 @@
 		ondrop={card.id ? (e) => dropOnCard(e, card.id!) : undefined}
 	>
 		<span class="row-head">
-			<button
-				type="button"
-				class="chev"
-				class:on={opened === card.id}
-				aria-expanded={opened === card.id}
-				aria-label="{opened === card.id ? 'Collapse' : 'Expand'} {card.name}"
-				onclick={() => card.id && toggleCard(card.id)}
-			>
-				{#if opened === card.id}
-					<svg
-						width="13"
-						height="13"
-						viewBox="0 0 16 16"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="1.6"
-						stroke-linecap="round"
-						aria-hidden="true"><path d="M4 6.5 8 10.5 12 6.5" /></svg
-					>
-				{:else}
-					<svg
-						width="13"
-						height="13"
-						viewBox="0 0 16 16"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="1.6"
-						stroke-linecap="round"
-						aria-hidden="true"><path d="M6.5 4l4 4-4 4" /></svg
-					>
-				{/if}
-			</button>
+			{@render chevron(card)}
 			<span class="tile" style:--hue="var({hueFor(card.country)})" aria-hidden="true">
 				{card.emoji}
 			</span>
-			<span class="row-name" class:strong={opened === card.id}>{card.name}</span>
+			<span class="row-name" class:strong={opened === keyOf(card)}>{card.name}</span>
 			<span class="mono count quiet">{card.documentCount}</span>
 		</span>
 		{#if span.length === 0}
@@ -725,7 +624,7 @@
 			</span>
 		{/if}
 	</div>
-	{#if opened === card.id}
+	{#if opened === keyOf(card)}
 		<EmploymentRecord
 			{card}
 			year={dossier.year}
@@ -741,38 +640,7 @@
 
 {#snippet plainRow(card: DossierCard)}
 	<div class="plain">
-		<button
-			type="button"
-			class="chev"
-			class:on={opened === (card.id ?? 'unassigned')}
-			aria-expanded={opened === (card.id ?? 'unassigned')}
-			aria-label="{opened === (card.id ?? 'unassigned') ? 'Collapse' : 'Expand'} {card.name}"
-			onclick={() => toggleCard(card.id ?? 'unassigned')}
-		>
-			{#if opened === (card.id ?? 'unassigned')}
-				<svg
-					width="13"
-					height="13"
-					viewBox="0 0 16 16"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.6"
-					stroke-linecap="round"
-					aria-hidden="true"><path d="M4 6.5 8 10.5 12 6.5" /></svg
-				>
-			{:else}
-				<svg
-					width="13"
-					height="13"
-					viewBox="0 0 16 16"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.6"
-					stroke-linecap="round"
-					aria-hidden="true"><path d="M6.5 4l4 4-4 4" /></svg
-				>
-			{/if}
-		</button>
+		{@render chevron(card)}
 		<span class="tile" style:--hue="var({hueFor(card.country)})" aria-hidden="true"
 			>{card.emoji}</span
 		>
@@ -780,7 +648,7 @@
 		{#if card.country}<span class="quiet">{countryName(card.country)}</span>{/if}
 		<span class="mono count quiet">{card.documentCount}</span>
 	</div>
-	{#if opened === (card.id ?? 'unassigned')}
+	{#if opened === keyOf(card)}
 		<EmploymentRecord
 			{card}
 			year={dossier.year}

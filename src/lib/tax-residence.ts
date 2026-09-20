@@ -187,3 +187,57 @@ export function residenceNeedsAnswer(residence: Residence): boolean {
 export function residenceIsProved(residence: Residence): boolean {
 	return residence.evidence === 'declared' || residence.evidence === 'statement';
 }
+
+/** What a whole household's year resolved to, folded from each person's. */
+export interface HouseholdResidence {
+	/** Where they lived, or — where `unsettled` — the countries it is torn between. */
+	countries: string[];
+	/**
+	 * `proved` said so or filed it; `inferred` worked it out; `unsettled` could
+	 * not call it. Three borders rather than three colours on the screen: a guess
+	 * is not a warning.
+	 */
+	state: 'proved' | 'inferred' | 'unsettled';
+	/** The weakest tier standing, or null where nothing answered. */
+	evidence: ResidenceEvidence | null;
+}
+
+/**
+ * One year, folded across everybody in the house.
+ *
+ * TORN IS NOT SILENT. A tier that offered a CHOICE is the year somebody moved,
+ * and both countries owe something until the date is said. A person with no
+ * evidence at all offered nothing, which is a different thing — folding the two
+ * together made one person with an empty record turn every settled year in the
+ * household amber.
+ *
+ * Two people resident in two countries is a couple living apart, not a
+ * question, so only a tier that could not choose makes a year unsettled. The
+ * weakest tier standing decides the word: a year proved for one person and
+ * guessed for another is still a guess about the household.
+ *
+ * Lives here, beside the per-person rule it sits on, because both screens ask
+ * it and a fold written twice is a rule that can drift from itself.
+ */
+export function householdResidence(residences: readonly Residence[]): HouseholdResidence {
+	const torn = distinct(
+		residences.flatMap((r) => (r.ambiguous && r.candidates.length > 1 ? r.candidates : []))
+	);
+	if (torn.length > 1) return { countries: torn, state: 'unsettled', evidence: null };
+
+	// Only the people something is known about can settle the year; the rest are
+	// silent rather than contradicting.
+	const known = residences.filter((r) => r.periods.length > 0);
+	const countries = distinct(known.flatMap(residenceCountries));
+	if (countries.length === 0) return { countries: [], state: 'unsettled', evidence: null };
+
+	// Weakest first: the first tier present is the one the household is standing on.
+	const weakest = (['citizenship', 'employment', 'statement', 'declared'] as const).find((tier) =>
+		known.some((r) => r.evidence === tier)
+	);
+	return {
+		countries,
+		state: known.every(residenceIsProved) ? 'proved' : 'inferred',
+		evidence: weakest ?? null
+	};
+}

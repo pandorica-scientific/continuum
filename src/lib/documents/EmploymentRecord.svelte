@@ -13,8 +13,10 @@
 	// Nothing here is new data. A card already carries its role periods and its
 	// lanes; this draws them against twelve months instead of against a card.
 	import { enhance } from '$app/forms';
+	import Icon from '$lib/components/Icon.svelte';
 	import { countryName, countryOptions, flagEmoji } from '$lib/countries';
 	import { ENUMS } from '$lib/enums';
+	import { MONTHS } from '$lib/documents/dossier-cells';
 	import type { CardDocument, DossierCard } from '$lib/server/documents/dossier-load';
 
 	let {
@@ -40,21 +42,6 @@
 		onyear: (year: number) => void;
 	} = $props();
 
-	const MONTHS = [
-		'Jan',
-		'Feb',
-		'Mar',
-		'Apr',
-		'May',
-		'Jun',
-		'Jul',
-		'Aug',
-		'Sep',
-		'Oct',
-		'Nov',
-		'Dec'
-	];
-
 	/** The lanes with a rhythm, and the lanes without: two shapes, one card. */
 	const timed = $derived(card.lanes.filter((lane) => lane.cadence !== 'none'));
 	const loose = $derived(card.lanes.filter((lane) => lane.cadence === 'none'));
@@ -78,7 +65,12 @@
 		return [from, to];
 	}
 
-	const inYear = $derived(card.roles.filter((role) => months(role) !== null));
+	const inYear = $derived(
+		card.roles.flatMap((role) => {
+			const span = months(role);
+			return span ? [{ role, span }] : [];
+		})
+	);
 
 	/**
 	 * Whether the card's own record is open — its name, emoji, kind and country.
@@ -90,12 +82,23 @@
 	 */
 	let editing = $state(false);
 
+	/**
+	 * Close the open form and reload what it changed.
+	 *
+	 * Returning a callback from `enhance` REPLACES the default, so without the
+	 * `update()` the write lands and the screen keeps showing what it wrote over.
+	 */
+	const closeAfter =
+		() =>
+		async ({ update }: { update: () => Promise<void> }) => {
+			doing = null;
+			await update();
+		};
+
 	/** Which correction is open, at most one: the forms are alternatives, not a toolbar. */
 	let doing = $state<{ id: string; what: 'end' | 'promote' | 'dates' } | null>(null);
-	const isDoing = (id: string, what: 'end' | 'promote' | 'dates') =>
-		doing?.id === id && doing.what === what;
 	function toggle(id: string, what: 'end' | 'promote' | 'dates') {
-		doing = isDoing(id, what) ? null : { id, what };
+		doing = doing?.id === id && doing.what === what ? null : { id, what };
 	}
 
 	/** Whether a role period is the one running now — the only one that can end or be promoted. */
@@ -115,22 +118,8 @@
 		return `${count} · ${newest.name}`;
 	}
 
-	/**
-	 * Filed of the months drawn, counted from the CELLS.
-	 *
-	 * `lane.filed` is every document the lane holds, across every year, and
-	 * `lane.expected` is the windows of this one — so the pair reads "12/8" for
-	 * an employer with a year of payslips behind it, which is nonsense beside a
-	 * row of twelve months. Both numbers come off the same twelve cells here.
-	 */
-	function ratio(lane: { cells: { state: string }[] }): string {
-		const filed = lane.cells.filter((cell) => cell.state === 'filed').length;
-		return `${filed}/${lane.cells.length}`;
-	}
-
-	/** The word a cell carries for a screen reader. Five states, five words. */
+	/** The word an UNFILLED cell carries for a screen reader; a filled one says so itself. */
 	const CELL_WORD: Record<string, string> = {
-		filed: 'Filed',
 		gap: 'Missing',
 		'not-arrived': 'Not due yet',
 		before: 'Before this began'
@@ -159,13 +148,7 @@
 				aria-label="More for {card.name}"
 				onclick={() => (editing = !editing)}
 			>
-				<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"
-					><circle cx="3" cy="8" r="1.3" /><circle cx="8" cy="8" r="1.3" /><circle
-						cx="13"
-						cy="8"
-						r="1.3"
-					/></svg
-				>
+				<Icon name="dots" size={16} />
 			</button>
 		{/if}
 		<div class="pager">
@@ -175,16 +158,7 @@
 				disabled={year <= firstYear}
 				onclick={() => onyear(year - 1)}
 			>
-				<svg
-					width="13"
-					height="13"
-					viewBox="0 0 16 16"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.6"
-					stroke-linecap="round"
-					aria-hidden="true"><path d="M9.5 4 5.5 8l4 4" /></svg
-				>
+				<Icon name="chevronLeft" size={13} />
 			</button>
 			<span class="mono">{year}</span>
 			<button
@@ -193,16 +167,7 @@
 				disabled={year >= lastYear}
 				onclick={() => onyear(year + 1)}
 			>
-				<svg
-					width="13"
-					height="13"
-					viewBox="0 0 16 16"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.6"
-					stroke-linecap="round"
-					aria-hidden="true"><path d="M6.5 4l4 4-4 4" /></svg
-				>
+				<Icon name="chevronRight" size={13} />
 			</button>
 		</div>
 	</div>
@@ -263,8 +228,7 @@
 					<span class="quiet">No role period covers {year}.</span>
 				</span>
 			{:else}
-				{#each inYear as role (role.id)}
-					{@const span = months(role)!}
+				{#each inYear as { role, span } (role.id)}
 					<span
 						class="bar"
 						class:undated={role.startsOn === null}
@@ -286,16 +250,7 @@
 									End it
 								</button>
 								<button type="button" class="chip-btn" onclick={() => toggle(role.id, 'promote')}>
-									<svg
-										width="11"
-										height="11"
-										viewBox="0 0 16 16"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="1.8"
-										stroke-linecap="round"
-										aria-hidden="true"><path d="M8 4v8M4 8h8" /></svg
-									>
+									<Icon name="plus" size={11} />
 									Promotion
 								</button>
 							{:else}
@@ -311,7 +266,7 @@
 			<div class="row">
 				<span class="row-label">
 					<span>{lane.label}</span>
-					<span class="mono quiet" class:short={lane.gaps > 0}>{ratio(lane)}</span>
+					<span class="mono quiet" class:short={lane.gaps > 0}>{lane.filed}/{lane.expected}</span>
 				</span>
 				{#each lane.cells as cell, i (cell.key)}
 					{#if cell.state === 'filed'}
@@ -322,17 +277,7 @@
 							onclick={() => onopen(cell.documentIds[0])}
 							aria-label="Filed: {cell.label}"
 						>
-							<svg
-								width="13"
-								height="13"
-								viewBox="0 0 16 16"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="1.8"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								aria-hidden="true"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" /></svg
-							>
+							<Icon name="check" size={13} />
 							{#if cell.documentIds.length > 1}
 								<span class="mono many">{cell.documentIds.length}</span>
 							{/if}
@@ -356,16 +301,7 @@
 		{@const role = card.roles.find((r) => r.id === doing!.id)}
 		{#if role}
 			{#if doing.what === 'end'}
-				<form
-					method="POST"
-					action="?/endEngagement"
-					use:enhance={() =>
-						async ({ update }) => {
-							doing = null;
-							await update();
-						}}
-					class="correct"
-				>
+				<form method="POST" action="?/endEngagement" use:enhance={closeAfter} class="correct">
 					<input type="hidden" name="id" value={role.id} />
 					<span class="quiet">{role.role ?? 'This role'} ended on</span>
 					<input type="date" name="endsOn" required aria-label="Last day of this role" />
@@ -373,16 +309,7 @@
 					<button type="button" class="btn small" onclick={() => (doing = null)}>Cancel</button>
 				</form>
 			{:else if doing.what === 'promote'}
-				<form
-					method="POST"
-					action="?/promoteEngagement"
-					use:enhance={() =>
-						async ({ update }) => {
-							doing = null;
-							await update();
-						}}
-					class="correct"
-				>
+				<form method="POST" action="?/promoteEngagement" use:enhance={closeAfter} class="correct">
 					<input type="hidden" name="id" value={role.id} />
 					<span class="quiet">Promoted to</span>
 					<input name="role" placeholder="New title" aria-label="New title" />
@@ -395,16 +322,7 @@
 					</span>
 				</form>
 			{:else}
-				<form
-					method="POST"
-					action="?/updateEngagement"
-					use:enhance={() =>
-						async ({ update }) => {
-							doing = null;
-							await update();
-						}}
-					class="correct"
-				>
+				<form method="POST" action="?/updateEngagement" use:enhance={closeAfter} class="correct">
 					<input type="hidden" name="id" value={role.id} />
 					<span class="quiet">Title</span>
 					<input name="role" value={role.role ?? ''} aria-label="Role" />

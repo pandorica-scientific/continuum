@@ -12,8 +12,13 @@
 	// older ones collapse to a line that says what is missing and nothing else —
 	// a shelf of identical expanded cards is a wall, and a household looking for
 	// 2021 is looking for one fact about it.
+	import Icon from '$lib/components/Icon.svelte';
 	import { countryName, flagEmoji } from '$lib/countries';
-	import { hueTokens } from '$lib/tax-hues';
+	import { countryHues } from '$lib/tax-hues';
+	import { householdResidence } from '$lib/tax-residence';
+	import { MONTHS } from '$lib/documents/dossier-cells';
+	import { INCOME_KINDS } from '$lib/documents/templates';
+	import { cardPaper, cardState, paperCount, returnKindWords } from '$lib/documents/tax-years';
 	import ObligationPanel from '$lib/documents/ObligationPanel.svelte';
 	import type { DossierCard, DossierPayload } from '$lib/server/documents/dossier-load';
 	import type { TaxYearCardPayload, TaxYearsPayload } from '$lib/server/documents/tax-years';
@@ -34,21 +39,6 @@
 
 	/** How many years stand open before the rest become lines. */
 	const OPEN_YEARS = 4;
-
-	const MONTHS = [
-		'Jan',
-		'Feb',
-		'Mar',
-		'Apr',
-		'May',
-		'Jun',
-		'Jul',
-		'Aug',
-		'Sep',
-		'Oct',
-		'Nov',
-		'Dec'
-	];
 
 	/**
 	 * Every year, newest first — the SAME span the Timeline draws.
@@ -72,13 +62,9 @@
 		return known.length > 0 ? known : [thisYear];
 	});
 
-	const hues = $derived(
-		hueTokens([
-			...years.grid.countries,
-			...dossier.cards.map((c) => c.country).filter((c): c is string => c !== null)
-		])
+	const hueFor = $derived(
+		countryHues([...years.grid.countries, ...dossier.cards.map((c) => c.country)])
 	);
-	const hueFor = (country: string | null) => (country && hues.get(country)) || '--series-r10';
 
 	/** Nothing earns and nothing is owed — the same test the Timeline makes. */
 	const bare = $derived(dossier.cards.length === 0 && years.cards.length === 0);
@@ -106,14 +92,16 @@
 	 * may well have been the whole year, and the card says so as a dashed chip
 	 * rather than being left out and making the year look emptier than it was.
 	 */
+	const sources = $derived(
+		dossier.cards.filter((card) => card.id !== null && INCOME_KINDS.has(card.kind))
+	);
+	/** Year-independent, so worked out once rather than per card. */
+	const undatedSources = $derived(
+		sources.filter((card) => card.roles.every((role) => role.startsOn === null))
+	);
+
 	function earning(year: number): { dated: DossierCard[]; undated: DossierCard[] } {
-		const sources = dossier.cards.filter(
-			(card) => card.id !== null && (card.kind === 'employer' || card.kind === 'broker')
-		);
-		return {
-			dated: sources.filter((card) => covered(card, year)),
-			undated: sources.filter((card) => card.roles.every((role) => role.startsOn === null))
-		};
+		return { dated: sources.filter((card) => covered(card, year)), undated: undatedSources };
 	}
 
 	/** "from Oct" where a role period started inside the year; nothing where it ran through. */
@@ -154,76 +142,47 @@
 		return `${MONTHS[free[0] - 1]}–${MONTHS[free[free.length - 1] - 1]}`;
 	}
 
-	/**
-	 * Payslips filed of months drawn, for the one year the shelf loaded months for.
-	 *
-	 * Counted from the CELLS, not from `lane.filed`: that number is every payslip
-	 * the lane has ever held, across every year, and set against this year's
-	 * months it reads "12 of 8".
-	 */
+	/** Payslips filed of months expected, for the one year the shelf loaded months for. */
 	function payslips(year: number): string | null {
 		if (year !== dossier.year) return null;
-		const cells = dossier.cards
-			.filter((card) => card.kind === 'employer')
-			.flatMap((card) => card.lanes.filter((lane) => lane.cadence === 'monthly'))
-			.flatMap((lane) => lane.cells);
-		if (cells.length === 0) return null;
-		const filed = cells.filter((cell) => cell.state === 'filed').length;
-		return `payslips ${filed} of ${cells.length}`;
+		const lanes = sources.flatMap((card) => card.lanes.filter((l) => l.cadence === 'monthly'));
+		if (lanes.length === 0) return null;
+		const expected = lanes.reduce((n, lane) => n + lane.expected, 0);
+		if (expected === 0) return null;
+		return `payslips ${lanes.reduce((n, lane) => n + lane.filed, 0)} of ${expected}`;
 	}
 
 	// ---- What it made you owe ----
 
 	const cardsFor = (year: number) => years.cards.filter((card) => card.year === year);
 
-	function paperCount(card: TaxYearCardPayload): number {
-		const ids = new Set(card.rows.flatMap((r) => r.documents.map((d) => d.id)));
-		return ids.size + card.supporting.length;
-	}
-
-	/** One word for the whole year, on the spine of the card. */
-	function verdict(year: number): { word: string; tone: 'good' | 'bad' | 'quiet' } {
-		const cards = cardsFor(year);
-		if (cards.length === 0) return { word: 'nothing owed', tone: 'quiet' };
-		const missing = cards.filter((card) => card.rows.some((r) => r.state === 'gap')).length;
-		if (missing > 0) return { word: `${missing} never filed`, tone: 'bad' };
+	/**
+	 * What a year amounts to, in one pass: the spine's word and, for a folded
+	 * year, what is missing and where. `verdict` and `line` asked the same
+	 * question with the same filter and were called together on every row.
+	 */
+	function verdict(cards: TaxYearCardPayload[]) {
+		const missing = cards.filter((card) => card.rows.some((r) => r.state === 'gap'));
+		const where = missing.map((card) => countryName(card.country));
+		if (cards.length === 0) return { word: 'nothing owed', tone: 'quiet', missing: 0, where };
+		if (missing.length > 0)
+			return {
+				word: `${missing.length} never filed`,
+				tone: 'bad',
+				missing: missing.length,
+				where
+			};
 		if (cards.some((card) => card.rows.some((r) => r.state === 'open')))
-			return { word: 'in progress', tone: 'quiet' };
-		return { word: 'all filed', tone: 'good' };
+			return { word: 'in progress', tone: 'quiet', missing: 0, where };
+		return { word: 'all filed', tone: 'good', missing: 0, where };
 	}
 
 	/** The residence chip: where they lived, or the question nothing settles. */
-	function residence(year: number): { countries: string[]; settled: boolean } {
-		const rows = years.residences.filter((r) => r.year === year);
-		// Torn between countries is the year somebody moved; silence from a person
-		// with no record at all is not a contest. See the same fold on the Timeline.
-		const torn = [
-			...new Set(
-				rows.flatMap((r) =>
-					r.residence.ambiguous && r.residence.candidates.length > 1 ? r.residence.candidates : []
-				)
-			)
-		].sort();
-		if (torn.length > 1) return { countries: torn, settled: false };
-		const countries = [
-			...new Set(rows.flatMap((r) => r.residence.periods.map((p) => p.country)))
-		].sort();
-		return { countries, settled: countries.length > 0 };
-	}
-
-	/** The state of one return, in the words the Timeline's cells use. */
-	function stateOf(card: TaxYearCardPayload): 'filed' | 'partial' | 'gap' | 'open' {
-		if (card.rows.every((r) => r.state === 'filed')) return 'filed';
-		if (card.rows.some((r) => r.state === 'filed')) return 'partial';
-		return card.rows.some((r) => r.state === 'open') ? 'open' : 'gap';
-	}
-
-	function kindWords(card: TaxYearCardPayload): string {
-		// The flag beside the word already names the country — see the Timeline.
-		if (card.returnKind === 'source') return 'second return';
-		if (card.returnKind === 'unclear') return 'residence unclear';
-		// Silence where nothing is on record: see `TaxReturnKind`.
-		return card.returnKind === 'unknown' ? '' : 'residence return';
+	function residence(year: number) {
+		// The same fold the Timeline draws, from the module that owns the rule.
+		return householdResidence(
+			years.residences.filter((r) => r.year === year).map((r) => r.residence)
+		);
 	}
 
 	/** One pressed return at a time, across every year. */
@@ -238,17 +197,7 @@
 			? years.cards.find((c) => c.year === pressed!.year && c.country === pressed!.country)
 			: undefined
 	);
-	const openDocuments = $derived.by(() => {
-		if (!openCard) return [];
-		const all = [...openCard.rows.flatMap((r) => r.documents), ...openCard.supporting];
-		return all.filter((d, i) => all.findIndex((x) => x.id === d.id) === i);
-	});
-
-	/** What a collapsed line has to say for itself. */
-	function line(year: number): { missing: number; where: string[] } {
-		const gaps = cardsFor(year).filter((card) => card.rows.some((r) => r.state === 'gap'));
-		return { missing: gaps.length, where: gaps.map((card) => countryName(card.country)) };
-	}
+	const openDocuments = $derived(openCard ? cardPaper(openCard) : []);
 </script>
 
 <!-- The derivation, restated once here: the left half of every card produces the
@@ -268,17 +217,7 @@
 {:else}
 	<div class="derivation">
 		<span class="arrow">
-			<svg
-				width="14"
-				height="14"
-				viewBox="0 0 16 16"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="1.5"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				aria-hidden="true"><path d="M3 8h10M9.5 4.5 13 8l-3.5 3.5" /></svg
-			>
+			<Icon name="arrowRight" size={14} />
 			the income on the left produces the return on the right — one where you were resident, plus any
 			country that wants its own
 		</span>
@@ -287,10 +226,11 @@
 
 	<div class="years">
 		{#each axis as year, index (year)}
-			{@const said = verdict(year)}
+			{@const returns = cardsFor(year)}
+			{@const said = verdict(returns)}
 			{@const lived = residence(year)}
 			{#if isOpen(year, index)}
-				{@const sources = earning(year)}
+				{@const earned = earning(year)}
 				{@const months = uncovered(year)}
 				{@const slips = payslips(year)}
 				<section class="card" class:short={said.tone === 'bad'}>
@@ -298,11 +238,11 @@
 						<span class="mono year">{year}</span>
 						<span class="verdict {said.tone}">{said.word}</span>
 						{#if lived.countries.length > 0}
-							<span class="res" class:unsettled={!lived.settled}>
+							<span class="res" class:unsettled={lived.state === 'unsettled'}>
 								{#each lived.countries as code, i (code)}{i > 0 ? ' → ' : ''}<span
 										aria-hidden="true">{flagEmoji(code)}</span
 									>{/each}
-								{lived.settled ? 'resident' : 'residence?'}
+								{lived.state === 'unsettled' ? 'residence?' : 'resident'}
 							</span>
 						{/if}
 					</div>
@@ -310,23 +250,23 @@
 					<div class="half income">
 						<span class="eyebrow">Income that year</span>
 						<div class="chips">
-							{#each sources.dated as card (card.id)}
+							{#each earned.dated as card (card.id)}
 								<span class="chip" style:--hue="var({hueFor(card.country)})">
 									<span aria-hidden="true">{card.emoji}</span>
 									{card.name}
 									<span class="quiet">{startedIn(card, year) ?? card.kind}</span>
 								</span>
 							{/each}
-							{#each sources.undated as card (card.id)}
+							{#each earned.undated as card (card.id)}
 								<span class="chip guess">
 									<span aria-hidden="true">{card.emoji}</span>
 									{card.name}
 									<span class="quiet">dates not recorded</span>
 								</span>
 							{/each}
-							{#if sources.dated.length === 0 && sources.undated.length === 0}
+							{#if earned.dated.length === 0 && earned.undated.length === 0}
 								<span class="quiet">Nothing on record earned anything this year.</span>
-							{:else if months && sources.undated.length > 0}
+							{:else if months && earned.undated.length > 0}
 								<span class="chip guess">{months} · role dates not recorded</span>
 							{/if}
 							{#if slips}<span class="quiet">· {slips}</span>{/if}
@@ -336,8 +276,8 @@
 					<div class="half returns">
 						<span class="eyebrow">Tax returns</span>
 						<div class="cells">
-							{#each cardsFor(year) as card (card.country)}
-								{@const state = stateOf(card)}
+							{#each returns as card (card.country)}
+								{@const state = cardState(card)}
 								{#if state === 'open'}
 									<span class="ret later">
 										<span aria-hidden="true">{flagEmoji(card.country)}</span>
@@ -355,7 +295,7 @@
 										<span class="ret-word">
 											<span aria-hidden="true">{flagEmoji(card.country)}</span>
 											{#if state === 'filed'}
-												filed{paperCount(card) > 1 ? ` · ${paperCount(card)}` : ''}
+												{@const held = paperCount(card)}filed{held > 1 ? ` · ${held}` : ''}
 											{:else if state === 'partial'}
 												partly filed
 											{:else}
@@ -363,12 +303,12 @@
 											{/if}
 										</span>
 										<span class="ret-note" class:warnword={card.returnKind === 'unclear'}>
-											{kindWords(card)}
+											{returnKindWords(card.returnKind)}
 										</span>
 									</button>
 								{/if}
 							{/each}
-							{#if cardsFor(year).length === 0}
+							{#if returns.length === 0}
 								<span class="quiet">Nothing owed anywhere this year.</span>
 							{/if}
 						</div>
@@ -378,22 +318,20 @@
 					<ObligationPanel
 						card={openCard}
 						documents={openDocuments}
-						residences={years.residences.filter((r) => r.year === year)}
 						{people}
 						{onopen}
 						onclose={() => (pressed = null)}
 					/>
 				{/if}
 			{:else}
-				{@const said2 = line(year)}
 				<div class="folded">
 					<span class="mono fold-year">{year}</span>
-					{#if said2.missing > 0}
+					{#if said.missing > 0}
 						<span class="fold-word">
 							<span class="dot" aria-hidden="true"></span>
-							{said2.missing}
-							{said2.missing === 1 ? 'return' : 'returns'} never filed
-							<span class="quiet">· {said2.where.join(', ')}</span>
+							{said.missing}
+							{said.missing === 1 ? 'return' : 'returns'} never filed
+							<span class="quiet">· {said.where.join(', ')}</span>
 						</span>
 					{:else}
 						<span class="quiet">{said.word}</span>
@@ -404,16 +342,7 @@
 						aria-label="Open {year}"
 						onclick={() => unfold(year)}
 					>
-						<svg
-							width="16"
-							height="16"
-							viewBox="0 0 16 16"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="1.5"
-							stroke-linecap="round"
-							aria-hidden="true"><path d="M6.5 4l4 4-4 4" /></svg
-						>
+						<Icon name="chevronRight" size={16} />
 					</button>
 				</div>
 			{/if}

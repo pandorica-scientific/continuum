@@ -13,6 +13,16 @@
  * may become, for the same reason `shelf_type` decides what the type filter
  * offers first and not what the shelf will accept.
  */
+
+/**
+ * Which kinds of counterparty EARN, and so decide what tax is owed.
+ *
+ * Income & Tax draws its bands from this: an employer earns, a broker earns, a
+ * tax office does not. Named once rather than tested inline in the markup, for
+ * the same reason `SUPPORTING_TAGS` is read from `ATTACHMENT_KINDS` — the rule
+ * belongs where it can be read, not in five conditions across two components.
+ */
+export const INCOME_KINDS: ReadonlySet<string> = new Set(['employer', 'broker']);
 import type { EnumValue } from '$lib/enums';
 
 export type ShelfTemplate = EnumValue<'shelf.template'>;
