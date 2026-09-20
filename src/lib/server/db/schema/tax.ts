@@ -6,6 +6,7 @@
 import {
 	bigint,
 	boolean,
+	date,
 	index,
 	integer,
 	pgTable,
@@ -16,6 +17,9 @@ import {
 } from 'drizzle-orm/pg-core';
 import { person } from './auth';
 import { currency } from './money';
+// Relative, not aliased: drizzle-kit loads these files outside Vite and
+// does not resolve SvelteKit's $lib.
+import type { EnumValue } from '../../../enums';
 
 // What a yearly tax statement said, per person per country. Nothing here is
 // computed: no brackets, no allowances, no residency. The two canonical figures
@@ -37,6 +41,12 @@ export const taxStatement = pgTable(
 			.references(() => currency.code),
 		grossIncomeMinor: bigint('gross_income_minor', { mode: 'bigint' }).notNull(),
 		taxPaidMinor: bigint('tax_paid_minor', { mode: 'bigint' }).notNull(),
+		// Which return this is: the one owed because they LIVED here, or the one
+		// this country wanted because income arose in it. It is what lets a filed
+		// statement prove residence, so it is deliberately NOT defaulted — an
+		// unclassified statement proves nothing, and that is the honest state for
+		// every row filed before this column existed.
+		role: text('role').$type<EnumValue<'tax_statement.role'>>(),
 		// No document column here, deliberately. A statement's papers hang off its
 		// `entity` row through `document_link` — the statement itself, the
 		// employer's income confirmation, the broker's report — and a "primary"
@@ -62,6 +72,57 @@ export const taxStatementLine = pgTable(
 		sort: integer('sort').notNull().default(0)
 	},
 	(table) => [index('tax_statement_line_statement_idx').on(table.statementId)]
+);
+
+/**
+ * Where a person says they were tax-resident, when nothing filed says it.
+ *
+ * Residence is what makes a return owed at all: income decides the amount and
+ * whether a second country wants one of its own, but a year with no work, no
+ * investments and no rent still owes one where the person lived, filed as a nil
+ * return. Deriving obligations from income alone makes exactly that year
+ * invisible, which is why this exists.
+ *
+ * A HAND CORRECTION, like `tax_filing_override` beside it, and it holds only
+ * what the derivation cannot reach. `residenceForYear` in `$lib/tax-residence`
+ * resolves a year through four tiers — a row here, then a statement marked
+ * `role = 'residence'`, then the countries worked in, then citizenship — and
+ * the first three are all read from tables that already exist. Nothing derived
+ * is stored, so nothing here can go stale against the paper.
+ *
+ * TWO ROWS ARE A MOVE. `from_on` and `to_on` are null for a whole year and set
+ * for the halves of a year somebody moved in — and both halves owe a return,
+ * because the move date splits the year rather than choosing a winner between
+ * two countries. That is the one thing a derivation cannot work out and a
+ * person can state in one gesture.
+ *
+ * Deliberately per YEAR rather than a continuous residence timeline: residence
+ * is proved a year at a time, and a period spanning five years would prove all
+ * five from one piece of evidence. Nothing carries forward — see the module
+ * note in `$lib/tax-residence`, where the absence of a previous-year parameter
+ * is the enforcement.
+ */
+export const taxResidence = pgTable(
+	'tax_residence',
+	{
+		id: uuid('id').primaryKey(),
+		personId: uuid('person_id')
+			.notNull()
+			.references(() => person.id, { onDelete: 'cascade' }),
+		year: integer('year').notNull(),
+		/** ISO 3166-1 alpha-2, upper case; the shape is a CHECK in the appendix. */
+		country: text('country').notNull(),
+		/** Inclusive. Null means "from the start of the year". */
+		fromOn: date('from_on'),
+		/** Inclusive. Null means "to the end of the year". */
+		toOn: date('to_on'),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	// One row per person, year and country — a second country in the same year is
+	// the move, a second row for the SAME country is a duplicate. The composite
+	// leads with person_id, which is what covers the foreign key; `tax_statement`
+	// beside it is indexed the same way for the same reason.
+	(table) => [uniqueIndex('tax_residence_unique_idx').on(table.personId, table.year, table.country)]
 );
 
 /**
@@ -109,6 +170,16 @@ export const taxCheckSql = `
 -- one folding rule has to serve all three, or a card and its paper stop matching.
 ALTER TABLE tax_filing_override ADD CONSTRAINT tax_filing_override_country_check
 	CHECK (country ~ '^[A-Z]{2}$');
+--> statement-breakpoint
+-- The same two letters, for the same reason: a declared residence and the
+-- paper that would prove it have to fold to one spelling or they never meet.
+ALTER TABLE tax_residence ADD CONSTRAINT tax_residence_country_check
+	CHECK (country ~ '^[A-Z]{2}$');
+--> statement-breakpoint
+-- A period that ends before it starts is not a half-year, it is a typo, and
+-- it would silently contribute no residence to the year it claims to cover.
+ALTER TABLE tax_residence ADD CONSTRAINT tax_residence_period_check
+	CHECK (from_on IS NULL OR to_on IS NULL OR from_on <= to_on);
 --> statement-breakpoint
 -- NULLS NOT DISTINCT, because person_id IS NULL is the card ITSELF and there is
 -- exactly one of those per year and country. Postgres treats nulls as distinct by

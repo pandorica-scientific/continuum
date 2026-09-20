@@ -83,9 +83,10 @@ describe('making a card', () => {
 		);
 		expect(card.unit).toBe('organisation');
 		const lanes = await lanesFor(card.id, testDb);
-		// Two, not three: the yearly declaration moved to the tax year card, which
-		// is keyed by the year rather than by whoever happened to be paying.
-		expect(lanes.map((l) => l.label)).toEqual(['Payslips', 'Contract & HR']);
+		// No yearly one: the declaration moved to the tax year card, which is keyed
+		// by the year rather than by whoever happened to be paying. The other three
+		// are the rows the employment record reads.
+		expect(lanes.map((l) => l.label)).toEqual(['Payslips', 'Annexes', 'Contract', 'HR']);
 	});
 
 	it('refuses a unit that has a screen of its own', async () => {

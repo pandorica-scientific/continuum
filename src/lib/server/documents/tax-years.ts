@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * The Tax years tab: one card per year and country, with who has filed.
+ * The tax half of Income & Tax: one card per year and country, with who has filed.
  *
  * Its own module rather than a branch inside `dossier-load`, because it asks a
  * different question and answers it differently. A dossier card's membership is
@@ -16,6 +16,7 @@ import { uuidv7 } from 'uuidv7';
 import { foldCountry } from '$lib/countries';
 import { derivedNameFor } from '$lib/tax';
 import { db, inTransaction, type Queryable } from '$lib/server/db';
+import { dayBefore } from '$lib/dates';
 import {
 	document,
 	documentLink,
@@ -26,17 +27,22 @@ import {
 	tag,
 	tagLink,
 	taxFilingOverride,
+	taxResidence,
 	taxStatement
 } from '$lib/server/db/schema';
 import {
 	isSupportingPaper,
 	taxRowState,
+	taxResidences,
 	taxYearCards,
 	taxYearGrid,
 	taxYearsByPerson,
 	type PersonBreakdown,
+	type ResolvedResidence,
+	type TaxReturnKind,
 	type TaxRowState,
-	type TaxYearGrid
+	type TaxYearGrid,
+	type TaxYearReason
 } from '$lib/documents/tax-years';
 
 export interface TaxYearDocument {
@@ -64,6 +70,10 @@ export interface TaxYearCardPayload {
 	/** Everything else filed for that year and country: earnings reports, broker reports. */
 	supporting: TaxYearDocument[];
 	gaps: number;
+	/** What raised this card, role period first. See `TaxYearReason`. */
+	reasons: TaxYearReason[];
+	/** The residence return, a second one a country wanted, or not yet callable. */
+	returnKind: TaxReturnKind;
 }
 
 export interface TaxYearsPayload {
@@ -76,7 +86,16 @@ export interface TaxYearsPayload {
 	byPerson: PersonBreakdown[];
 	/** The countries already in play, so the Add form opens on a likely one. */
 	knownCountries: string[];
-	people: { id: string; name: string }[];
+	/** `citizenship` rides along because it is the floor the residence row draws. */
+	people: { id: string; name: string; citizenship: string | null }[];
+	/**
+	 * Where everybody lived, year by year, and which tier settled it.
+	 *
+	 * Sent rather than recomputed on the client because the same resolution
+	 * decides which cards exist: two readings of it would let the residence row
+	 * disagree with the grid beneath it.
+	 */
+	residences: ResolvedResidence[];
 	/**
 	 * Employers and offices somebody has a role period with, but no country yet.
 	 * Each is a period the derivation cannot place, so the tab says so rather
@@ -91,71 +110,100 @@ export async function loadTaxYears(
 ): Promise<TaxYearsPayload> {
 	const thisYear = Number(today.slice(0, 4));
 
-	const [people, engagements, statements, overrides, dated, links, engagedOrganisations, tags] =
-		await Promise.all([
-			handle.select({ id: person.id, name: person.name }).from(person).orderBy(person.name),
-			// The country travels with the role period, from the organisation it is
-			// with: a Czech employer's year is a Czech return's year.
-			handle
-				.select({
-					personId: engagement.personId,
-					country: organisation.country,
-					startsOn: engagement.startsOn,
-					endsOn: engagement.endsOn
-				})
-				.from(engagement)
-				.innerJoin(organisation, eq(organisation.id, engagement.organisationId)),
-			handle
-				.select({
-					personId: taxStatement.personId,
-					year: taxStatement.year,
-					country: taxStatement.country
-				})
-				.from(taxStatement),
-			handle
-				.select({
-					year: taxFilingOverride.year,
-					country: taxFilingOverride.country,
-					personId: taxFilingOverride.personId,
-					expected: taxFilingOverride.expected
-				})
-				.from(taxFilingOverride),
-			// Every document that names a country and a period: the filings and the
-			// paper behind them, in one pass rather than two.
-			handle
-				.select({
-					id: document.id,
-					name: document.name,
-					ext: document.ext,
-					type: document.type,
-					typeLabel: documentType.label,
-					addedOn: document.addedOn,
-					periodOn: document.periodOn,
-					country: document.country
-				})
-				.from(document)
-				.innerJoin(documentType, eq(documentType.key, document.type))
-				.where(and(isNotNull(document.country), isNotNull(document.periodOn))),
-			handle
-				.select({ documentId: documentLink.documentId, personId: documentLink.targetId })
-				.from(documentLink)
-				.innerJoin(person, eq(person.id, documentLink.targetId)),
-			handle
-				.selectDistinct({
-					id: organisation.id,
-					name: organisation.name,
-					country: organisation.country
-				})
-				.from(organisation)
-				.innerJoin(engagement, eq(engagement.organisationId, organisation.id)),
-			// What each tax document IS, as the Tax screen recorded it: a statement,
-			// an employer's report, a broker's report. The kind lives on a tag, so
-			// the tags are what tell a return from the paper behind it.
-			handle
-				.select({ documentId: tagLink.targetId, name: tag.name })
-				.from(tagLink)
-				.innerJoin(tag, eq(tag.id, tagLink.tagId))
-		]);
+	const [
+		people,
+		engagements,
+		statements,
+		overrides,
+		declarations,
+		dated,
+		links,
+		engagedOrganisations,
+		tags
+	] = await Promise.all([
+		handle
+			.select({ id: person.id, name: person.name, citizenship: person.citizenship })
+			.from(person)
+			.orderBy(person.name),
+		// The country travels with the role period, from the organisation it is
+		// with: a Czech employer's year is a Czech return's year.
+		handle
+			.select({
+				personId: engagement.personId,
+				country: organisation.country,
+				startsOn: engagement.startsOn,
+				endsOn: engagement.endsOn,
+				// Who the period is with, so an obligation can name the role period
+				// that raised it — the one correction that files nothing.
+				organisationId: organisation.id,
+				organisationName: organisation.name,
+				organisationKind: organisation.kind
+			})
+			.from(engagement)
+			.innerJoin(organisation, eq(organisation.id, engagement.organisationId)),
+		handle
+			.select({
+				personId: taxStatement.personId,
+				year: taxStatement.year,
+				country: taxStatement.country,
+				// Only a statement marked as the RESIDENCE return proves where
+				// somebody lived; a `source` one proves income arose there.
+				role: taxStatement.role
+			})
+			.from(taxStatement),
+		handle
+			.select({
+				year: taxFilingOverride.year,
+				country: taxFilingOverride.country,
+				personId: taxFilingOverride.personId,
+				expected: taxFilingOverride.expected
+			})
+			.from(taxFilingOverride),
+		handle
+			.select({
+				personId: taxResidence.personId,
+				year: taxResidence.year,
+				country: taxResidence.country,
+				fromOn: taxResidence.fromOn,
+				toOn: taxResidence.toOn
+			})
+			.from(taxResidence),
+		// Every document that names a country and a period: the filings and the
+		// paper behind them, in one pass rather than two.
+		handle
+			.select({
+				id: document.id,
+				name: document.name,
+				ext: document.ext,
+				type: document.type,
+				typeLabel: documentType.label,
+				addedOn: document.addedOn,
+				periodOn: document.periodOn,
+				country: document.country
+			})
+			.from(document)
+			.innerJoin(documentType, eq(documentType.key, document.type))
+			.where(and(isNotNull(document.country), isNotNull(document.periodOn))),
+		handle
+			.select({ documentId: documentLink.documentId, personId: documentLink.targetId })
+			.from(documentLink)
+			.innerJoin(person, eq(person.id, documentLink.targetId)),
+		handle
+			.selectDistinct({
+				id: organisation.id,
+				name: organisation.name,
+				country: organisation.country
+			})
+			.from(organisation)
+			.innerJoin(engagement, eq(engagement.organisationId, organisation.id)),
+		// What each tax document IS, as the Tax screen recorded it: a statement,
+		// an employer's report, a broker's report. The kind lives on a tag, so
+		// the tags are what tell a return from the paper behind it.
+		handle
+			.select({ documentId: tagLink.targetId, name: tag.name })
+			.from(tagLink)
+			.innerJoin(tag, eq(tag.id, tagLink.tagId))
+	]);
 
 	const tagsOf = new Map<string, string[]>();
 	for (const row of tags)
@@ -181,7 +229,20 @@ export async function loadTaxYears(
 			})
 	];
 
-	const cards = taxYearCards({ engagements, filings, overrides, people, thisYear });
+	const residenceInput = {
+		engagements,
+		filings,
+		overrides,
+		people,
+		thisYear,
+		residenceDeclarations: declarations,
+		residenceStatements: statements
+			.filter((s) => s.role === 'residence')
+			.map((s) => ({ personId: s.personId, year: s.year, country: s.country })),
+		citizenship: Object.fromEntries(people.map((p) => [p.id, p.citizenship]))
+	};
+	const cards = taxYearCards(residenceInput);
+	const residences = taxResidences(residenceInput);
 
 	const shown = (row: (typeof dated)[number]): TaxYearDocument => ({
 		id: row.id,
@@ -222,7 +283,9 @@ export async function loadTaxYears(
 			country: card.country,
 			rows,
 			supporting: onCard.filter((d) => !filed.includes(d)).map(shown),
-			gaps: rows.filter((r) => r.state === 'gap').length
+			gaps: rows.filter((r) => r.state === 'gap').length,
+			reasons: card.reasons,
+			returnKind: card.returnKind
 		};
 	});
 
@@ -235,10 +298,23 @@ export async function loadTaxYears(
 			.map((o) => ({ id: o.id, name: o.name }))
 			.sort((a, b) => a.name.localeCompare(b.name)),
 		cards: drawn,
+		residences,
 		years: grid.years,
 		grid,
 		byPerson: taxYearsByPerson(drawn, grid.years)
 	};
+}
+
+/**
+ * Returns owed and never filed, across the shelf — the banner's share of `missing`.
+ *
+ * Cells, not cards: a card two people owe and neither has filed is two missing
+ * returns. A year still running is not late and does not count, the same rule
+ * every cell on the screen draws itself by.
+ */
+export function taxYearsMissing(payload: TaxYearsPayload | null): number {
+	if (!payload) return 0;
+	return payload.cards.reduce((n, card) => n + card.gaps, 0);
 }
 
 /**
@@ -370,6 +446,127 @@ export async function assignToTaxYear(
  * one, but a constraint violation reaches a person as a 500 rather than as a
  * sentence about what went wrong.
  */
+/**
+ * State where somebody lived in a year, or take the statement back.
+ *
+ * The declaration tier — the only one a person writes, and the only one that
+ * can split a year, because a move is the one thing no derivation can work out.
+ * Writing one does not choose BETWEEN countries: a year with two declarations
+ * owes a return in both, which is what a move actually means.
+ *
+ * Upserts on (person, year, country) the way `setTaxFilingExpected` does on its
+ * own key, so correcting the dates of a declaration already made is the same
+ * gesture as making it.
+ */
+export async function setResidenceDeclaration(
+	input: {
+		personId: string;
+		year: number;
+		country: string;
+		fromOn?: string | null;
+		toOn?: string | null;
+	},
+	handle: Queryable = db
+): Promise<void> {
+	const country = foldCountry(input.country);
+	if (!country) throw new Error(`Not a country code: ${input.country}`);
+
+	await handle
+		.insert(taxResidence)
+		.values({
+			id: uuidv7(),
+			personId: input.personId,
+			year: input.year,
+			country,
+			fromOn: input.fromOn ?? null,
+			toOn: input.toOn ?? null
+		})
+		.onConflictDoUpdate({
+			target: [taxResidence.personId, taxResidence.year, taxResidence.country],
+			set: { fromOn: input.fromOn ?? null, toOn: input.toOn ?? null }
+		});
+}
+
+/**
+ * The year somebody moved, said in one gesture: both halves, split by the day.
+ *
+ * This is the "two returns, one per country" answer on an obligation, and it is
+ * two rows because the year genuinely is two residences. The other answer —
+ * everything on one return and a nil return on the other — is one whole-year
+ * row, which is `setResidenceDeclaration` unchanged. So the choice needs no
+ * table of its own: it IS the declaration, in the shape the household chose.
+ *
+ * One transaction. Half a split year is worse than none: the derivation would
+ * read a whole year in one country and stop asking the question, with the other
+ * country's return quietly no longer the residence return.
+ */
+export async function splitResidenceYear(
+	input: {
+		personId: string;
+		year: number;
+		/** Where they lived until `movedOn`, exclusive of that day. */
+		fromCountry: string;
+		/** Where they lived from `movedOn` onwards. */
+		toCountry: string;
+		/** The first day in the new country, inside `year`. */
+		movedOn: string;
+	},
+	handle: Queryable = db
+): Promise<void> {
+	const from = foldCountry(input.fromCountry);
+	const to = foldCountry(input.toCountry);
+	if (!from || !to) throw new Error('Both halves of a split year need a country code.');
+	if (from === to) throw new Error('A split year needs two different countries.');
+	if (Number(input.movedOn.slice(0, 4)) !== input.year)
+		throw new Error(`That date is not in ${input.year}.`);
+
+	const lastDay = dayBefore(input.movedOn);
+	if (lastDay < `${input.year}-01-01`)
+		throw new Error('A move on the first of January is a whole year in one country.');
+
+	await inTransaction(handle, async (tx) => {
+		await setResidenceDeclaration(
+			{ personId: input.personId, year: input.year, country: from, fromOn: null, toOn: lastDay },
+			tx
+		);
+		await setResidenceDeclaration(
+			{
+				personId: input.personId,
+				year: input.year,
+				country: to,
+				fromOn: input.movedOn,
+				toOn: null
+			},
+			tx
+		);
+	});
+}
+
+/**
+ * Withdraw a declaration, dropping the year back to what can be derived.
+ *
+ * Deliberately not a `expected: false` row like the override table keeps: there
+ * is nothing to suppress here. Removing the statement means "I did not mean to
+ * say that", and the four tiers answer again from whatever else is on record.
+ */
+export async function clearResidenceDeclaration(
+	input: { personId: string; year: number; country: string },
+	handle: Queryable = db
+): Promise<void> {
+	const country = foldCountry(input.country);
+	if (!country) throw new Error(`Not a country code: ${input.country}`);
+
+	await handle
+		.delete(taxResidence)
+		.where(
+			and(
+				eq(taxResidence.personId, input.personId),
+				eq(taxResidence.year, input.year),
+				eq(taxResidence.country, country)
+			)
+		);
+}
+
 export async function setTaxFilingExpected(
 	input: { year: number; country: string; personId?: string; expected: boolean },
 	handle: Queryable = db

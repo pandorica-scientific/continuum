@@ -28,6 +28,7 @@ import { CATEGORY_GROUP_SEED, RESERVE_COLOR_TOKENS } from '$lib/categories';
 import { passwordsMatchError } from '$lib/password-policy';
 import { disableOpenMode, enableOpenMode, isOpenMode } from '$lib/server/auth/open-mode';
 import { asEnumValue, ENUMS } from '$lib/enums';
+import { isCountryCode } from '$lib/countries';
 import { enrollmentLinkDays, passwordMinLength } from '$lib/server/system/policy';
 import { env } from '$env/dynamic/private';
 import {
@@ -165,6 +166,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 				initials: person.initials,
 				role: isAdmin ? person.role : sql<null>`null`,
 				birthYear: isAdmin ? person.birthYear : sql<null>`null`,
+				citizenship: isAdmin ? person.citizenship : sql<null>`null`,
 				deactivatedAt: isAdmin ? person.deactivatedAt : sql<null>`null`,
 				// Created but never enrolled: no password chosen yet.
 				pending: isAdmin ? sql<boolean>`${person.passwordHash} is null` : sql<boolean>`false`
@@ -733,6 +735,15 @@ export const actions = administered({
 		const birthYear = parseBirthYear(String(form.get('birthYear') ?? ''), new Date());
 		if (birthYear === 'invalid') return fail(400, { message: BIRTH_YEAR_ERROR });
 
+		// Asked for at creation so a person does not start without a residence
+		// floor; blank stays blank rather than being guessed from the name.
+		const citizenshipRaw = String(form.get('citizenship') ?? '')
+			.trim()
+			.toUpperCase();
+		const citizenship = citizenshipRaw === '' ? null : citizenshipRaw;
+		if (citizenship !== null && !isCountryCode(citizenship))
+			return fail(400, { message: 'Name the country as a code.' });
+
 		const id = uuidv7();
 		await db.insert(person).values({
 			id,
@@ -740,6 +751,7 @@ export const actions = administered({
 			initials: initialsFor(name),
 			role,
 			birthYear,
+			citizenship,
 			// No password: they choose their own through the enrollment link, so
 			// the administrator creating them never knows it.
 			passwordHash: null
@@ -806,6 +818,35 @@ export const actions = administered({
 			.where(eq(person.id, personId))
 			.returning({ id: person.id });
 		if (!updated[0]) return fail(404, { message: 'No such person.' });
+		return { ok: true };
+	},
+
+	/**
+	 * Citizenship — the floor under tax residence, and the reason it lives here
+	 * rather than on the Tax screen.
+	 *
+	 * A tax year with no filed statement and no role period still owes a return
+	 * somewhere, and this is what says where. Without it that year resolves to
+	 * nothing and raises no obligation at all, silently — so it is a fact about
+	 * the person, recorded once beside their name, not a field on a screen they
+	 * visit once a year.
+	 *
+	 * Blank is allowed and means "not recorded": the residence derivation treats
+	 * an empty floor as contributing nothing, which leaves the grid exactly as it
+	 * was rather than guessing a country from a name.
+	 */
+	setCitizenship: async ({ request, locals }) => {
+		requireAdmin(locals.person!);
+		const form = await request.formData();
+		const personId = asRowId(form.get('personId'));
+		const raw = String(form.get('citizenship') ?? '')
+			.trim()
+			.toUpperCase();
+		const citizenship = raw === '' ? null : raw;
+		if (citizenship !== null && !isCountryCode(citizenship))
+			return fail(400, { message: 'Name the country as a code.' });
+
+		await db.update(person).set({ citizenship }).where(eq(person.id, personId));
 		return { ok: true };
 	},
 

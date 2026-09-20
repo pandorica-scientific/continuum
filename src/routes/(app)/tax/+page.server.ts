@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { asOptionalRowId, asRowId } from '$lib/ids';
+import { isEnumValue } from '$lib/enums';
 import { extname } from 'node:path';
 import { fail } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
@@ -143,6 +144,13 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		// ?add=1 opens the statement dialog on arrival — the same convention the
 		// quick-add menu uses for /documents and /salary.
 		openAdd: url.searchParams.get('add') === '1',
+		// `&year=&country=` opens it on the year an obligation elsewhere is
+		// complaining about, so "Add the 2024 return" lands on the 2024 form
+		// rather than on a blank one the reader has to fill in again.
+		addDefaults: {
+			year: Number(url.searchParams.get('year')) || null,
+			country: (url.searchParams.get('country') ?? '').trim().toUpperCase() || null
+		},
 		// Form values carry the ISO code. Display symbols belong only in labels;
 		// sending "Kč" back through the currency input stored a non-currency.
 		baseCurrency: base,
@@ -190,6 +198,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 						amount: formatMinor(l.amountMinor, s.currency)
 					})),
 					attachments: s.attachments,
+					role: s.role,
 					note: s.note,
 					diverges
 				};
@@ -368,6 +377,11 @@ export const actions: Actions = {
 				currency,
 				grossIncomeMinor: gross,
 				taxPaidMinor: taxPaid,
+				// Blank stays blank: an unclassified statement proves nothing about
+				// residence, which is the honest state until somebody says.
+				role: isEnumValue('tax_statement.role', form.get('role'))
+					? (form.get('role') as 'residence' | 'source')
+					: null,
 				note: String(form.get('note') ?? '').trim() || null,
 				lines,
 				attachments,

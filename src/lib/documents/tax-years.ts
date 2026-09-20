@@ -42,6 +42,15 @@ export interface TaxYearInput {
 		country: string | null;
 		startsOn: string | null;
 		endsOn: string | null;
+		/**
+		 * Which organisation the period is with, so a card can name what raised
+		 * it. Optional: the derivation worked before the screen asked why, and a
+		 * caller that cannot say produces a card with an unnamed reason rather
+		 * than no card.
+		 */
+		organisationId?: string;
+		organisationName?: string;
+		organisationKind?: string;
 	}[];
 	/**
 	 * Filings already on record: a `tax_statement`, or a tax document dated to a
@@ -53,6 +62,32 @@ export interface TaxYearInput {
 	/** Everyone, in the order rows should read. */
 	people: { id: string; name: string }[];
 	thisYear: number;
+	/**
+	 * Rows on `tax_residence`: where somebody SAID they lived, and for which part
+	 * of the year. Two rows in one year are the halves of a year they moved in.
+	 */
+	residenceDeclarations?: {
+		personId: string;
+		year: number;
+		country: string;
+		fromOn: string | null;
+		toOn: string | null;
+	}[];
+	/**
+	 * Statements marked `role = 'residence'` — the return somebody filed because
+	 * they lived there. A statement marked `source` is deliberately absent: it
+	 * proves income arose in a country, never that anybody lived in it.
+	 */
+	residenceStatements?: { personId: string; year: number; country: string }[];
+	/**
+	 * `person.citizenship`, by person id. The floor under the derivation.
+	 *
+	 * Absent or null contributes NOTHING, which is the safe default and not an
+	 * oversight: until a household records citizenship, a year with no paper and
+	 * no work raises no card, exactly as it did before this existed. The tier
+	 * switches itself on when somebody answers.
+	 */
+	citizenship?: Record<string, string | null>;
 }
 
 export interface TaxYearRow {
@@ -60,10 +95,51 @@ export interface TaxYearRow {
 	personName: string;
 }
 
+/**
+ * What raised this card — the one thing a drawn card could not say before.
+ *
+ * The screen offers exactly one way out of an obligation that does not involve
+ * filing anything: end the role period that created it. It can only offer that
+ * if the card remembers which period it was, which is why the reason carries
+ * the organisation rather than just the word "employment".
+ *
+ * `personId` is null only on `added`, the correction that belongs to the card
+ * itself rather than to anybody on it.
+ */
+export interface TaxYearReason {
+	source: 'engagement' | 'filing' | 'residence' | 'added';
+	personId: string | null;
+	country: string;
+	organisationId?: string;
+	organisationName?: string;
+	organisationKind?: string;
+	/** On `residence`: which tier said so, so the panel can say how it knows. */
+	evidence?: ResidenceEvidence;
+}
+
+/**
+ * Which return this is, for the caption under a cell.
+ *
+ * `residence` is the return owed for having LIVED there; `source` is the one a
+ * country wanted because income arose in it — a Polish broker while resident in
+ * Czechia. Telling those two apart is the difference between chasing a resident
+ * form and a non-resident one.
+ *
+ * `unclear` is the year somebody MOVED: two countries from one tier and nothing
+ * filed, so both owe something and neither may claim to be THE return until the
+ * date is said. `unknown` is the different, quieter case of a household that has
+ * recorded no residence evidence at all — no citizenship, no statement, no
+ * country on an employer. Those must not share a word: "residence unclear" on
+ * every cell of a fresh instance is an alarm about a move that never happened.
+ */
+export type TaxReturnKind = 'residence' | 'source' | 'unclear' | 'unknown';
+
 export interface TaxYearCard {
 	year: number;
 	country: string;
 	rows: TaxYearRow[];
+	reasons: TaxYearReason[];
+	returnKind: TaxReturnKind;
 }
 
 const yearOf = (iso: string): number => Number(iso.slice(0, 4));
@@ -88,7 +164,8 @@ function yearsOf(
 	return years;
 }
 
-export function taxYearCards(input: TaxYearInput): TaxYearCard[] {
+/** The folded inputs and the year span, shared by the two things that read them. */
+function prepare(input: TaxYearInput) {
 	const engagements = input.engagements
 		.map((e) => ({ ...e, country: foldCountry(e.country) }))
 		.filter((e): e is typeof e & { country: string } => e.country !== null);
@@ -104,6 +181,64 @@ export function taxYearCards(input: TaxYearInput): TaxYearCard[] {
 		...filings.map((f) => f.year)
 	];
 	const floorYear = dated.length > 0 ? Math.min(...dated) : input.thisYear;
+	return { engagements, filings, floorYear, thisYear: input.thisYear };
+}
+
+/** One person's residence in one year, with the tier that settled it. */
+export interface ResolvedResidence {
+	personId: string;
+	year: number;
+	residence: Residence;
+}
+
+/**
+ * Where everyone lived, year by year, across the span the cards cover.
+ *
+ * Resolved HERE rather than on the server so the whole chain is one pure
+ * function over one payload — and so the year span the cards already compute is
+ * the span residence is asked about, instead of a second opinion about which
+ * years exist.
+ *
+ * Every year is resolved on its own evidence; `residenceForYear` has no
+ * parameter for the year before it. See the module note in `$lib/tax-residence`
+ * for why that absence is the design rather than an omission.
+ */
+export function taxResidences(input: TaxYearInput): ResolvedResidence[] {
+	const { engagements, floorYear, thisYear } = prepare(input);
+	const fold = <T extends { country: string }>(rows: readonly T[]) =>
+		rows
+			.map((row) => ({ ...row, country: foldCountry(row.country) }))
+			.filter((row): row is T & { country: string } => row.country !== null);
+	const declarations = fold(input.residenceDeclarations ?? []);
+	const statements = fold(input.residenceStatements ?? []);
+
+	const resolved: ResolvedResidence[] = [];
+	for (const person of input.people)
+		for (let year = floorYear; year <= thisYear; year++)
+			resolved.push({
+				personId: person.id,
+				year,
+				residence: residenceForYear({
+					declared: declarations
+						.filter((row) => row.personId === person.id && row.year === year)
+						.map((row) => ({ country: row.country, fromOn: row.fromOn, toOn: row.toOn })),
+					statementCountries: statements
+						.filter((row) => row.personId === person.id && row.year === year)
+						.map((row) => row.country),
+					employmentCountries: engagements
+						.filter(
+							(e) => e.personId === person.id && yearsOf(e, floorYear, thisYear).includes(year)
+						)
+						.map((e) => e.country),
+					citizenship: input.citizenship?.[person.id] ?? null
+				})
+			});
+	return resolved;
+}
+
+export function taxYearCards(input: TaxYearInput): TaxYearCard[] {
+	const { engagements, filings, floorYear } = prepare(input);
+	const residences = taxResidences(input);
 
 	// A card exists for every year a role period ran in that country, for every
 	// filing already on record, and for whatever somebody added by hand; a
@@ -114,6 +249,12 @@ export function taxYearCards(input: TaxYearInput): TaxYearCard[] {
 	for (const e of engagements)
 		for (const year of yearsOf(e, floorYear, input.thisYear)) want(year, e.country);
 	for (const f of filings) want(f.year, f.country);
+	// Residence raises a card on its own. A return is owed for having LIVED
+	// somewhere, not for having earned there, so this is the only source that can
+	// put up the year with no role period and no filing — a break, unpaid leave,
+	// a year between jobs — which is exactly the year that used to disappear.
+	for (const resolved of residences)
+		for (const period of resolved.residence.periods) want(resolved.year, period.country);
 	for (const o of input.overrides) {
 		if (o.personId !== null) continue;
 		const country = foldCountry(o.country);
@@ -132,6 +273,12 @@ export function taxYearCards(input: TaxYearInput): TaxYearCard[] {
 				derived.add(e.personId);
 		for (const f of filings)
 			if (f.personId !== null && f.country === country && f.year === year) derived.add(f.personId);
+		for (const resolved of residences)
+			if (
+				resolved.year === year &&
+				resolved.residence.periods.some((period) => period.country === country)
+			)
+				derived.add(resolved.personId);
 
 		const forced = new Map(
 			input.overrides
@@ -141,7 +288,54 @@ export function taxYearCards(input: TaxYearInput): TaxYearCard[] {
 		const rows = input.people
 			.filter((person) => forced.get(person.id) ?? derived.has(person.id))
 			.map((person) => ({ personId: person.id, personName: person.name }));
-		return { year, country, rows };
+
+		// Why this card is here, in the order the panel wants to offer it: the role
+		// period first, because ending one is the only way out that files nothing.
+		const reasons: TaxYearReason[] = [];
+		for (const e of engagements)
+			if (e.country === country && yearsOf(e, floorYear, input.thisYear).includes(year))
+				reasons.push({
+					source: 'engagement',
+					personId: e.personId,
+					country,
+					...(e.organisationId === undefined ? {} : { organisationId: e.organisationId }),
+					...(e.organisationName === undefined ? {} : { organisationName: e.organisationName }),
+					...(e.organisationKind === undefined ? {} : { organisationKind: e.organisationKind })
+				});
+		for (const f of filings)
+			if (f.country === country && f.year === year)
+				reasons.push({ source: 'filing', personId: f.personId, country });
+		// Whose residence, and which tier said so: "because you lived there" is a
+		// different sentence from "because a statement says you did".
+		const here = residences.filter(
+			(r) => r.year === year && r.residence.periods.some((p) => p.country === country)
+		);
+		for (const r of here)
+			reasons.push({
+				source: 'residence',
+				personId: r.personId,
+				country,
+				evidence: r.residence.evidence
+			});
+		if (reasons.length === 0) reasons.push({ source: 'added', personId: null, country });
+
+		// A year no tier could call leaves BOTH countries owing something, so
+		// neither is the residence return yet — ambiguity outranks the country
+		// being in the list, because the employment tier puts both in it. But only
+		// a tier that offered a CHOICE is unclear; one that offered nothing at all
+		// leaves the question unanswered rather than contested.
+		const thisYearsResidences = residences.filter((r) => r.year === year);
+		const judged = here.length > 0 ? here : thisYearsResidences;
+		const torn = judged.some((r) => r.residence.ambiguous && r.residence.candidates.length > 1);
+		const anywhere = thisYearsResidences.some((r) => r.residence.periods.length > 0);
+		const returnKind: TaxReturnKind = torn
+			? 'unclear'
+			: here.length > 0
+				? 'residence'
+				: anywhere
+					? 'source'
+					: 'unknown';
+		return { year, country, rows, reasons, returnKind };
 	});
 
 	// Newest first, then by country: a household looking for a year is almost
@@ -168,6 +362,7 @@ export function taxRowState(filedCount: number, year: number, thisYear: number):
 
 import { ATTACHMENT_KINDS } from '$lib/tax';
 import { foldCountry } from '$lib/countries';
+import { residenceForYear, type Residence, type ResidenceEvidence } from '$lib/tax-residence';
 
 /**
  * Whether a tax document is paper BEHIND a return rather than the return.

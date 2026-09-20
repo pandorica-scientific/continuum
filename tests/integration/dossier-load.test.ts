@@ -149,11 +149,10 @@ describe('the dossier loader', () => {
 		const payload = await loadDossier(incomeTax, 2026, testDb, TODAY);
 		const drawnLabels = payload.cards[0].lanes.map((l) => l.label);
 		// Payslips has something filed, so it draws. The yearly declaration has
-		// neither a filing nor a gap, so it does not. "Contract & HR" is
-		// cadence-less — the card's one general place for a contract or an HR
-		// letter — and stays visible even with nothing in it yet, or there
-		// would be no sign that place exists.
-		expect(drawnLabels).toEqual(['Payslips', 'Contract & HR']);
+		// neither a filing nor a gap, so it does not. The three cadence-less rows
+		// stay visible even with nothing in them yet, or there would be no sign
+		// those places exist — which is the whole point of naming them.
+		expect(drawnLabels).toEqual(['Payslips', 'Annexes', 'Contract', 'HR']);
 	});
 
 	it('a kit card shows three slots and counts the empty ones as missing', async () => {

@@ -44,7 +44,7 @@ beforeEach(async () => {
 });
 
 describe('lanes', () => {
-	it('seeds an employer with the two lanes an employer has', async () => {
+	it('seeds an employer with the rows the employment record reads', async () => {
 		const org = await addOrganisation(
 			{ shelfId: await incomeTaxShelf(db), name: 'Institute', kind: 'employer' },
 			db
@@ -54,7 +54,9 @@ describe('lanes', () => {
 		// employer, so it lives on the tax year card.
 		expect(lanes.map((l) => `${l.label}:${l.cadence}`)).toEqual([
 			'Payslips:monthly',
-			'Contract & HR:none'
+			'Annexes:none',
+			'Contract:none',
+			'HR:none'
 		]);
 	});
 
@@ -82,7 +84,7 @@ describe('lanes', () => {
 			db
 		);
 		await addOrganisation({ shelfId: await incomeTaxShelf(db), name: 'institute' }, db);
-		expect(await lanesFor(first.id, db)).toHaveLength(2);
+		expect(await lanesFor(first.id, db)).toHaveLength(4);
 	});
 
 	it('goes with the organisation', async () => {

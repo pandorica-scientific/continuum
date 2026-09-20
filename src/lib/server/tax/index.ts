@@ -67,6 +67,15 @@ interface StatementInput {
 	currency: string;
 	grossIncomeMinor: bigint;
 	taxPaidMinor: bigint;
+	/**
+	 * Which return this is: the one owed for having LIVED there, or the one the
+	 * country wanted because income arose in it.
+	 *
+	 * Null is not a default, it is "nobody has said" — and it is what a statement
+	 * saved before this existed keeps. Only a `residence` one proves residence,
+	 * so guessing here would settle a year nobody has looked at.
+	 */
+	role?: 'residence' | 'source' | null;
 	note: string | null;
 	lines: { label: string; amountMinor: bigint }[];
 	/** Uploads to file on the Finance shelf and link, in this same commit. */
@@ -252,6 +261,7 @@ export async function saveStatement(input: StatementInput, handle: Db = db): Pro
 		currency,
 		grossIncomeMinor: input.grossIncomeMinor,
 		taxPaidMinor: input.taxPaidMinor,
+		role: input.role ?? null,
 		note: input.note
 	};
 

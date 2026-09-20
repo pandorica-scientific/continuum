@@ -2,6 +2,7 @@
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import { enhance } from '$app/forms';
 	import { DEFAULT_ENROLLMENT_LINK_DAYS, daysPhrase } from '$lib/password-policy';
+	import { countryName, countryOptions } from '$lib/countries';
 
 	// Everything past the name is null for a non-admin — the server withholds it.
 	interface PersonRow {
@@ -10,6 +11,7 @@
 		initials: string;
 		role: 'admin' | 'member' | null;
 		birthYear: number | null;
+		citizenship: string | null;
 		deactivatedAt: Date | null;
 		pending: boolean;
 	}
@@ -35,6 +37,10 @@
 		if (!p.role) return '';
 		const bits: string[] = [p.role];
 		if (p.birthYear) bits.push(`born ${p.birthYear}`);
+		// Said out loud rather than left to the picker below: a household that
+		// has not recorded one gets no residence floor, and no obligation for a
+		// year it worked nowhere.
+		bits.push(p.citizenship ? countryName(p.citizenship) : 'citizenship not set');
 		// Meaningless while the instance is open — nobody needs a password to sign in.
 		if (p.pending && !openMode) bits.push('not enrolled yet');
 		if (p.deactivatedAt) bits.push('deactivated');
@@ -51,6 +57,19 @@
 				<span>{p.name}</span>
 				{#if label}<span class="note">{label}</span>{/if}
 			</span>
+
+			{#if isAdmin}
+				<form method="POST" action="?/setCitizenship" use:enhance class="cit-form">
+					<input type="hidden" name="personId" value={p.id} />
+					<select name="citizenship" aria-label="Citizenship for {p.name}">
+						<option value="">Citizenship —</option>
+						{#each countryOptions() as c (c.code)}
+							<option value={c.code} selected={c.code === p.citizenship}>{c.name}</option>
+						{/each}
+					</select>
+					<button type="submit" class="btn">Save</button>
+				</form>
+			{/if}
 
 			{#if isAdmin && p.id !== me?.id}
 				<span class="row-actions">
@@ -100,6 +119,10 @@
 			<form method="POST" action="?/addPerson" use:enhance class="add-form">
 				<input name="name" placeholder="Name" />
 				<input name="birthYear" placeholder="Birth year" inputmode="numeric" />
+				<select name="citizenship" aria-label="Citizenship">
+					<option value="">Citizenship —</option>
+					{#each countryOptions() as c (c.code)}<option value={c.code}>{c.name}</option>{/each}
+				</select>
 				<select name="role">
 					<option value="member">Member</option>
 					<option value="admin">Administrator</option>
@@ -113,6 +136,14 @@
 </div>
 
 <style>
+	/* Beside the name, because citizenship is a fact about the person rather
+	   than an administrative action taken against them — it sits with the row,
+	   not in the row's buttons. */
+	.cit-form {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-3);
+	}
 	/* Mirrors the module list on the same screen: a bordered row per entry. */
 	.people {
 		display: flex;
