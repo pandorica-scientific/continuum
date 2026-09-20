@@ -44,6 +44,7 @@ CREATE TABLE "person" (
 	"initials" text NOT NULL,
 	"role" text DEFAULT 'member' NOT NULL,
 	"birth_year" integer,
+	"citizenship" text,
 	"password_hash" text,
 	"auth_generation" integer DEFAULT 0 NOT NULL,
 	"deactivated_at" timestamp with time zone,
@@ -697,6 +698,16 @@ CREATE TABLE "tax_filing_override" (
 	"expected" boolean NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "tax_residence" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"person_id" uuid NOT NULL,
+	"year" integer NOT NULL,
+	"country" text NOT NULL,
+	"from_on" date,
+	"to_on" date,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "tax_statement" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"person_id" uuid NOT NULL,
@@ -705,6 +716,7 @@ CREATE TABLE "tax_statement" (
 	"currency" text NOT NULL,
 	"gross_income_minor" bigint NOT NULL,
 	"tax_paid_minor" bigint NOT NULL,
+	"role" text,
 	"note" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -1029,6 +1041,7 @@ ALTER TABLE "equity_grant" ADD CONSTRAINT "equity_grant_document_id_document_id_
 ALTER TABLE "equity_tranche" ADD CONSTRAINT "equity_tranche_grant_id_equity_grant_id_fk" FOREIGN KEY ("grant_id") REFERENCES "public"."equity_grant"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "security_price" ADD CONSTRAINT "security_price_currency_currency_code_fk" FOREIGN KEY ("currency") REFERENCES "public"."currency"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tax_filing_override" ADD CONSTRAINT "tax_filing_override_person_id_person_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."person"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "tax_residence" ADD CONSTRAINT "tax_residence_person_id_person_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."person"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tax_statement" ADD CONSTRAINT "tax_statement_person_id_person_id_fk" FOREIGN KEY ("person_id") REFERENCES "public"."person"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tax_statement" ADD CONSTRAINT "tax_statement_currency_currency_code_fk" FOREIGN KEY ("currency") REFERENCES "public"."currency"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tax_statement_line" ADD CONSTRAINT "tax_statement_line_statement_id_tax_statement_id_fk" FOREIGN KEY ("statement_id") REFERENCES "public"."tax_statement"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -1148,6 +1161,7 @@ CREATE INDEX "equity_tranche_grant_idx" ON "equity_tranche" USING btree ("grant_
 CREATE INDEX "equity_tranche_vests_idx" ON "equity_tranche" USING btree ("grant_id","vests_on");--> statement-breakpoint
 CREATE INDEX "security_price_currency_idx" ON "security_price" USING btree ("currency");--> statement-breakpoint
 CREATE INDEX "tax_filing_override_person_idx" ON "tax_filing_override" USING btree ("person_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "tax_residence_unique_idx" ON "tax_residence" USING btree ("person_id","year","country");--> statement-breakpoint
 CREATE INDEX "tax_statement_currency_idx" ON "tax_statement" USING btree ("currency");--> statement-breakpoint
 CREATE UNIQUE INDEX "tax_statement_unique_idx" ON "tax_statement" USING btree ("person_id","year","country");--> statement-breakpoint
 CREATE INDEX "tax_statement_line_statement_idx" ON "tax_statement_line" USING btree ("statement_id");--> statement-breakpoint
@@ -1365,6 +1379,9 @@ ALTER TABLE place ADD CONSTRAINT place_kind_check
 ALTER TABLE bottle ADD CONSTRAINT bottle_type_check
 	CHECK (type in ('wine', 'champagne', 'whisky', 'bourbon', 'gin', 'rum', 'beer', 'liqueur', 'cognac', 'other'));
 --> statement-breakpoint
+ALTER TABLE tax_statement ADD CONSTRAINT tax_statement_role_check
+	CHECK (role in ('residence', 'source'));
+--> statement-breakpoint
 ALTER TABLE entity ADD CONSTRAINT entity_kind_check
 	CHECK (kind in ('person', 'account', 'transaction', 'transaction_split', 'property', 'tenancy', 'loan', 'document', 'contact', 'tag', 'subject', 'tax_statement', 'organisation', 'trip', 'bottle', 'recipe'));
 --> statement-breakpoint
@@ -1372,6 +1389,12 @@ ALTER TABLE entity ADD CONSTRAINT entity_kind_check
 -- ---- Singletons and shapes ----
 -- One row, ever: the wizard is claimed or it is not.
 ALTER TABLE setup_claim ADD CONSTRAINT setup_claim_singleton CHECK (claimed = true);
+--> statement-breakpoint
+-- Two upper-case letters, the same shape document.country, tax_statement.country
+-- and tax_residence.country carry. One folding rule has to serve all of them,
+-- or a person and their paper stop agreeing about which country is which.
+ALTER TABLE person ADD CONSTRAINT person_citizenship_check
+	CHECK (citizenship IS NULL OR citizenship ~ '^[A-Z]{2}$');
 --> statement-breakpoint
 ALTER TABLE broker_import_state ADD CONSTRAINT broker_import_state_singleton
 	CHECK (id = 'global');
@@ -1487,6 +1510,16 @@ ALTER TABLE recipe ADD CONSTRAINT recipe_servings_check
 -- one folding rule has to serve all three, or a card and its paper stop matching.
 ALTER TABLE tax_filing_override ADD CONSTRAINT tax_filing_override_country_check
 	CHECK (country ~ '^[A-Z]{2}$');
+--> statement-breakpoint
+-- The same two letters, for the same reason: a declared residence and the
+-- paper that would prove it have to fold to one spelling or they never meet.
+ALTER TABLE tax_residence ADD CONSTRAINT tax_residence_country_check
+	CHECK (country ~ '^[A-Z]{2}$');
+--> statement-breakpoint
+-- A period that ends before it starts is not a half-year, it is a typo, and
+-- it would silently contribute no residence to the year it claims to cover.
+ALTER TABLE tax_residence ADD CONSTRAINT tax_residence_period_check
+	CHECK (from_on IS NULL OR to_on IS NULL OR from_on <= to_on);
 --> statement-breakpoint
 -- NULLS NOT DISTINCT, because person_id IS NULL is the card ITSELF and there is
 -- exactly one of those per year and country. Postgres treats nulls as distinct by

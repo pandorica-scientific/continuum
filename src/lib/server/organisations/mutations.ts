@@ -10,7 +10,7 @@
 import { asc, count, eq, sql } from 'drizzle-orm';
 import postgres from 'postgres';
 import { uuidv7 } from 'uuidv7';
-import { db, type Queryable } from '$lib/server/db';
+import { db, inTransaction, type Queryable } from '$lib/server/db';
 import {
 	document,
 	documentLink,
@@ -22,6 +22,7 @@ import {
 import type { EnumValue } from '$lib/enums';
 import { foldCountry } from '$lib/countries';
 import { attachmentKind } from '$lib/tax';
+import { dayBefore } from '$lib/dates';
 
 export const ORGANISATION_NAME_TAKEN = 'An organisation with that name already exists.';
 export const ORGANISATION_IN_USE =
@@ -164,9 +165,30 @@ export const LANE_PRESETS: Record<EnumValue<'organisation.kind'>, LanePreset[]> 
 			cadence: 'monthly',
 			conditions: [{ field: 'type', op: 'is', value: 'payslip' }]
 		},
+		// Then three rows with no rhythm, in the order the employment record reads
+		// them. One lane called "Contract & HR" answered "is anything on file"
+		// with a single number, and the two questions a household actually asks —
+		// is the contract here, and has it been amended — were the same number.
+		//
+		// ANNEXES LEADS, because lanes are tried in order and a first match wins:
+		// an amendment is a `contract` too, so Contract below would take it. The
+		// name test catches the ordinary case and nothing else; anything named in
+		// another language is dragged in, which is what an empty labelled lane is
+		// for. An empty one is a finding — "nothing has amended this" — while a
+		// wrong one is noise.
+		{
+			label: 'Annexes',
+			cadence: 'none',
+			conditions: [{ field: 'name', op: 'contains', value: 'annex' }]
+		},
+		{
+			label: 'Contract',
+			cadence: 'none',
+			conditions: [{ field: 'type', op: 'is', value: 'contract' }]
+		},
 		// Last and matching everything: lanes are tried in order, so this catches
-		// whatever the others didn't claim — the contract itself, its
-		// amendments, a raise or bonus letter, anything from HR.
+		// whatever the others didn't claim — a raise letter, a bonus letter, the
+		// employer's earnings report, anything from HR.
 		//
 		// No yearly lane, deliberately. A declaration is one per person per year
 		// and not one per employer: a year worked at two companies is filed once,
@@ -174,7 +196,7 @@ export const LANE_PRESETS: Record<EnumValue<'organisation.kind'>, LanePreset[]> 
 		// obligation. It lives on the tax year card, which is keyed by the year
 		// rather than by whoever happened to be paying. `authority` keeps its
 		// yearly lane — a tax office really does expect one filing a year.
-		{ label: 'Contract & HR', cadence: 'none', conditions: [] }
+		{ label: 'HR', cadence: 'none', conditions: [] }
 	],
 	authority: [
 		{
@@ -483,6 +505,54 @@ export async function endEngagement(
 	handle: Queryable = db
 ): Promise<void> {
 	await handle.update(engagement).set({ endsOn }).where(eq(engagement.id, id));
+}
+
+/**
+ * A promotion: close the role somebody held and open the one they now hold.
+ *
+ * TWO PERIODS, never an edit to one. A lane counts the filings it expected from
+ * the earliest start across every period, so overwriting the title and the date
+ * would move the beginning forward and quietly erase every missing month before
+ * the promotion — the arithmetic `engagementSpan` documents, seen from the other
+ * side.
+ *
+ * The old period ends the day BEFORE the new one starts, so no payslip can
+ * belong to both. One transaction, because a promotion that closed a role and
+ * failed to open the next would read as somebody having left.
+ */
+export async function promoteEngagement(
+	input: { id: string; role: string | null; startsOn: string },
+	handle: Queryable = db
+): Promise<{ id: string }> {
+	const [current] = await handle
+		.select({
+			organisationId: engagement.organisationId,
+			personId: engagement.personId,
+			startsOn: engagement.startsOn
+		})
+		.from(engagement)
+		.where(eq(engagement.id, input.id));
+	if (!current) throw new Error('That role period is no longer there.');
+	// A promotion cannot predate the role it promotes: the closing date would
+	// land before the opening one, which the CHECK on the table refuses anyway.
+	if (current.startsOn !== null && input.startsOn <= current.startsOn)
+		throw new Error('A promotion starts after the role it follows.');
+
+	const ended = dayBefore(input.startsOn);
+	const id = uuidv7();
+	await inTransaction(handle, async (tx) => {
+		await tx.update(engagement).set({ endsOn: ended }).where(eq(engagement.id, input.id));
+		await tx.insert(engagement).values({
+			id,
+			organisationId: current.organisationId,
+			personId: current.personId,
+			role: input.role?.trim() || null,
+			startsOn: input.startsOn,
+			endsOn: null,
+			documentId: null
+		});
+	});
+	return { id };
 }
 
 /** Remove a role period entered by mistake. Ending one is `endEngagement`. */

@@ -117,6 +117,7 @@
 			prefillTotals={data.prefillTotals}
 			baseCurrency={data.baseCurrency}
 			existing={editing === 'new' ? null : editing}
+			defaults={data.addDefaults}
 			onclose={() => (editing = null)}
 		/>
 	{/key}

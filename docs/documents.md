@@ -149,44 +149,68 @@ _proposes_ one and a person confirms; matching alone cannot say which of two
 lanes on one card holds a payslip when both match it. The Lane picker in the
 inspector is where that is changed afterwards.
 
-### Tax years
+### Income & Tax: what earned, and what it made you owe
 
-Income & Tax has two tabs, because it answers two questions. **Employers** is
-the cards above: which payslip never arrived, and what HR has sent. **Tax
-years** is one card per year and country — _2025 · Czech Republic_ — with a row
-per person who owes a return that year.
+This shelf is one derivation read two ways, so it has two views rather than two
+tabs of unrelated things. **Timeline** puts income above and tax below on one
+axis of years. **Year dossier** puts the same thing one year to a card, income
+on the left and the returns it produced on the right.
+
+**Everything above decides everything below.** A role period with a Czech
+employer is a year a Czech return is owed. Drawing the two halves apart — which
+is what the old Employers and Tax years tabs did — left a missing return looking
+like a fact about Czechia rather than a consequence of a job somebody could
+simply close.
+
+**A span is a relationship.** Each income row draws one bar across the years its
+role periods cover, in that country's colour: solid while paper is still
+arriving, dashed where nobody recorded the dates and the years are inferred from
+where the documents landed. Open a row and the employment record unfolds under
+it — the positions held, the payslips month by month, and the contract, annexes
+and HR paper that keep no rhythm. `Promotion` closes the role held and opens the
+next the following day, because a lane counts expected filings from the earliest
+start and overwriting the title would erase every month before it.
+
+**A return is owed because you were resident, not because you earned.** A year
+with no work, no investments and no rent still owes one where you lived, as a
+nil return. Residence is resolved a year at a time through four tiers — what you
+said, a filed statement marked as the residence return, the countries you worked
+in, then citizenship — and nothing carries over from the year before. The
+residence row says which tier answered, in its own words: _from the filed
+statement_, _from work · prove it_.
 
 **An annual return is one filing per person per year, not one per employer.** A
 year worked at two companies is filed once, so the year owns the card and the
-employer does not. An employer's card carries payslips and HR paper and nothing
-yearly at all.
+employer does not.
 
 **A card is drawn, never stored.** The years run from the earliest job or
-payslip to this one. The countries are the ones this household has already
-filed in — from a tax statement, or from a document that says which country it
-is from. Nothing is guessed: with no country known anywhere, the tab offers to
-add the first year by hand and draws nothing.
+payslip to this one, and the countries are the ones something already points at.
+Nothing is guessed: with no country known anywhere, the view offers to add the
+first year by hand and draws nothing.
 
-**A person is on a year they earned in**, by a job overlapping it or a payslip
-inside it. A row is green once a tax document for that year and country names
-that person, red once the year has ended with nothing filed, and quiet grey for
-the year still running — a return for a year that has not finished is not late.
+**Every cell says which return it is short of** — the residence return, or a
+second one a country wanted because income arose in it. A year nobody has dated
+a move in says _residence unclear_ instead, because both countries still owe
+something and neither may claim to be the return.
 
-**A joint return fills both rows.** It is one document naming two people, which
-is exactly what happened, so it is filed once and counts twice.
+**Press a cell and it says why it exists.** The role period that raised it, with
+the one way out that files nothing: end that period before the year and the
+obligation goes on its own. Where the year is the one somebody moved in, the
+panel offers the two honest answers — two returns, one per country, or
+everything on one with a nil return on the other — and both are stored as what
+they actually are, a declaration of where you lived.
 
-**Supporting paper** is everything else with that year and country: the
-employer's earnings report, the broker's report. It has no rhythm, so it is
-listed rather than celled.
+**A joint return fills both people's rows.** It is one document naming two
+people, which is exactly what happened, so it is filed once and counts twice.
 
-**Dragging a document onto a row** types it, dates it to the whole year, gives
-it the card's country and links it to that person, in one gesture. Dropping it
-on Supporting paper sets the year and country only — an employer's report is
-not a return, and calling it one would close a gap that is still open.
+**Dragging a document onto a cell** types it, dates it to the whole year, gives
+it the cell's country and links it to the people who owe that return, in one
+gesture. Dropping it on an income row files it against that counterparty and
+lets its lanes place it.
 
 **Add and Dismiss are for when the derivation is wrong.** Add a year for a
-country nothing points at yet; Dismiss a card for a year you do not file there.
-Remove takes one person off a return. None of the three touches a document.
+country nothing points at yet; "we do not file here" removes a card for a year
+you do not file in. Neither touches a document.
 
 ### The Inbox is a queue
 

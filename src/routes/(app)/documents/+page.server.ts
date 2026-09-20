@@ -22,7 +22,12 @@ import { createCard } from '$lib/server/documents/cards';
 import { loadQueue } from '$lib/server/documents/queue-load';
 import {
 	assignToTaxYear,
+	clearResidenceDeclaration,
 	loadTaxYears,
+	taxYearsMissing,
+	setResidenceDeclaration,
+	splitResidenceYear,
+	type TaxYearsPayload,
 	setTaxFilingExpected
 } from '$lib/server/documents/tax-years';
 import {
@@ -43,6 +48,7 @@ import {
 	deleteOrganisation,
 	endEngagement,
 	listOrganisations,
+	promoteEngagement,
 	renameOrganisation,
 	setOrganisationCountry,
 	setOrganisationEmoji,
@@ -198,13 +204,21 @@ const bannerToday = (): string => new Date().toISOString().slice(0, 10);
  * `accounts` and `gaps` are coverage facts, not document-row counts, so they
  * come from the coverage loader rather than being recomputed here.
  */
-async function tileFactsFor(shelfRow: ShelfRow, dossier: DossierPayload | null) {
+async function tileFactsFor(
+	shelfRow: ShelfRow,
+	dossier: DossierPayload | null,
+	taxYears: TaxYearsPayload | null
+) {
 	const facts = await shelfFacts(shelfRow);
 	if (dossier)
 		return {
 			...facts,
 			cards: dossier.cards.filter((c) => c.id !== null).length,
-			missing: dossierMissing(dossier)
+			// Lane gaps AND unfiled returns. On a shelf that draws both halves on one
+			// screen, counting only the lanes put "missing 0" above a view saying
+			// eight returns never arrived — the banner answering a narrower question
+			// than the screen under it reads as the screen being wrong.
+			missing: dossierMissing(dossier) + taxYearsMissing(taxYears)
 		};
 	if (templateEngine(shelfRow.template) !== 'completeness') return facts;
 	return {
@@ -278,15 +292,17 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 				)
 			: null;
 
-	// Two tabs, and only on the one shelf the application writes tax paper to.
-	// The tab is where in a screen a person is, which is what the URL is for —
-	// the same place the view, the filters, the group and the sort already live.
+	// Two views of ONE screen, and only on the shelf the application writes tax
+	// paper to. The view is where in a screen a person is, which is what the URL
+	// is for — the same place the filters, the group and the sort already live.
+	//
+	// Both halves load for both views. Income and tax are one derivation now: the
+	// Timeline draws them on one axis and the Year dossier puts them either side
+	// of one card, so loading one without the other would leave half of each view
+	// unable to say why anything on it is there.
 	const hasTabs = shelfRow?.key === SYSTEM_SHELF_KEYS.incomeTax && engine === 'dossier';
-	const tab = hasTabs ? (url.searchParams.get('tab') === 'years' ? 'years' : 'employers') : null;
-	const taxYears = tab === 'years' ? await loadTaxYears(db, bannerToday()) : null;
-	// Household or per person — the same question two ways, so the same URL.
-	const taxView: 'household' | 'person' =
-		url.searchParams.get('people') === '1' ? 'person' : 'household';
+	const tab = hasTabs ? (url.searchParams.get('tab') === 'dossier' ? 'dossier' : 'timeline') : null;
+	const taxYears = hasTabs ? await loadTaxYears(db, bannerToday()) : null;
 
 	/** One record a document is filed against, ready to draw as a chip. */
 	interface DocumentLinkRow extends TargetRow {
@@ -543,7 +559,6 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		isAdmin,
 		tab,
 		taxYears,
-		taxView,
 		// The shelf's own default, so Finance opens by year and Identity by who
 		// it is about.
 		group: url.searchParams.get('group') ?? DEFAULT_GROUP,
@@ -578,7 +593,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 				},
 		/** The three figures, chosen by the shelf's engine. */
 		tiles: shelfRow
-			? shelfTiles(engine!, await tileFactsFor(shelfRow, dossier))
+			? shelfTiles(engine!, await tileFactsFor(shelfRow, dossier, taxYears))
 			: archiveTiles(await archiveFacts()),
 		/** The rail's third section. Counted behind the same read rule as everything else here. */
 		organisations: await listOrganisations(db),
@@ -780,6 +795,102 @@ export const actions: Actions = {
 		if (!isCountryCode(country)) return fail(400, { message: 'Name the country as a code.' });
 
 		await assignToTaxYear({ documentId, year, country, personIds, supporting }, db);
+		return { ok: true };
+	},
+
+	/**
+	 * "I lived here that year" — the tier no derivation can reach.
+	 *
+	 * Two of these in one year are the halves of a year somebody moved in, and
+	 * both halves owe a return; this action states one side at a time rather
+	 * than asking for a move date and guessing what it implies.
+	 */
+	setResidence: async ({ request }) => {
+		const form = await request.formData();
+		const personId = String(form.get('personId') ?? '').trim();
+		const year = Number(form.get('year'));
+		const country = String(form.get('country') ?? '')
+			.trim()
+			.toUpperCase();
+		// Blank is "the whole year", which is the common case and not an error.
+		const day = (key: string): string | null => {
+			const raw = String(form.get(key) ?? '').trim();
+			return raw === '' ? null : raw;
+		};
+		const fromOn = day('fromOn');
+		const toOn = day('toOn');
+
+		if (!personId) return fail(400, { message: 'Whose residence?' });
+		if (!Number.isInteger(year) || year < 1900 || year > 2200)
+			return fail(400, { message: 'That year does not look right.' });
+		if (!isCountryCode(country)) return fail(400, { message: 'Name the country as a code.' });
+
+		const dated = /^\d{4}-\d{2}-\d{2}$/;
+		for (const value of [fromOn, toOn])
+			if (value !== null && !dated.test(value))
+				return fail(400, { message: 'Give a date as YYYY-MM-DD, or leave it blank.' });
+		// A date outside the year it claims to divide would store cleanly and
+		// then contribute nothing, which is the worst way to be wrong.
+		for (const value of [fromOn, toOn])
+			if (value !== null && Number(value.slice(0, 4)) !== year)
+				return fail(400, { message: `That date is not in ${year}.` });
+		if (fromOn !== null && toOn !== null && fromOn > toOn)
+			return fail(400, { message: 'That period ends before it starts.' });
+
+		await setResidenceDeclaration({ personId, year, country, fromOn, toOn }, db);
+		return { ok: true };
+	},
+
+	/**
+	 * "Two returns, one per country" — the year somebody moved, split by the day.
+	 *
+	 * The other answer on that panel, everything on one return and a nil return
+	 * on the other, is `setResidence` for the whole year: it is the same
+	 * declaration in a different shape, which is why neither needs a table of
+	 * its own.
+	 */
+	splitResidence: async ({ request }) => {
+		const form = await request.formData();
+		const personId = String(form.get('personId') ?? '').trim();
+		const year = Number(form.get('year'));
+		const fromCountry = String(form.get('fromCountry') ?? '')
+			.trim()
+			.toUpperCase();
+		const toCountry = String(form.get('toCountry') ?? '')
+			.trim()
+			.toUpperCase();
+		const movedOn = String(form.get('movedOn') ?? '').trim();
+
+		if (!personId) return fail(400, { message: 'Whose residence?' });
+		if (!Number.isInteger(year) || year < 1900 || year > 2200)
+			return fail(400, { message: 'That year does not look right.' });
+		if (!isCountryCode(fromCountry) || !isCountryCode(toCountry))
+			return fail(400, { message: 'Name both countries as codes.' });
+		if (!/^\d{4}-\d{2}-\d{2}$/.test(movedOn))
+			return fail(400, { message: 'Give the day of the move as YYYY-MM-DD.' });
+
+		try {
+			await splitResidenceYear({ personId, year, fromCountry, toCountry, movedOn }, db);
+		} catch (error) {
+			return fail(400, {
+				message: error instanceof Error ? error.message : 'Could not split that year.'
+			});
+		}
+		return { ok: true };
+	},
+
+	/** Take a declaration back, and let the four tiers answer again. */
+	clearResidence: async ({ request }) => {
+		const form = await request.formData();
+		const personId = String(form.get('personId') ?? '').trim();
+		const year = Number(form.get('year'));
+		const country = String(form.get('country') ?? '')
+			.trim()
+			.toUpperCase();
+		if (!personId || !Number.isInteger(year) || !isCountryCode(country))
+			return fail(400, { message: 'Whose residence, which year, and where?' });
+
+		await clearResidenceDeclaration({ personId, year, country }, db);
 		return { ok: true };
 	},
 
@@ -1331,6 +1442,30 @@ export const actions: Actions = {
 		} catch (error) {
 			return fail(400, {
 				message: error instanceof Error ? error.message : 'Could not close the role.'
+			});
+		}
+		return { ok: true };
+	},
+
+	/**
+	 * A promotion: the role held closes, the role now held opens.
+	 *
+	 * One action rather than "end it" followed by "add one", because the two
+	 * halves are the same fact and a promotion that only closed a period would
+	 * read as somebody having left the company.
+	 */
+	promoteEngagement: async ({ request }) => {
+		const form = await request.formData();
+		const id = String(form.get('id') ?? '').trim();
+		const startsOn = String(form.get('startsOn') ?? '').trim();
+		if (!id) return fail(400, { message: 'Which role period?' });
+		if (!/^\d{4}-\d{2}-\d{2}$/.test(startsOn))
+			return fail(400, { message: 'Give the day the new role started as YYYY-MM-DD.' });
+		try {
+			await promoteEngagement({ id, role: String(form.get('role') ?? '') || null, startsOn }, db);
+		} catch (error) {
+			return fail(400, {
+				message: error instanceof Error ? error.message : 'Could not record the promotion.'
 			});
 		}
 		return { ok: true };

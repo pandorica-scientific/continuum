@@ -18,6 +18,7 @@
 		gross: string;
 		taxPaid: string;
 		lines: { label: string; amount: string }[];
+		role: 'residence' | 'source' | null;
 		note: string | null;
 	}
 
@@ -28,6 +29,7 @@
 		prefillTotals,
 		baseCurrency,
 		existing,
+		defaults,
 		onclose
 	}: {
 		people: { id: string; name: string }[];
@@ -36,6 +38,12 @@
 		prefillTotals: Record<string, { amount: string; months: number }>;
 		baseCurrency: string;
 		existing: Existing | null;
+		/**
+		 * What a NEW statement opens on, where the caller knows: the year and
+		 * country an obligation on another screen is asking about. Ignored while
+		 * editing — an existing statement's own values always win.
+		 */
+		defaults?: { year: number | null; country: string | null } | null;
 		onclose: () => void;
 	} = $props();
 
@@ -43,8 +51,9 @@
 	// overwrite what they had typed.
 	const start = untrack(() => ({
 		personId: existing?.personId ?? (people[0]?.id || ''),
-		year: String(existing?.year ?? new Date().getFullYear() - 1),
-		country: existing?.country ?? '',
+		year: String(existing?.year ?? defaults?.year ?? new Date().getFullYear() - 1),
+		country: existing?.country ?? defaults?.country ?? '',
+		role: existing?.role ?? '',
 		currency: existing?.currencyCode ?? baseCurrency,
 		gross: existing?.gross ?? '',
 		taxPaid: existing?.taxPaid ?? '',
@@ -57,6 +66,7 @@
 	let personId = $state(start.personId);
 	let year = $state(start.year);
 	let country = $state(start.country);
+	let role = $state<string>(start.role);
 	let currency = $state(start.currency);
 	let gross = $state(start.gross);
 	let taxPaid = $state(start.taxPaid);
@@ -138,6 +148,18 @@
 			<label>
 				<span>Country</span>
 				<input class="tax-country" name="country" placeholder="CZ" bind:value={country} />
+			</label>
+			<label>
+				<!-- Which return this is, and it is not bookkeeping: only a return
+				     filed because you LIVED there proves residence, and residence is
+				     what makes a return owed at all. Blank stays blank — an
+				     unclassified statement settles nothing. -->
+				<span>Which return</span>
+				<select name="role" bind:value={role}>
+					<option value="">Not said</option>
+					<option value="residence">I lived here that year</option>
+					<option value="source">Income arose here</option>
+				</select>
 			</label>
 			<label>
 				<span>Currency</span>

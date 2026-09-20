@@ -22,7 +22,8 @@
 	import CoverageView from '$lib/statements/CoverageView.svelte';
 	import DossierView from '$lib/documents/DossierView.svelte';
 	import QueueView from '$lib/documents/QueueView.svelte';
-	import TaxYearView from '$lib/documents/TaxYearView.svelte';
+	import TimelineView from '$lib/documents/TimelineView.svelte';
+	import YearDossierView from '$lib/documents/YearDossierView.svelte';
 	import WalletView from '$lib/documents/WalletView.svelte';
 	import DocumentsRail from '$lib/documents/DocumentsRail.svelte';
 	import { documentFileHref, fileKindForExt } from '$lib/ui/file-viewer';
@@ -463,15 +464,19 @@
 
 {#snippet tabs()}
 	<!-- The same control the Cards/List switch is: two views of one shelf,
-	     not two loose buttons. -->
+	     not two loose buttons.
+
+	     Timeline reads the career; Year dossier reads one year. What was here
+	     before — Employers and Tax years — was two screens for one derivation,
+	     and a reader on either could not see that the first decided the second. -->
 	<div class="tabs">
 		<Segmented
 			options={[
-				{ value: 'employers', label: 'Employers' },
-				{ value: 'years', label: 'Tax years' }
+				{ value: 'timeline', label: 'Timeline' },
+				{ value: 'dossier', label: 'Year dossier' }
 			]}
-			value={data.tab ?? 'employers'}
-			onchange={(value) => navigate({ tab: value === 'years' ? 'years' : null, doc: null })}
+			value={data.tab ?? 'timeline'}
+			onchange={(value) => navigate({ tab: value === 'dossier' ? 'dossier' : null, doc: null })}
 		/>
 	</div>
 {/snippet}
@@ -767,21 +772,30 @@
 					selectedId={data.selected?.id}
 					onopen={(id) => navigate({ doc: id })}
 				/>
-			{:else if data.view === 'shelf' && data.tab === 'years' && data.taxYears}
-				<!-- An employer card answers "which payslip never arrived"; a tax year
-				     card answers "is this year filed". Two questions, one shelf,
-				     because the paper moves between them and a shelf is where paper
-				     lives. -->
+			{:else if data.view === 'shelf' && data.tab && data.taxYears && data.dossier}
+				<!-- Income and tax on one screen, two ways of reading it. What earned
+				     decides what is owed, so the shelf draws both halves at once and
+				     never asks the reader to hold one of them in their head. -->
 				{@render tabs()}
-				<TaxYearView
-					years={data.taxYears}
-					view={data.taxView}
-					thisYear={Number(today.slice(0, 4))}
-					onopen={(id) => navigate({ doc: id })}
-					onview={(view) => navigate({ people: view === 'person' ? '1' : null, doc: null })}
-				/>
+				{#if data.tab === 'dossier'}
+					<YearDossierView
+						dossier={data.dossier}
+						years={data.taxYears}
+						people={data.householdPeople}
+						thisYear={Number(today.slice(0, 4))}
+						onopen={(id) => navigate({ doc: id })}
+					/>
+				{:else}
+					<TimelineView
+						dossier={data.dossier}
+						years={data.taxYears}
+						people={data.householdPeople}
+						thisYear={Number(today.slice(0, 4))}
+						onopen={(id) => navigate({ doc: id })}
+						onyear={(year) => navigate({ year: String(year) })}
+					/>
+				{/if}
 			{:else if data.view === 'shelf' && data.layout === 'dossier' && data.dossier}
-				{#if data.tab}{@render tabs()}{/if}
 				<!-- One card per unit, with what it owes you and what never arrived. -->
 				<DossierView
 					dossier={data.dossier}

@@ -27,6 +27,14 @@ export const person = pgTable('person', {
 	// tokens, 'member' may not. These are the only two valid values.
 	role: text('role').$type<'admin' | 'member'>().notNull().default('member'),
 	birthYear: integer('birth_year'),
+	// ISO 3166-1 alpha-2, upper case. The floor under tax residence: a year
+	// with no filed statement and no role period still owes a return
+	// somewhere, and without this the derivation resolves that year to
+	// nothing and raises no obligation at all — silently, which is the worst
+	// way for a screen about missing filings to be wrong. Null only on a
+	// household created before this shipped; the Tax screen asks rather than
+	// assuming one from a name or a bank.
+	citizenship: text('citizenship'),
 	// Null between "created by an admin" and "enrolled via the one-time link".
 	// A null hash can never satisfy a sign-in — see verifyPassword.
 	passwordHash: text('password_hash'),
@@ -125,4 +133,10 @@ export const settings = pgTable('settings', {
 export const authSql = `
 -- One row, ever: the wizard is claimed or it is not.
 ALTER TABLE setup_claim ADD CONSTRAINT setup_claim_singleton CHECK (claimed = true);
+--> statement-breakpoint
+-- Two upper-case letters, the same shape document.country, tax_statement.country
+-- and tax_residence.country carry. One folding rule has to serve all of them,
+-- or a person and their paper stop agreeing about which country is which.
+ALTER TABLE person ADD CONSTRAINT person_citizenship_check
+	CHECK (citizenship IS NULL OR citizenship ~ '^[A-Z]{2}$');
 `;

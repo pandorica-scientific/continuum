@@ -38,6 +38,18 @@ export function monthsBetween(from: string, to: string): number {
 }
 
 /**
+ * The day before an ISO date.
+ *
+ * For a period that ends where the next one begins: a promotion closes the old
+ * role the day before the new one starts, so the two do not both claim the
+ * handover day. Subtracting one from the day number would produce `2026-03-00`
+ * at the start of a month, which stores cleanly and then compares wrongly.
+ */
+export function dayBefore(day: string): string {
+	return new Date(Date.parse(`${day}T00:00:00Z`) - MS_PER_DAY).toISOString().slice(0, 10);
+}
+
+/**
  * Today as the wall clock reads it, `YYYY-MM-DD`.
  *
  * `toISOString()` is the UTC day, which is yesterday every evening east of

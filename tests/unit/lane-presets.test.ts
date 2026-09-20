@@ -17,8 +17,20 @@ describe('LANE_PRESETS', () => {
 		expect(LANE_PRESETS.employer.some((lane) => lane.cadence === 'yearly')).toBe(false);
 	});
 
-	it('leaves an employer with payslips and a catch-all', () => {
-		expect(LANE_PRESETS.employer.map((lane) => lane.label)).toEqual(['Payslips', 'Contract & HR']);
+	it('gives an employer the four rows the employment record reads', () => {
+		expect(LANE_PRESETS.employer.map((lane) => lane.label)).toEqual([
+			'Payslips',
+			'Annexes',
+			'Contract',
+			'HR'
+		]);
+	});
+
+	// A first match wins, and an amendment is a `contract` too — so Contract
+	// before Annexes would take every amendment and leave that row empty for ever.
+	it('tries Annexes before Contract', () => {
+		const labels = LANE_PRESETS.employer.map((lane) => lane.label);
+		expect(labels.indexOf('Annexes')).toBeLessThan(labels.indexOf('Contract'));
 	});
 
 	// Lanes are tried in order, so the catch-all has to be last or it claims

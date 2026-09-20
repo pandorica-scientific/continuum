@@ -650,13 +650,13 @@
 											<span class="loose-name">{doc.name}</span>
 											<span class="quiet loose-type">{doc.typeLabel}</span>
 											{#if card.id === null && doc.onTaxYear}
-												<!-- Paper with a year and a country is PLACED — on the Tax years
+												<!-- Paper with a year and a country is PLACED — on the Income & Tax
 											     tab — whether or not it names an employer. Said as where it
 											     lives, not left reading as an orphan. Pressing the ROW is how
 											     it moves. -->
 												<span class="mono chip placed-chip">
 													{flagEmoji(doc.onTaxYear.country)}
-													{doc.onTaxYear.year} · on Tax years
+													{doc.onTaxYear.year} · on Income & Tax
 												</span>
 											{:else if card.id === null && dossier.unit === 'organisation'}
 												<span class="mono chip placed-chip"> File to a tax year </span>
@@ -715,8 +715,8 @@
 												<button type="button" class="btn small" onclick={() => onopen(doc.id)}>
 													Open document
 												</button>
-												<a class="quiet" href="?shelf={shelfKey}&view=shelf&tab=years"
-													>Open Tax years</a
+												<a class="quiet" href="?shelf={shelfKey}&view=shelf&tab=timeline"
+													>Open the Timeline</a
 												>
 												<button type="button" class="btn small" onclick={() => (movingId = null)}
 													>Cancel</button

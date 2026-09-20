@@ -9,14 +9,22 @@
 ### ✨ Added
 
 - 💹 **A broker is a counterparty of its own** — its reports file against a card with a yearly lane, instead of piling up under "Not assigned yet" with nothing to attach to.
+- 🧭 **A tax year knows where you lived, and says how it knows** — a return is owed because you were resident somewhere, not because you earned, so a year with no work and no investments still raises the nil return it owes. A filed statement proves residence; failing that it is inferred from where you worked, and failing that it falls back to your citizenship. Nothing carries over from the year before, so leaving a country stops raising its returns instead of doing it forever.
+- 🛂 **A person's citizenship is recorded beside their name in Settings** — it is what tax residence falls back to when a year has no filed statement and no work in it, and it is asked for when a person is added. Left blank it contributes nothing rather than being guessed from a name, so a household that ignores it sees exactly what it saw before.
 - 🔗 **An account can say which organisation it is held at** — so a portfolio and the broker that issues its paper stay one counterparty rather than two spellings of one.
+- 🧾 **An obligation says why it exists, and how to make it go away** — pressing a missing return names the role period that raised it, so ending that period before the year removes the obligation without filing anything.
+- 🗂️ **Income & Tax reads a year at a time as well as a career at a time** — the Year dossier puts each year on its own card with what earned on the left and the returns it produced on the right, and the years nothing is missing from fold down to a line.
+- 🪜 **A promotion is one action** — the role held closes the day before the new one starts, so no payslip belongs to both and the months before the promotion stay expected.
 
 ### 🔧 Changed
 
+- 🏛️ **Income & Tax is one screen instead of two tabs** — employers, brokers and the returns they produce share one axis of years, with the employment record opening under its own span. Employers and Tax years were two screens for one derivation, and neither said that what you earned decides what you owe.
+- 💼 **An employer starts with Contract, Annexes and HR rather than one row for all three** — so "is the contract on file" and "has it been amended" stop being the same number. Employers already on the shelf keep the rows they have.
 - 📊 **The Statements shelf reads a statement's rhythm from the period it covers** — so a quarterly report draws across its three months instead of having nowhere to go, and a bank's yearly summary stops drawing eleven gaps.
 
 ### 🐛 Fixed
 
+- 🔢 **The "missing" figure above Income & Tax counts the returns too** — it read the lanes only, so it could say nothing was missing above a screen listing eight returns that never arrived.
 - 📎 **The same file attached twice to one tax statement is filed once** — the upload stored a content hash and never read it, so one Polish form ended up filed under two different names.
 - 🏷️ **A tax document moved to another year or country is renamed to match** — dragging a Polish form onto the Polish card left it still titled with the Czech one.
 - 💹 **A broker report that files against no account now says so** — it landed where nothing could find it and showed up only as an unplaced count nobody reads.

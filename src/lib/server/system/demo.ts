@@ -320,6 +320,10 @@ export async function seedDemo(): Promise<void> {
 			initials: initialsFor(JANA),
 			role: 'admin',
 			birthYear: 1990,
+			// The floor under tax residence. A demo household with none leaves every
+			// year on Income & Tax unsettled, which shows the question rather than
+			// the answer the screen exists to give.
+			citizenship: 'CZ',
 			passwordHash,
 			overviewLayout: SUGGESTED_LAYOUT
 		},
@@ -329,6 +333,7 @@ export async function seedDemo(): Promise<void> {
 			initials: initialsFor(PETR),
 			role: 'member',
 			birthYear: 1988,
+			citizenship: 'CZ',
 			passwordHash,
 			overviewLayout: SUGGESTED_LAYOUT
 		}
@@ -888,6 +893,10 @@ export async function seedDemo(): Promise<void> {
 			name: DEMO_EMPLOYER,
 			kind: 'employer',
 			emoji: '🏛️',
+			// The country is what makes the employment decide the tax below it: a
+			// Czech employer is a Czech year owed. Without it the demo showed the
+			// failure mode — a span reading "no country set" over six amber years.
+			country: 'CZ',
 			shelfId: await systemShelfId(SYSTEM_SHELF_KEYS.incomeTax)
 		},
 		db
@@ -971,7 +980,7 @@ export async function seedDemo(): Promise<void> {
 		if (payslipLane) await assignLane(documentId, payslipLane, db);
 	}
 
-	// One year's declaration and not the next, so the Tax years tab shows a filed
+	// One year's declaration and not the next, so Income & Tax shows a filed
 	// year beside a missing one. An all-green fixture demonstrates nothing: the
 	// whole claim of this shelf is that it can show the year that never arrived.
 	//
@@ -1005,6 +1014,7 @@ export async function seedDemo(): Promise<void> {
 			name: 'Finanční úřad',
 			kind: 'authority',
 			emoji: '🏛️',
+			country: 'CZ',
 			shelfId: await systemShelfId(SYSTEM_SHELF_KEYS.incomeTax)
 		},
 		db

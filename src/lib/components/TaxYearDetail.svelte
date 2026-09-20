@@ -24,6 +24,12 @@
 		lines: { label: string; amount: string }[];
 		/** From `documentsAbout`. */
 		attachments: AboutDocument[];
+		/**
+		 * Which return this is — carried through untouched so the dialog opens on
+		 * what was saved. Null is "nobody has said", and only a `residence` one
+		 * proves where somebody lived.
+		 */
+		role: 'residence' | 'source' | null;
 		note: string | null;
 		diverges: string | null;
 	}

@@ -238,7 +238,7 @@ async function shelfDocuments(
 	cardIds: string[],
 	handle: Queryable
 ): Promise<{ byCard: Map<string, CardDocument[]>; loose: CardDocument[] }> {
-	// The one shelf with a Tax years tab, which is the only place a document can
+	// The one shelf that draws tax years, which is the only place a document can
 	// be accounted for other than a card on this shelf.
 	const hasTaxYears = shelfRow.key === SYSTEM_SHELF_KEYS.incomeTax;
 	const rows = await handle
@@ -286,13 +286,13 @@ async function shelfDocuments(
 	 * Which (year, country) the household has said it does not file.
 	 *
 	 * Read here because of what it does to the rule below: a dismissed card is
-	 * not DRAWN on the Tax years tab, so paper filed to it is accounted for by
+	 * not DRAWN as a tax year, so paper filed to it is accounted for by
 	 * neither tab and has to keep its place on the loose card. Only the
 	 * household-level rows matter — a per-person override says WHO owes a
 	 * return, not whether the card exists.
 	 *
 	 * One query against a table that holds a handful of rows, and only on the
-	 * shelf that has a Tax years tab at all.
+	 * shelf that draws tax years at all.
 	 */
 	const dismissed = new Set<string>();
 	if (hasTaxYears) {
@@ -330,7 +330,7 @@ async function shelfDocuments(
 		const cards = cardOf.get(row.id);
 		if (!cards || cards.length === 0) {
 			/**
-			 * Already accounted for by the Tax years tab, so not drawn again here.
+			 * Already accounted for by the tax half of the shelf, so not drawn again here.
 			 *
 			 * The shelf's rule is that everything on it is either on a card or at
 			 * the end of it — but this shelf has a SECOND tab, and a return sitting

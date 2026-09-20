@@ -14,7 +14,7 @@ import {
 	engagementSpan,
 	engagementsFor
 } from '$lib/server/organisations/engagements';
-import { updateEngagement } from '$lib/server/organisations/mutations';
+import { promoteEngagement, updateEngagement } from '$lib/server/organisations/mutations';
 import { ALL_MIGRATIONS, startPostgres, type Harness, type TestDb } from './harness';
 import { makeEngagement, makeOrganisation, makePerson } from './fixtures';
 
@@ -71,6 +71,51 @@ describe('an engagement', () => {
 		// 2018, not 2021: the span is the employment, and a lane counts from it.
 		expect(engagementSpan(rows)).toEqual({ startsOn: '2018-09-01', endsOn: null });
 		expect(currentEngagement(rows, TODAY)?.role).toBe('Research scientist');
+	});
+
+	// The Timeline's "Promotion" button, which does in one write what the test
+	// above sets up by hand — and must not move the span forward while doing it.
+	it('promotes by closing one period the day before the next opens', async () => {
+		const org = await makeOrganisation(db, { name: 'MSD Czech Republic' });
+		const person = await makePerson(db, { name: 'Robert' });
+		const first = await makeEngagement(db, {
+			organisationId: org.id,
+			personId: person.id,
+			role: 'Data Scientist',
+			startsOn: '2025-10-01'
+		});
+
+		await promoteEngagement(
+			{ id: first.id, role: 'Sr. Data Scientist & Computer Vision', startsOn: '2026-04-01' },
+			db
+		);
+
+		const rows = await engagementsFor(org.id, db);
+		expect(rows).toHaveLength(2);
+		expect(rows.map((r) => [r.role, r.startsOn, r.endsOn])).toEqual([
+			['Data Scientist', '2025-10-01', '2026-03-31'],
+			['Sr. Data Scientist & Computer Vision', '2026-04-01', null]
+		]);
+		// The relationship still begins where it began: the lane's count of
+		// expected payslips must not shrink because somebody was promoted.
+		expect(engagementSpan(rows)).toEqual({ startsOn: '2025-10-01', endsOn: null });
+		expect(currentEngagement(rows, '2026-09-01')?.role).toBe(
+			'Sr. Data Scientist & Computer Vision'
+		);
+	});
+
+	it('refuses a promotion dated before the role it follows', async () => {
+		const org = await makeOrganisation(db, { name: 'MSD Czech Republic' });
+		const person = await makePerson(db, { name: 'Robert' });
+		const first = await makeEngagement(db, {
+			organisationId: org.id,
+			personId: person.id,
+			startsOn: '2025-10-01'
+		});
+		await expect(
+			promoteEngagement({ id: first.id, role: 'Earlier', startsOn: '2025-09-01' }, db)
+		).rejects.toThrow(/after the role it follows/);
+		expect(await engagementsFor(org.id, db)).toHaveLength(1);
 	});
 
 	it('says a relationship has ended only once every period has closed', async () => {

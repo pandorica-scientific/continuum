@@ -309,6 +309,23 @@ export const ENUMS = {
 		'other'
 	],
 
+	/**
+	 * What a filed statement IS to the year it belongs to.
+	 *
+	 * `residence` is the return owed because the person LIVED there, and a year
+	 * holds at most one. `source` is the return a country wanted because income
+	 * arose in it — a Polish broker while resident in Czechia — and a year may
+	 * hold several. The distinction is not bookkeeping: it is what lets a filed
+	 * statement prove residence, and it already exists on the paper, since a
+	 * resident form and a non-resident form are different forms.
+	 *
+	 * The column is nullable. A statement filed before this shipped has not been
+	 * classified, and defaulting it to `residence` would put a proved residence
+	 * on years nobody has looked at — the one error this whole derivation is
+	 * built to avoid.
+	 */
+	'tax_statement.role': ['residence', 'source'],
+
 	'entity.kind': ENTITY_KINDS
 } as const satisfies Record<string, readonly string[]>;
 
@@ -367,6 +384,7 @@ export const ENUM_COLUMNS: { table: string; column: string; enum: EnumKey }[] = 
 	{ table: 'visit', column: 'source', enum: 'visit.source' },
 	{ table: 'place', column: 'kind', enum: 'place.kind' },
 	{ table: 'bottle', column: 'type', enum: 'bottle.type' },
+	{ table: 'tax_statement', column: 'role', enum: 'tax_statement.role' },
 	{ table: 'entity', column: 'kind', enum: 'entity.kind' }
 ];
 
