@@ -190,6 +190,67 @@ export function yearsCovered(statement: CoverageStatement): number[] {
 }
 
 /**
+ * Which band a document is drawn in, read off the period it declares.
+ *
+ * Rhythm used to be decided twice and neither place asked the document: the
+ * query picked it from `document.type`, and the rows picked it from
+ * `account.kind`. A bank that sends a yearly summary then drew eleven false
+ * gaps, and a broker that reported quarterly could not be drawn at all — its
+ * paper landed in the month query and its account was excluded from the month
+ * band.
+ *
+ * Twelve months is the line because that is where the units change: below it
+ * the month band spans the document across its months, at or above it the
+ * month band would need more columns than a year has.
+ */
+export function bandFor(statement: CoverageStatement): 'monthly' | 'yearly' {
+	if (!statement.periodEndOn) return 'monthly';
+	const first = monthKey(statement.periodOn);
+	const last = monthKey(statement.periodEndOn);
+	// Backwards is a defect upstream, and `monthsCovered` already treats it as
+	// the single starting month. Same answer here rather than a second opinion.
+	if (last < first) return 'monthly';
+	const months =
+		(Number(last.slice(0, 4)) - Number(first.slice(0, 4))) * 12 +
+		(Number(last.slice(5, 7)) - Number(first.slice(5, 7))) +
+		1;
+	return months >= 12 ? 'yearly' : 'monthly';
+}
+
+/**
+ * Which bands an account is drawn on.
+ *
+ * Its PAPER decides wherever it has any: an account that files quarterly gets
+ * a month row and an account that files annually gets a year row, whatever
+ * kind of account it happens to be. That is what lets a broker reporting
+ * quarterly be drawn at all, which the old rule — month band for every
+ * non-brokerage account, year band for every brokerage one — could not do.
+ *
+ * `expects` is the fallback and only the fallback: what this kind of account
+ * is taken to send before it has sent anything. It cannot be derived, because
+ * nothing in the data separates a current account with movements and no
+ * statements (twelve real gaps) from a brokerage account with movements and no
+ * report (one real gap, in the year band). Both are "used, nothing filed"; only
+ * the kind says which question to ask.
+ *
+ * Transactions are deliberately NOT an input. Movement means an account is
+ * used, not that paper arrives monthly — reading it as monthly evidence drew a
+ * brokerage account eleven red months a year, which is the bug the kind-based
+ * rule was written to fix in the first place.
+ */
+export function bandsForAccount(input: {
+	hasMonthlyPaper: boolean;
+	hasYearlyPaper: boolean;
+	/** What this kind of account is asked for before it has filed anything. */
+	expects: 'monthly' | 'yearly';
+}): { monthly: boolean; yearly: boolean } {
+	if (input.hasMonthlyPaper || input.hasYearlyPaper) {
+		return { monthly: input.hasMonthlyPaper, yearly: input.hasYearlyPaper };
+	}
+	return { monthly: input.expects === 'monthly', yearly: input.expects === 'yearly' };
+}
+
+/**
  * One decade of an account's yearly paper, left to right.
  *
  * The same four states the month band uses and the same two rules: a filed box

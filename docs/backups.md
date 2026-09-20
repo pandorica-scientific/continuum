@@ -25,8 +25,8 @@ Restoring is booting a fresh instance of the **same release** the dump came from
 (its migrations recreate the schema) and feeding it the dump. It empties every
 table before it loads, so point it only at an instance you are willing to lose.
 A dump is not a way to move between releases: it lists the columns its release
-had, and a newer schema refuses it. Upgrade first, following the release's
-Upgrading block in `CHANGELOG.md`, and take a fresh backup afterwards.
+had, and a newer schema refuses it. Restore into the release the dump came
+from, and take a fresh backup after moving to a newer one.
 
 ```sh
 docker compose exec -T db psql -U continuum -d continuum -v ON_ERROR_STOP=1 \

@@ -65,6 +65,16 @@
 
 	const colour = $derived(countryColour(code, COUNTRY_COLOURS));
 
+	/**
+	 * The household view is a reading, not a record.
+	 *
+	 * It is the union of everybody's visits, so it belongs to nobody and there
+	 * is no one to credit a new scratch to. Scratching here used to write a
+	 * visit with no member at all — a fact about the household that no person's
+	 * tab could ever show, and that nothing could later attribute.
+	 */
+	const readonly = $derived(!who);
+
 	/** The country's own outline, re-fitted so it fills the frame. */
 	const country = $derived.by(() => {
 		const countries = countriesFrom(JSON.parse(world) as Topology);
@@ -100,6 +110,23 @@
 	/** The scratch the pill is currently offering to take back, if any. */
 	let undoable = $state<{ index: number; name: string } | null>(null);
 	let layer = $state<ReturnType<typeof ScratchLayer> | null>(null);
+
+	/**
+	 * A different person's map is a different reading, so nothing carries over.
+	 *
+	 * `scratched` is what this SESSION put on top of what was filed. Left alone
+	 * across a tab switch it showed one person's scratches on another's map, and
+	 * the undo pill offered to take back a scratch that was never theirs.
+	 */
+	let shownFor = $state<string | null | undefined>(undefined);
+	$effect(() => {
+		const now = who ?? null;
+		if (untrack(() => shownFor) === now) return;
+		shownFor = now;
+		scratched = [];
+		undoable = null;
+		toast = null;
+	});
 
 	/** The names the household has been to, matched case-insensitively against Natural Earth's names. */
 	const been = $derived(new Set([...visited, ...scratched].map((name) => name.toLowerCase())));
@@ -366,6 +393,9 @@
 	 * across a reload and counts on the world map and tiles.
 	 */
 	async function cleared(index: number, name: string) {
+		// The layer already refuses the pointer; this is the second lock, for a
+		// scratch arriving any other way.
+		if (readonly) return;
 		scratched = [...scratched, name];
 		onscratched?.(name);
 		// A region with no name can't be undone either — undo removes a visit by name.
@@ -397,7 +427,7 @@
 	 */
 	async function undo() {
 		const taking = undoable;
-		if (!taking) return;
+		if (!taking || readonly) return;
 		undoable = null;
 
 		layer?.recoat(taking.index);
@@ -405,6 +435,9 @@
 
 		const body = new FormData();
 		body.set('region', taking.name);
+		// Whose scratch is being taken back. Undo removes one person's visit, not
+		// the region — two people can have scratched the same one.
+		if (who) body.set('who', who);
 		const outcome = await submitAction('?/unscratched', body, { updatePage: false });
 		if (outcome.type !== 'success') {
 			// Roll back the optimistic recoat — the server refused (e.g. a visit
@@ -442,7 +475,20 @@
 		</svg>
 
 		{#if regions}
-			<ScratchLayer bind:this={layer} {cells} clear={alreadyClear} oncleared={cleared} />
+			<!-- Keyed on the person, so switching tab builds a NEW coating rather
+			     than keeping the one already painted. The canvas is the engine's
+			     own state and `clear` is read untracked on purpose — an ordinary
+			     scratch must not repaint everything — so a different reading has
+			     to arrive as a different component, not as a changed prop. -->
+			{#key who}
+				<ScratchLayer
+					bind:this={layer}
+					{cells}
+					clear={alreadyClear}
+					oncleared={cleared}
+					{readonly}
+				/>
+			{/key}
 		{/if}
 
 		<!-- Names over the coating: dark on foil, white on a scratched region —
@@ -477,6 +523,10 @@
 	<p class="status">
 		{#if failed}
 			<span class="failed">{failed}</span>
+		{:else if readonly && regions}
+			<span class="mono">{alreadyClear.length}</span>
+			of <span class="mono">{regions.length}</span>
+			{regions.length === 1 ? 'region' : 'regions'} — everyone's visits together. Pick a person to scratch.
 		{:else if !regions}
 			Reading the province outlines{regionCount ? ` — ${regionCount} of them` : ''}…
 		{:else}

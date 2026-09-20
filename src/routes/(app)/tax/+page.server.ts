@@ -408,9 +408,9 @@ export const actions: Actions = {
 		const { attachments } = uploaded;
 		if (attachments.length === 0) return fail(400, { message: 'Choose a file to attach.' });
 
-		let filedDocumentIds: string[];
+		let filed: Awaited<ReturnType<typeof attachDocumentsToStatement>>;
 		try {
-			filedDocumentIds = await db.transaction((tx) =>
+			filed = await db.transaction((tx) =>
 				attachDocumentsToStatement(
 					statementId,
 					statement.personId,
@@ -424,9 +424,19 @@ export const actions: Actions = {
 			await discardUploads(attachments);
 			throw err;
 		}
+		// A skipped upload's bytes reached the volume before this ran and nothing
+		// points at them now. Discarded here rather than left behind, because the
+		// document they duplicate is already keeping a copy.
+		await discardUploads(
+			attachments.filter((a) => filed.skipped.some((s) => s.original === (a.original ?? '')))
+		);
 		// After the commit, never inside it: a queued job pointing at a document
 		// the transaction went on to roll back is work with nothing to read.
-		for (const documentId of filedDocumentIds) await enqueueExtraction(documentId);
+		for (const documentId of filed.filedIds) await enqueueExtraction(documentId);
+		if (filed.skipped.length > 0) {
+			const names = [...new Set(filed.skipped.map((s) => s.existingName))].join(', ');
+			return { ok: true, message: `Already filed here: ${names}.` };
+		}
 		return { ok: true };
 	},
 

@@ -85,11 +85,11 @@ export const ENUMS = {
 	/**
 	 * What a counterparty IS to the household, which is what its badge says.
 	 *
-	 * Not a taxonomy of institutions — four words that change what is expected
+	 * Not a taxonomy of institutions — five words that change what is expected
 	 * of one: an employer sends payslips monthly, an authority is written to
-	 * once a year, an insurer neither.
+	 * once a year, a broker reports on the year's trading, an insurer neither.
 	 */
-	'organisation.kind': ['employer', 'authority', 'insurer', 'other'],
+	'organisation.kind': ['employer', 'authority', 'insurer', 'broker', 'other'],
 
 	/**
 	 * How a shelf draws, in the household's words rather than the code's.

@@ -25,7 +25,7 @@
 	import TaxYearView from '$lib/documents/TaxYearView.svelte';
 	import WalletView from '$lib/documents/WalletView.svelte';
 	import DocumentsRail from '$lib/documents/DocumentsRail.svelte';
-	import { documentFileHref } from '$lib/ui/file-viewer';
+	import { documentFileHref, fileKindForExt } from '$lib/ui/file-viewer';
 	import {
 		ALL_TYPES,
 		EXPIRY_VERBS,
@@ -1049,7 +1049,18 @@
 
 			<!-- 2. Preview. A tall receipt letterboxes rather than crops — cropping
 			     the top of a receipt hides the merchant. -->
-			{#if d.hasFile}
+			{#if d.hasFile && fileKindForExt(d.ext) === 'download'}
+				<!-- A format nothing renders — a spreadsheet, a CSV, an OFX. NOT a
+				     link and NOT an iframe: the server sends these as an attachment,
+				     so pointing an iframe at one downloaded the file on load, before
+				     anybody clicked, and a click on the anchor downloaded it again.
+				     Saving it is a deliberate act and lives in the ⋯ menu. -->
+				<div class="ins-preview ins-preview-plain">
+					<span class="ins-ext mono">{d.ext.toUpperCase()}</span>
+					<span class="quiet">Nothing can show this kind of file. Download it from the ⋯ menu.</span
+					>
+				</div>
+			{:else if d.hasFile}
 				<!-- The preview IS the link: a click opens the same overlay viewer
 				     every document link in the app opens. The iframe is inert so the
 				     click reaches the anchor rather than the PDF plugin, and the
@@ -2055,6 +2066,21 @@
 		line-height: 1.4;
 		padding: var(--space-5) var(--space-6);
 	}
+	/* The stand-in for a file nothing can draw. Same frame as a real preview so
+	   the panel does not change shape, but stacked and quiet: there is nothing
+	   to look at, only something to say. */
+	.ins-preview-plain {
+		flex-direction: column;
+		gap: var(--space-2);
+		padding: var(--space-6);
+		text-align: center;
+	}
+
+	.ins-ext {
+		font-size: var(--text-lg);
+		color: var(--fg2);
+	}
+
 	.ins-preview {
 		margin: 0 var(--space-8);
 		/* Never shrunk to make room below it — a flex item is shrinkable by

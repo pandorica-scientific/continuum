@@ -14,6 +14,7 @@
 import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { foldCountry } from '$lib/countries';
+import { derivedNameFor } from '$lib/tax';
 import { db, inTransaction, type Queryable } from '$lib/server/db';
 import {
 	document,
@@ -241,6 +242,53 @@ export async function loadTaxYears(
 }
 
 /**
+ * The name this document should carry once it has moved, or null to leave it.
+ *
+ * Only a name this code DERIVED may be re-derived. A household that typed its
+ * own name for a document meant it, and renaming that would be this function
+ * inventing a fact about paper it was only asked to move. So the old name is
+ * rebuilt from the year and country the document is LEAVING, and the rename
+ * happens only where the stored name matches it exactly.
+ *
+ * Without this, dragging a Polish IFT-1R onto the PL card moved its country to
+ * PL and left it called "2025 CZ tax statement" — a title naming the wrong
+ * country, which is worse than no title at all.
+ */
+async function renameForMove(
+	documentId: string,
+	year: number,
+	country: string,
+	tx: Queryable
+): Promise<string | null> {
+	const [current] = await tx
+		.select({ name: document.name, country: document.country, periodOn: document.periodOn })
+		.from(document)
+		.where(eq(document.id, documentId));
+	if (!current?.country || !current.periodOn) return null;
+
+	const tagNames = (
+		await tx
+			.select({ name: tag.name })
+			.from(tagLink)
+			.innerJoin(tag, eq(tag.id, tagLink.tagId))
+			.where(eq(tagLink.targetId, documentId))
+	).map((row) => row.name);
+
+	const oldYear = Number(current.periodOn.slice(0, 4));
+	const separator = ' · ';
+	const at = current.name.indexOf(separator);
+	const suffix = at === -1 ? undefined : current.name.slice(at + separator.length);
+
+	if (current.name === derivedNameFor(tagNames, oldYear, current.country)) {
+		return derivedNameFor(tagNames, year, country);
+	}
+	if (suffix && current.name === derivedNameFor(tagNames, oldYear, current.country, suffix)) {
+		return derivedNameFor(tagNames, year, country, suffix);
+	}
+	return null;
+}
+
+/**
  * Put a document on a tax year card, in one write.
  *
  * Membership here is what the document SAYS, so assigning it is setting those
@@ -268,10 +316,19 @@ export async function assignToTaxYear(
 	// names them alone. Nobody named: supporting paper, and the type stays.
 	const personIds = [...new Set(input.personIds ?? [])];
 	await inTransaction(handle, async (tx) => {
+		// Read BEFORE the update: the rename is decided from the year and country
+		// the document is leaving, which this write is about to overwrite.
+		const renamed = await renameForMove(
+			input.documentId,
+			input.year,
+			input.country.toUpperCase(),
+			tx
+		);
 		await tx
 			.update(document)
 			.set({
 				...(personIds.length > 0 ? { type: 'tax_document' as const } : {}),
+				...(renamed ? { name: renamed } : {}),
 				// Both ends: `period_on` alone means the single month it names, so a
 				// return dated 2025-01-01 would read as January 2025.
 				periodOn: `${input.year}-01-01`,

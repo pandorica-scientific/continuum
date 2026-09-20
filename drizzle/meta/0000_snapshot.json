@@ -1,5 +1,5 @@
 {
-  "id": "97835426-b546-415c-9f3b-bf79b0677f01",
+  "id": "483d8da5-eb75-4e06-b435-f5f65bf67a35",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -2072,6 +2072,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "organisation_id": {
+          "name": "organisation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "numbers": {
           "name": "numbers",
           "type": "jsonb",
@@ -2136,6 +2142,21 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "account_organisation_idx": {
+          "name": "account_organisation_idx",
+          "columns": [
+            {
+              "expression": "organisation_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -2158,6 +2179,19 @@
           "tableTo": "person",
           "columnsFrom": [
             "owner_person_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "account_organisation_id_organisation_id_fk": {
+          "name": "account_organisation_id_organisation_id_fk",
+          "tableFrom": "account",
+          "tableTo": "organisation",
+          "columnsFrom": [
+            "organisation_id"
           ],
           "columnsTo": [
             "id"

@@ -21,6 +21,7 @@ import {
 } from '$lib/server/db/schema';
 import type { EnumValue } from '$lib/enums';
 import { foldCountry } from '$lib/countries';
+import { attachmentKind } from '$lib/tax';
 
 export const ORGANISATION_NAME_TAKEN = 'An organisation with that name already exists.';
 export const ORGANISATION_IN_USE =
@@ -182,6 +183,30 @@ export const LANE_PRESETS: Record<EnumValue<'organisation.kind'>, LanePreset[]> 
 			conditions: [{ field: 'type', op: 'is', value: 'tax_document' }]
 		},
 		{ label: 'Not tied to a year', cadence: 'none', conditions: [] }
+	],
+	broker: [
+		// The paper the investments tab is built on, and the paper a return
+		// needs. A yearly lane so a card reports the year nobody downloaded a
+		// report for, which is the whole reason this shelf draws lanes at all.
+		//
+		// Claimed by TAG rather than by type, which every other preset here uses.
+		// A broker report filed from the Tax screen is a `tax_document` —
+		// `attachDocumentsToStatement` files every attachment as one, and the tax
+		// year card depends on it (`tax-years.ts` builds a card from exactly that
+		// type, and names the Polish broker report as the case it exists for). A
+		// lane keyed to `type = broker_report` therefore could never claim the
+		// very paper it was seeded for. The tag says what the paper IS; the type
+		// is pinned by what the tax year card needs, and the two are different
+		// questions.
+		//
+		// Read from `ATTACHMENT_KINDS` rather than spelled again, so the tag the
+		// Tax screen applies and the tag this lane claims cannot drift apart.
+		{
+			label: 'Annual report',
+			cadence: 'yearly',
+			conditions: [{ field: 'tag', op: 'is', value: attachmentKind('broker').tag }]
+		},
+		{ label: 'Correspondence', cadence: 'none', conditions: [] }
 	],
 	insurer: [
 		{

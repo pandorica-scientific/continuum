@@ -767,6 +767,7 @@
 							<option value="employer">Employer</option>
 							<option value="authority">Authority</option>
 							<option value="insurer">Insurer</option>
+							<option value="broker">Broker</option>
 							<option value="other">Other</option>
 						</select>
 					</label>

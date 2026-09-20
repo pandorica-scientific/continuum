@@ -24,6 +24,7 @@ import {
 import type { EnumValue } from '../../../enums';
 import { person } from './auth';
 import { document, tag } from './documents';
+import { organisation } from './organisations';
 import { currency } from './money';
 
 // ---- Accounts and transactions ----
@@ -56,6 +57,22 @@ export const account = pgTable(
 			.notNull()
 			.references(() => currency.code),
 		ownerPersonId: uuid('owner_person_id').references(() => person.id, { onDelete: 'set null' }),
+		/**
+		 * The counterparty this account is held at, where that is a record.
+		 *
+		 * Null for every bank account, and that is the expected case: a bank is
+		 * named by `account.bank`, which is a picker row rather than an
+		 * organisation. A broker is different — it also issues the paper a tax
+		 * return is built from, so it is a card on Income & Tax as well as a
+		 * portfolio here, and this is what stops those two drifting into two
+		 * spellings of one counterparty.
+		 *
+		 * SET NULL rather than CASCADE: deleting the organisation must never take
+		 * the portfolio and its balance with it.
+		 */
+		organisationId: uuid('organisation_id').references(() => organisation.id, {
+			onDelete: 'set null'
+		}),
 		// bank account number / IBAN in the form statements print it; used to
 		// recognise transfers between the household's own accounts
 		numbers: jsonb('numbers').$type<string[]>().notNull().default([]),
@@ -83,7 +100,8 @@ export const account = pgTable(
 	},
 	(table) => [
 		index('account_currency_idx').on(table.currency),
-		index('account_owner_person_idx').on(table.ownerPersonId)
+		index('account_owner_person_idx').on(table.ownerPersonId),
+		index('account_organisation_idx').on(table.organisationId)
 	]
 );
 

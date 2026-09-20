@@ -204,7 +204,9 @@ describe('the broker report upload becomes a document (decision D8)', () => {
 			.from(schema.tagLink)
 			.innerJoin(schema.tag, eq(schema.tag.id, schema.tagLink.tagId))
 			.where(eq(schema.tagLink.targetId, doc.id));
-		expect(tags.map((t) => t.name).sort()).toEqual(['2026', 'xtb']);
+		// The broker's key, the year it covers, and what the paper is — the last
+		// of which is what the broker card's Annual report lane claims.
+		expect(tags.map((t) => t.name).sort()).toEqual(['2026', 'broker report', 'xtb']);
 
 		// Compared as Buffers, not via toEqual on raw Uint8Arrays: vitest's
 		// deep-equal reports content-identical typed arrays as unequal here.
@@ -299,5 +301,70 @@ describe('the broker report upload becomes a document (decision D8)', () => {
 		const stored = await readUpload(docs[0].storedName!);
 		expect(stored).not.toBeNull();
 		expect(Buffer.compare(Buffer.from(stored!), Buffer.from(bytes))).toBe(0);
+	});
+
+	it('says so when a report files against no brokerage account', async () => {
+		// No account at all — the state that hid a report for two days.
+		const result = await uploadBrokerReport(
+			'xtb.xlsx',
+			makeXtbWorkbook('2026-07-08 10:00:00'),
+			testDb
+		);
+
+		expect(result.unattached).toBe('no-brokerage-account');
+		// Still filed and still ingested: the report's real work is the ledger.
+		const [doc] = await testDb
+			.select()
+			.from(schema.document)
+			.where(eq(schema.document.type, 'broker_report'));
+		expect(doc).toBeDefined();
+	});
+
+	it('attaches to the one brokerage account and says nothing', async () => {
+		const account = await makeAccount(testDb, { name: 'XTB portfolio', kind: 'brokerage' });
+
+		const result = await uploadBrokerReport(
+			'xtb.xlsx',
+			makeXtbWorkbook('2026-07-08 10:00:00'),
+			testDb
+		);
+
+		expect(result.unattached).toBeNull();
+		const links = await testDb
+			.select()
+			.from(schema.documentLink)
+			.where(eq(schema.documentLink.targetId, account.id));
+		expect(links).toHaveLength(1);
+	});
+
+	it('leaves a household with two brokerage accounts to attach by hand', async () => {
+		await makeAccount(testDb, { name: 'XTB portfolio', kind: 'brokerage' });
+		await makeAccount(testDb, { name: 'Degiro', kind: 'brokerage' });
+
+		const result = await uploadBrokerReport(
+			'xtb.xlsx',
+			makeXtbWorkbook('2026-07-08 10:00:00'),
+			testDb
+		);
+
+		expect(result.unattached).toBe('several-brokerage-accounts');
+	});
+
+	// The broker card's Annual report lane claims this tag, so a report filed
+	// here has to carry it or it lands on the card with no lane to sit in.
+	it('tags a filed report as a broker report, so the card lane can claim it', async () => {
+		await uploadBrokerReport('xtb.xlsx', makeXtbWorkbook('2026-07-08 10:00:00'), testDb);
+
+		const [doc] = await testDb
+			.select()
+			.from(schema.document)
+			.where(eq(schema.document.type, 'broker_report'));
+		const tags = await testDb
+			.select({ name: schema.tag.name })
+			.from(schema.tagLink)
+			.innerJoin(schema.tag, eq(schema.tag.id, schema.tagLink.tagId))
+			.where(eq(schema.tagLink.targetId, doc.id));
+
+		expect(tags.map((t) => t.name)).toContain('broker report');
 	});
 });

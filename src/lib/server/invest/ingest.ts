@@ -19,6 +19,15 @@ export interface BrokerIngestResult {
 	holdings: number;
 	snapshotDay: string;
 	replacedHoldings: boolean;
+	/**
+	 * Filed, but attached to nothing — and which of the two reasons.
+	 *
+	 * Null where it attached. A report attached to nothing is findable by no
+	 * screen and shows up only in the Statements shelf's `unplaced` count,
+	 * which is not a number anyone reads as "your report went missing". Saying
+	 * it out loud is the whole point of the field.
+	 */
+	unattached: 'no-brokerage-account' | 'several-brokerage-accounts' | null;
 }
 
 /**
@@ -272,7 +281,10 @@ export async function ingestReport(
 			operationsKnown: known,
 			holdings: report.holdings.length,
 			snapshotDay,
-			replacedHoldings: replaced
+			replacedHoldings: replaced,
+			// The ledger side files no documents, so it has nothing to say about
+			// attachment. `uploadBrokerReport`, which does, overrides this.
+			unattached: null
 		};
 	});
 }

@@ -2,125 +2,28 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security
 
-## 0.10.0 — Unreleased
+## 0.11.0 — Unreleased
+
+> A broker gets a record of its own, and a statement's rhythm comes from the period it covers.
+
+### ✨ Added
+
+- 💹 **A broker is a counterparty of its own** — its reports file against a card with a yearly lane, instead of piling up under "Not assigned yet" with nothing to attach to.
+- 🔗 **An account can say which organisation it is held at** — so a portfolio and the broker that issues its paper stay one counterparty rather than two spellings of one.
+
+### 🔧 Changed
+
+- 📊 **The Statements shelf reads a statement's rhythm from the period it covers** — so a quarterly report draws across its three months instead of having nowhere to go, and a bank's yearly summary stops drawing eleven gaps.
+
+### 🐛 Fixed
+
+- 📎 **The same file attached twice to one tax statement is filed once** — the upload stored a content hash and never read it, so one Polish form ended up filed under two different names.
+- 🏷️ **A tax document moved to another year or country is renamed to match** — dragging a Polish form onto the Polish card left it still titled with the Czech one.
+- 💹 **A broker report that files against no account now says so** — it landed where nothing could find it and showed up only as an unplaced count nobody reads.
+
+## 0.10.0 — 2026-09-19
 
 > A year's tax return on its own card, an import queue that sorts itself, and an account that can be closed.
-
-### ⬆️ Upgrading
-
-This release changes the schema, so a database made by an earlier one needs the
-SQL below before `docker compose up -d` — see [Installing](docs/install.md).
-Back up first.
-
-```sql
-BEGIN;
-
--- A closed account keeps its transactions and leaves net worth.
-ALTER TABLE account ADD COLUMN IF NOT EXISTS archived_at timestamp with time zone;
-
--- Vested shares moved to a broker, counted by that broker's report instead.
--- Before the view: it reads the column.
-ALTER TABLE equity_tranche
-	ADD COLUMN IF NOT EXISTS moved_units numeric(18, 6) NOT NULL DEFAULT '0';
-
-DROP VIEW IF EXISTS net_worth_component;
-CREATE VIEW net_worth_component AS
-	SELECT id, 'property'::text AS kind, kind::text AS subkind, owner_person_id,
-	       currency, value_minor, valued_on
-	  FROM property
-	UNION ALL
-	-- A closed account is not money you have. Its transactions stay in the
-	-- ledger and in cash-flow history; only the balance leaves.
-	SELECT id, 'account', kind::text, owner_person_id,
-	       currency, balance_minor, balance_on
-	  FROM account
-	 WHERE archived_at IS NULL
-	UNION ALL
-	SELECT id, 'loan', kind::text, owner_person_id,
-	       currency, -owed_minor, owed_on
-	  FROM loan
-	UNION ALL
-	SELECT id, 'holding', category, NULL,
-	       currency, value_minor, valued_at::date
-	  FROM holding
-	UNION ALL
-	SELECT t.id, 'equity', 'rsu', g.person_id,
-	       p.currency,
-	       round((coalesce(t.delivered_units, t.units) - t.sold_units - t.moved_units) * p.close_minor)::bigint,
-	       p.day
-	  FROM equity_tranche t
-	  JOIN equity_grant g ON g.id = t.grant_id
-	  JOIN LATERAL (
-	    SELECT close_minor, currency, day FROM security_price sp
-	     WHERE sp.ticker = g.ticker ORDER BY sp.day DESC LIMIT 1
-	  ) p ON true
-	 WHERE t.forfeited_on IS NULL
-	   AND (t.settled_on IS NOT NULL OR t.vests_on <= current_date)
-	   AND (coalesce(t.delivered_units, t.units) - t.sold_units - t.moved_units) > 0;
-
--- A transfer out to an account this household does not track.
-ALTER TABLE transaction
-	ADD COLUMN IF NOT EXISTS transfer_to_untracked boolean NOT NULL DEFAULT false;
-
--- An organisation says which country it is in — what puts its role periods on
--- a tax year card. Set it on each employer's card afterwards; until then that
--- employer contributes no card.
-ALTER TABLE organisation ADD COLUMN IF NOT EXISTS country text;
-ALTER TABLE organisation DROP CONSTRAINT IF EXISTS organisation_country_check;
-ALTER TABLE organisation ADD CONSTRAINT organisation_country_check
-	CHECK (country IS NULL OR country ~ '^[A-Z]{2}$');
-
--- A document says which country's paper it is.
-ALTER TABLE document ADD COLUMN IF NOT EXISTS country text;
-ALTER TABLE document DROP CONSTRAINT IF EXISTS document_country_check;
-ALTER TABLE document ADD CONSTRAINT document_country_check
-	CHECK (country IS NULL OR country ~ '^[A-Z]{2}$');
-
--- Which tax filings this household says are expected, where the derivation is
--- wrong. NULLS NOT DISTINCT because person_id IS NULL is the card itself.
-CREATE TABLE IF NOT EXISTS tax_filing_override (
-	id uuid PRIMARY KEY,
-	year integer NOT NULL,
-	country text NOT NULL,
-	person_id uuid,
-	expected boolean NOT NULL,
-	-- Named rather than left to Postgres, so an upgraded database and a fresh
-	-- one carry the identical constraint name.
-	CONSTRAINT tax_filing_override_person_id_person_id_fk
-		FOREIGN KEY (person_id) REFERENCES person(id) ON DELETE CASCADE,
-	CONSTRAINT tax_filing_override_country_check CHECK (country ~ '^[A-Z]{2}$')
-);
-CREATE UNIQUE INDEX IF NOT EXISTS tax_filing_override_unique_idx
-	ON tax_filing_override (year, country, person_id) NULLS NOT DISTINCT;
-CREATE INDEX IF NOT EXISTS tax_filing_override_person_idx
-	ON tax_filing_override (person_id);
-
--- Tax documents filed before this release carry their year and country only in
--- their generated name — "2025 CZ tax statement". Lift both out, for the ones
--- whose country really is a two-letter code; the field was free text, so some
--- may say "Czech Republic", and those are left for a person to set by hand.
-UPDATE document SET country = upper(substring(name from '^[0-9]{4} ([A-Z]{2}) '))
- WHERE country IS NULL
-   AND type = 'tax_document'
-   AND name ~ '^[0-9]{4} [A-Z]{2} ';
-
-UPDATE document SET
-	period_on     = (substring(name from '^([0-9]{4}) ') || '-01-01')::date,
-	period_end_on = (substring(name from '^([0-9]{4}) ') || '-12-31')::date
- WHERE period_on IS NULL
-   AND type = 'tax_document'
-   AND name ~ '^[0-9]{4} [A-Z]{2} ';
-
--- An employer no longer expects a yearly declaration: it is one per person per
--- year, not one per employer. Anything filed in such a lane falls back to the
--- card's history — document.lane_id is ON DELETE SET NULL.
-DELETE FROM lane
- WHERE cadence = 'yearly'
-   AND label = 'Once a year · declaration, annual settlement'
-   AND entity_id IN (SELECT id FROM organisation WHERE kind = 'employer');
-
-COMMIT;
-```
 
 ### ✨ Added
 

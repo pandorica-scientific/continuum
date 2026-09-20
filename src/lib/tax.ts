@@ -108,6 +108,32 @@ export function statementDocumentName(
 }
 
 /**
+ * The name `statementDocumentName` would give a document carrying this tag.
+ *
+ * The inverse the rename needs: `assignToTaxYear` moves a document's year and
+ * country, and a name derived from the old pair then says something false —
+ * a Polish form filed as "2025 CZ tax statement" because it was uploaded with
+ * a Czech return and dragged onto the Polish card afterwards.
+ *
+ * The KIND is recovered from the TAG the attachment was filed with rather than
+ * parsed back out of the name: a name is prose that a household may have
+ * rewritten, and a tag is a fact this code wrote.
+ *
+ * Null where no tag names an attachment kind, which is how a document that was
+ * never a tax attachment keeps its own name.
+ */
+export function derivedNameFor(
+	tags: readonly string[],
+	year: number,
+	country: string,
+	filename?: string
+): string | null {
+	const folded = tags.map((tag) => tag.trim().toLowerCase());
+	const kind = ATTACHMENT_KINDS.find((candidate) => folded.includes(candidate.tag));
+	return kind ? statementDocumentName(year, country, kind.key, filename) : null;
+}
+
+/**
  * How a person last left the Tax screen.
  *
  * Preferences, not transient UI: a chart mode and a display currency chosen

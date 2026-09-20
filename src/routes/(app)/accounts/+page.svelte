@@ -175,6 +175,20 @@
 							</select>
 						</label>
 						<label class="field">
+							<span>Held at</span>
+							<!-- The counterparty, where it is a record of its own. Blank for
+							     every bank account: a bank is named by the Bank field above,
+							     which is a picker row rather than a card. A broker is the case
+							     this exists for — it also issues the paper a tax return is
+							     built from, so it is a card on Income & Tax as well. -->
+							<select name="organisationId" value={a.organisationId ?? ''}>
+								<option value="">—</option>
+								{#each data.organisations as o (o.id)}
+									<option value={o.id}>{o.name}</option>
+								{/each}
+							</select>
+						</label>
+						<label class="field">
 							<span>Currency</span>
 							<!-- Locked once anything is filed: every stored amount is minor units
 						     of this currency, so changing it would reinterpret history. -->
@@ -273,6 +287,10 @@
 				<select name="ownerPersonId" aria-label="Whose account this is">
 					<option value="">Joint</option>
 					{#each data.people as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
+				</select>
+				<select name="organisationId" aria-label="Which organisation this account is held at">
+					<option value="">Held at —</option>
+					{#each data.organisations as o (o.id)}<option value={o.id}>{o.name}</option>{/each}
 				</select>
 				<div class="numbers-field">
 					<input name="numbers" placeholder="Account number(s), comma separated" />

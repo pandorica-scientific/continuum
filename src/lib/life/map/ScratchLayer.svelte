@@ -21,9 +21,19 @@
 		oncleared: (index: number, name: string) => void;
 		/** A double tap on the sea, which is how somebody leaves. */
 		onexit?: () => void;
+		/**
+		 * Draw the coating but do not let anybody through it.
+		 *
+		 * The household view: a union of everybody's visits, which belongs to
+		 * nobody and so cannot be added to. The foil still draws, because the
+		 * unscratched area IS the progress the screen is reporting — a bare
+		 * outline would say "nothing to see here" about the very thing being
+		 * measured.
+		 */
+		readonly?: boolean;
 	}
 
-	let { cells, clear, oncleared, onexit }: Props = $props();
+	let { cells, clear, oncleared, onexit, readonly = false }: Props = $props();
 
 	/**
 	 * Put a region's coating back, for undo.
@@ -51,7 +61,10 @@
 	let foil: Foil | null = null;
 
 	$effect(() => {
-		// Rebuilt when the COUNTRY changes, and only then.
+		// Rebuilt when the COUNTRY changes, and only then. Switching PERSON is a
+		// different coating entirely and cannot be patched into this one — the
+		// parent keys the whole component on it, which destroys this canvas and
+		// builds the new reading from scratch.
 		const list = cells;
 		const element = canvas;
 		if (!element || list.length === 0) return;
@@ -82,7 +95,7 @@
 	let lastSeaTap = 0;
 
 	function down(event: PointerEvent) {
-		if (!foil) return;
+		if (!foil || readonly) return;
 		const [x, y] = pointIn(event);
 		if (foil.begin(x, y)) {
 			try {
@@ -108,8 +121,9 @@
 	width="960"
 	height="480"
 	aria-hidden="true"
+	class:readonly
 	onpointerdown={down}
-	onpointermove={(event) => foil?.move(...pointIn(event))}
+	onpointermove={(event) => !readonly && foil?.move(...pointIn(event))}
 	onpointerup={() => foil?.end()}
 	onpointercancel={() => foil?.end()}
 	onpointerleave={() => foil?.end()}
@@ -125,5 +139,12 @@
 		   promise a click. */
 		cursor: crosshair;
 		touch-action: none;
+	}
+
+	/* Nothing to aim at, so nothing that looks aimable. `pointer-events` as well
+	   as the guards above: a stray synthetic event cannot get through either. */
+	canvas.readonly {
+		cursor: default;
+		pointer-events: none;
 	}
 </style>

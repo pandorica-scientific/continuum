@@ -41,7 +41,7 @@ function extensionOf(name: string): string {
  * so the overlay must not try.
  */
 export function fileKind(name: string): FileKind {
-	return fileKindFromExtension(extensionOf(name));
+	return fileKindForExt(extensionOf(name));
 }
 
 /**
@@ -50,8 +50,13 @@ export function fileKind(name: string): FileKind {
  * A `/documents/<id>/file` link carries no filename, so the row states the
  * extension it already holds — `PDF`, `JPG` — and the dot and the case are
  * this function's problem rather than every call site's.
+ *
+ * Exported because the inspector has to ask BEFORE it draws, not only when a
+ * click arrives: it used to point an `<iframe>` at whatever it held, and for a
+ * format the server sends as an attachment that downloaded the file on load,
+ * before anybody clicked anything.
  */
-function fileKindFromExtension(ext: string): FileKind {
+export function fileKindForExt(ext: string): FileKind {
 	const dotted = ext.startsWith('.') ? ext.toLowerCase() : `.${ext.toLowerCase()}`;
 	if (IMAGE_EXT.has(dotted)) return 'image';
 	if (dotted === '.pdf') return 'pdf';
@@ -166,7 +171,7 @@ export function viewerSourceFor(
 	const path = href && /^https?:\/\//i.test(href) ? safePathname(href) : (href ?? '');
 	const document = path && DOCUMENT_FILE.test(path.split(/[?#]/)[0]);
 	if (!document || !ext) return null;
-	const kind = fileKindFromExtension(ext);
+	const kind = fileKindForExt(ext);
 	if (kind === 'download') return null;
 	return { src: path.split(/[?#]/)[0], kind, download: '' };
 }

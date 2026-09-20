@@ -5,6 +5,8 @@
 // draw a rhythm nobody stated.
 import { describe, expect, it } from 'vitest';
 import {
+	bandFor,
+	bandsForAccount,
 	coverageDecade,
 	coverageRow,
 	countGaps,
@@ -202,5 +204,85 @@ describe('coverageDecade', () => {
 		);
 		expect(boxes.reduce((total, b) => total + b.months, 0)).toBe(10);
 		expect(boxes[0]).toEqual({ state: 'filed', startMonth: 0, months: 1, documentIds: ['r'] });
+	});
+});
+
+describe('bandFor', () => {
+	it('puts a statement with no end date in the monthly band', () => {
+		expect(bandFor(stmt('a', '2026-04-01'))).toBe('monthly');
+	});
+
+	it('puts one month in the monthly band', () => {
+		expect(bandFor(stmt('a', '2026-04-01', '2026-04-30'))).toBe('monthly');
+	});
+
+	it('puts a quarter in the monthly band, which is what lets it span', () => {
+		expect(bandFor(stmt('a', '2026-01-01', '2026-03-31'))).toBe('monthly');
+	});
+
+	it('keeps eleven months monthly — the boundary is a whole year', () => {
+		expect(bandFor(stmt('a', '2026-01-01', '2026-11-30'))).toBe('monthly');
+	});
+
+	it('puts a full calendar year in the yearly band', () => {
+		expect(bandFor(stmt('a', '2025-01-01', '2025-12-31'))).toBe('yearly');
+	});
+
+	it('puts twelve months that straddle a year end in the yearly band', () => {
+		expect(bandFor(stmt('a', '2025-07-01', '2026-06-30'))).toBe('yearly');
+	});
+
+	it('puts several years in the yearly band', () => {
+		expect(bandFor(stmt('a', '2023-01-01', '2025-12-31'))).toBe('yearly');
+	});
+
+	// A period stored backwards is a defect upstream, not a rhythm. The month
+	// band draws it as the single month it starts in, so it belongs there.
+	it('does not read a backwards period as a long one', () => {
+		expect(bandFor(stmt('a', '2026-05-01', '2026-01-31'))).toBe('monthly');
+	});
+});
+
+describe('bandsForAccount', () => {
+	const bands = (
+		hasMonthlyPaper: boolean,
+		hasYearlyPaper: boolean,
+		expects: 'monthly' | 'yearly' = 'monthly'
+	) => bandsForAccount({ hasMonthlyPaper, hasYearlyPaper, expects });
+
+	it('draws an account that files monthly on the month band', () => {
+		expect(bands(true, false)).toEqual({ monthly: true, yearly: false });
+	});
+
+	it('draws a broker that reports quarterly on the month band', () => {
+		// Quarterly paper is monthly-band paper: it spans its three months.
+		// The old rule could not draw this at all.
+		expect(bands(true, false, 'yearly')).toEqual({ monthly: true, yearly: false });
+	});
+
+	it('keeps an account whose only paper is yearly off the month band', () => {
+		expect(bands(false, true)).toEqual({ monthly: false, yearly: true });
+	});
+
+	it('draws an account with both rhythms on both bands', () => {
+		expect(bands(true, true)).toEqual({ monthly: true, yearly: true });
+	});
+
+	// Paper always beats the expectation: what an account actually sends is a
+	// fact, and what its kind suggests is only a default.
+	it('lets paper override what the kind expected', () => {
+		expect(bands(false, true, 'monthly')).toEqual({ monthly: false, yearly: true });
+		expect(bands(true, false, 'yearly')).toEqual({ monthly: true, yearly: false });
+	});
+
+	// The regression guard: a mortgage has no transactions of its own and may
+	// have nothing filed, and those missing statements are the whole point.
+	it('falls back to the month band for an account that has filed nothing', () => {
+		expect(bands(false, false, 'monthly')).toEqual({ monthly: true, yearly: false });
+	});
+
+	// And the other half of the fallback, which the kind is the only source for.
+	it('falls back to the year band for a broker that has filed nothing', () => {
+		expect(bands(false, false, 'yearly')).toEqual({ monthly: false, yearly: true });
 	});
 });

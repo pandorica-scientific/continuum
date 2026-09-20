@@ -10,7 +10,7 @@
 	import { enhance } from '$app/forms';
 	import Icon from '$lib/components/Icon.svelte';
 	import TagField from '$lib/components/TagField.svelte';
-	import { documentFileHref } from '$lib/ui/file-viewer';
+	import { documentFileHref, fileKindForExt } from '$lib/ui/file-viewer';
 	import { ALL_TYPES, EXPIRY_VERBS, EXPIRY_VERB_MEANINGS, typeOptionsFor } from '$lib/documents';
 	import IdentityFields from '$lib/documents/IdentityFields.svelte';
 	import { typeLabels } from '$lib/documents/view';
@@ -112,7 +112,16 @@
 				</span>
 				<span class="mono preview-count">{queue.index + 1} of {queue.waiting.length}</span>
 			</div>
-			{#if current.storedName}
+			{#if current.storedName && fileKindForExt(current.ext) === 'download'}
+				<!-- A format nothing renders. NOT an <object> pointed at the file:
+				     the server sends these as an attachment, so loading one
+				     downloaded it before anybody asked. Same rule as the
+				     inspector's preview. -->
+				<div class="sheet empty">
+					<span class="mono">{current.ext.toUpperCase()}</span>
+					<span class="quiet">Nothing can show this kind of file.</span>
+				</div>
+			{:else if current.storedName}
 				<!-- The preview IS the link: a click opens the same viewer the
 				     inspector uses, rather than a second button beside it. -->
 				<a class="sheet" href={documentFileHref(current.id)} target="_blank">

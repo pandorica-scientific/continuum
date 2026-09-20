@@ -51,6 +51,7 @@ const edit = (over: Partial<Parameters<typeof updateAccount>[1]> = {}) =>
 			bank: 'fio',
 			kind: 'current',
 			ownerPersonId: null,
+			organisationId: null,
 			numbers: ['2101106516/2010'],
 			currency: null,
 			...over
