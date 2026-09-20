@@ -36,8 +36,6 @@ import {
 	taxResidences,
 	taxYearCards,
 	taxYearGrid,
-	taxYearsByPerson,
-	type PersonBreakdown,
 	type ResolvedResidence,
 	type TaxReturnKind,
 	type TaxRowState,
@@ -74,6 +72,8 @@ export interface TaxYearCardPayload {
 	reasons: TaxYearReason[];
 	/** The residence return, a second one a country wanted, or not yet callable. */
 	returnKind: TaxReturnKind;
+	/** Where `unclear`, the countries the year is torn between. See `TaxYearCard`. */
+	candidates: string[];
 }
 
 export interface TaxYearsPayload {
@@ -82,12 +82,10 @@ export interface TaxYearsPayload {
 	years: number[];
 	/** The household view: everybody folded into one cell per year and country. */
 	grid: TaxYearGrid;
-	/** The per-person view: a card each, a lane per country. */
-	byPerson: PersonBreakdown[];
 	/** The countries already in play, so the Add form opens on a likely one. */
 	knownCountries: string[];
-	/** `citizenship` rides along because it is the floor the residence row draws. */
-	people: { id: string; name: string; citizenship: string | null }[];
+	/** Who a residence can be declared for, in the order rows should read. */
+	people: { id: string; name: string }[];
 	/**
 	 * Where everybody lived, year by year, and which tier settled it.
 	 *
@@ -241,8 +239,12 @@ export async function loadTaxYears(
 			.map((s) => ({ personId: s.personId, year: s.year, country: s.country })),
 		citizenship: Object.fromEntries(people.map((p) => [p.id, p.citizenship]))
 	};
-	const cards = taxYearCards(residenceInput);
+	// Resolved ONCE and handed to the cards. Two readings of it would let the
+	// residence row disagree with the grid beneath it, which is the very thing
+	// the payload comment above promises cannot happen — and it was doing the
+	// work twice to make that promise.
 	const residences = taxResidences(residenceInput);
+	const cards = taxYearCards(residenceInput, residences);
 
 	const shown = (row: (typeof dated)[number]): TaxYearDocument => ({
 		id: row.id,
@@ -253,10 +255,20 @@ export async function loadTaxYears(
 		periodOn: row.periodOn
 	});
 
+	// Every dated document, indexed by the cell it would sit on. `dated` is the
+	// whole archive's dated-and-placed paper, not just tax paper, and residence
+	// now raises a card for every year of the span — so scanning it once per card
+	// multiplied a long list by a list that just got longer.
+	const byCell = new Map<string, typeof dated>();
+	for (const row of dated) {
+		const key = `${(row.periodOn as string).slice(0, 4)} ${row.country}`;
+		const held = byCell.get(key);
+		if (held) held.push(row);
+		else byCell.set(key, [row]);
+	}
+
 	const drawn: TaxYearCardPayload[] = cards.map((card) => {
-		const onCard = dated.filter(
-			(d) => d.country === card.country && Number((d.periodOn as string).slice(0, 4)) === card.year
-		);
+		const onCard = byCell.get(`${card.year} ${card.country}`) ?? [];
 		// A return is a tax document that names somebody and is not, by its own
 		// tag, a report behind one. An earnings report used to count here, and
 		// closed a gap that was still open; a mortgage-interest certificate that
@@ -267,6 +279,7 @@ export async function loadTaxYears(
 				(peopleOf.get(d.id) ?? []).length > 0 &&
 				!isSupportingPaper(tagsOf.get(d.id) ?? [])
 		);
+		const filedIds = new Set(filed.map((d) => d.id));
 		const rows = card.rows.map((row) => {
 			// A joint return names both people, so it fills both rows. One piece
 			// of paper, two true statements — which is why membership is the link
@@ -282,16 +295,20 @@ export async function loadTaxYears(
 			year: card.year,
 			country: card.country,
 			rows,
-			supporting: onCard.filter((d) => !filed.includes(d)).map(shown),
+			supporting: onCard.filter((d) => !filedIds.has(d.id)).map(shown),
 			gaps: rows.filter((r) => r.state === 'gap').length,
 			reasons: card.reasons,
-			returnKind: card.returnKind
+			returnKind: card.returnKind,
+			candidates: card.candidates
 		};
 	});
 
 	const grid = taxYearGrid(drawn);
 	return {
-		people,
+		// Citizenship stays on the server: it feeds the derivation below, and the
+		// screen reads the ANSWER — `residences`, which carries the tier that gave
+		// it — rather than the evidence.
+		people: people.map((p) => ({ id: p.id, name: p.name })),
 		knownCountries: [...new Set(cards.map((c) => c.country))].sort(),
 		unplacedOrganisations: engagedOrganisations
 			.filter((o) => o.country === null)
@@ -300,8 +317,7 @@ export async function loadTaxYears(
 		cards: drawn,
 		residences,
 		years: grid.years,
-		grid,
-		byPerson: taxYearsByPerson(drawn, grid.years)
+		grid
 	};
 }
 

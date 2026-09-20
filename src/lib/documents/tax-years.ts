@@ -140,6 +140,16 @@ export interface TaxYearCard {
 	rows: TaxYearRow[];
 	reasons: TaxYearReason[];
 	returnKind: TaxReturnKind;
+	/**
+	 * The countries this year is torn between, where `returnKind` is `unclear`;
+	 * empty otherwise.
+	 *
+	 * Carried rather than re-derived, because the screen that offers "two
+	 * returns, one per country" has to NAME them — and deciding a second time
+	 * whether a year is torn is how one panel came to disagree with the cell it
+	 * was opened from.
+	 */
+	candidates: string[];
 }
 
 const yearOf = (iso: string): number => Number(iso.slice(0, 4));
@@ -147,12 +157,15 @@ const yearOf = (iso: string): number => Number(iso.slice(0, 4));
 /**
  * The years a role period covers, capped at this one.
  *
+ * Exported because it is the rule for reading a span off a role period, and the
+ * screens draw spans from the same periods this derivation counts them from.
+ *
  * A period with no start is a relationship nobody remembers the beginning of —
  * the case `engagement` documents for an office a household has always dealt
  * with — and runs from `floorYear`, the earliest year anything else on record
  * names. Without the floor it would run from nowhere.
  */
-function yearsOf(
+export function yearsOf(
 	period: { startsOn: string | null; endsOn: string | null },
 	floorYear: number,
 	thisYear: number
@@ -236,9 +249,18 @@ export function taxResidences(input: TaxYearInput): ResolvedResidence[] {
 	return resolved;
 }
 
-export function taxYearCards(input: TaxYearInput): TaxYearCard[] {
+/**
+ * @param resolved Residence already worked out for this same input, where the
+ * caller has it. The payload sends residence to the screen beside the cards, so
+ * without this it is resolved twice from one input — the same answer, computed
+ * again, with the standing risk of the two readings drifting apart.
+ */
+export function taxYearCards(
+	input: TaxYearInput,
+	resolved?: readonly ResolvedResidence[]
+): TaxYearCard[] {
 	const { engagements, filings, floorYear } = prepare(input);
-	const residences = taxResidences(input);
+	const residences = resolved ?? taxResidences(input);
 
 	// A card exists for every year a role period ran in that country, for every
 	// filing already on record, and for whatever somebody added by hand; a
@@ -298,9 +320,9 @@ export function taxYearCards(input: TaxYearInput): TaxYearCard[] {
 					source: 'engagement',
 					personId: e.personId,
 					country,
-					...(e.organisationId === undefined ? {} : { organisationId: e.organisationId }),
-					...(e.organisationName === undefined ? {} : { organisationName: e.organisationName }),
-					...(e.organisationKind === undefined ? {} : { organisationKind: e.organisationKind })
+					organisationId: e.organisationId,
+					organisationName: e.organisationName,
+					organisationKind: e.organisationKind
 				});
 		for (const f of filings)
 			if (f.country === country && f.year === year)
@@ -335,7 +357,14 @@ export function taxYearCards(input: TaxYearInput): TaxYearCard[] {
 				: anywhere
 					? 'source'
 					: 'unknown';
-		return { year, country, rows, reasons, returnKind };
+		return {
+			year,
+			country,
+			rows,
+			reasons,
+			returnKind,
+			candidates: torn ? [...new Set(judged.flatMap((r) => r.residence.candidates))].sort() : []
+		};
 	});
 
 	// Newest first, then by country: a household looking for a year is almost
@@ -448,56 +477,71 @@ export function taxYearGrid(cards: CardForView[]): TaxYearGrid {
 }
 
 /**
- * The per-person view: a card per person, a lane per country they owe in,
- * cells over the household's years so every lane shares one time axis — the
- * hand-off from one country to the next reads as one lane ending where the
- * next begins.
+ * The paper on one card, listed once.
+ *
+ * A joint return sits on two people's rows and is one document; a card that
+ * counted it twice would report more filings than the household owns. Both
+ * views ask this, so it is answered here rather than in each of them.
  */
-export interface PersonLaneCell {
-	year: number;
-	/** `none` where this person owes nothing there that year. */
-	state: TaxRowState | 'none';
+export function cardPaper<D extends { id: string }>(card: {
+	rows: { documents: D[] }[];
+	supporting: D[];
+}): D[] {
+	const seen = new Set<string>();
+	const paper: D[] = [];
+	for (const doc of [...card.rows.flatMap((row) => row.documents), ...card.supporting])
+		if (!seen.has(doc.id)) {
+			seen.add(doc.id);
+			paper.push(doc);
+		}
+	return paper;
 }
 
-export interface PersonLane {
-	country: string;
-	cells: PersonLaneCell[];
-	filed: number;
-	gaps: number;
+/** How many pieces of paper a cell would list, for the count it carries. */
+export function paperCount(card: {
+	rows: { documents: { id: string }[] }[];
+	supporting: { id: string }[];
+}): number {
+	return cardPaper(card).length;
 }
 
-export interface PersonBreakdown {
-	personId: string;
-	personName: string;
-	lanes: PersonLane[];
+/**
+ * The caption under a cell: which return it is about.
+ *
+ * `unknown` is deliberately silent. A household that has recorded no residence
+ * anywhere would otherwise read a move alarm on every cell it owns — see
+ * `TaxReturnKind`.
+ */
+const RETURN_KIND_WORDS: Record<TaxReturnKind, string> = {
+	residence: 'residence return',
+	source: 'second return',
+	unclear: 'residence unclear',
+	unknown: ''
+};
+
+export function returnKindWords(kind: TaxReturnKind | undefined): string {
+	return kind ? RETURN_KIND_WORDS[kind] : '';
 }
 
-export function taxYearsByPerson(cards: CardForView[], years: number[]): PersonBreakdown[] {
-	const people = new Map<string, string>();
-	for (const card of cards) for (const row of card.rows) people.set(row.personId, row.personName);
+/**
+ * Five words for five states. "not due yet" is not "never filed", and a screen
+ * that used one for the other would send somebody chasing paper nobody owes.
+ */
+export const STATE_WORDS: Record<GridCellState, string> = {
+	filed: 'filed',
+	partial: 'partly filed',
+	gap: 'never filed',
+	open: 'not due yet',
+	none: 'nothing owed'
+};
 
-	return [...people.entries()]
-		.sort((a, b) => a[1].localeCompare(b[1]))
-		.map(([personId, personName]) => {
-			const countries = [
-				...new Set(
-					cards.filter((c) => c.rows.some((r) => r.personId === personId)).map((c) => c.country)
-				)
-			].sort();
-			const lanes = countries.map((country) => {
-				const cells = years.map((year) => {
-					const row = cards
-						.find((c) => c.year === year && c.country === country)
-						?.rows.find((r) => r.personId === personId);
-					return { year, state: row ? row.state : ('none' as const) };
-				});
-				return {
-					country,
-					cells,
-					filed: cells.filter((c) => c.state === 'filed').length,
-					gaps: cells.filter((c) => c.state === 'gap').length
-				};
-			});
-			return { personId, personName, lanes };
-		});
+/**
+ * One card folded to a state, the same way the grid folds it.
+ *
+ * The grid already holds this for every cell it draws, and `TimelineView` reads
+ * it there. This is for the two places holding a card without the grid around
+ * it — a year's dossier row, and an opened obligation.
+ */
+export function cardState(card: { rows: { state: TaxRowState }[] }): GridCellState {
+	return foldRows(card.rows).state;
 }

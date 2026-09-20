@@ -176,8 +176,8 @@ with no work, no investments and no rent still owes one where you lived, as a
 nil return. Residence is resolved a year at a time through four tiers — what you
 said, a filed statement marked as the residence return, the countries you worked
 in, then citizenship — and nothing carries over from the year before. The
-residence row says which tier answered, in its own words: _from the filed
-statement_, _from work · prove it_.
+residence row says which tier answered, in its own words: _from the return_,
+_from work_, _from citizenship_ — and counts how many years are still unproved.
 
 **An annual return is one filing per person per year, not one per employer.** A
 year worked at two companies is filed once, so the year owns the card and the

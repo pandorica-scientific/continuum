@@ -25,7 +25,21 @@ export interface DossierCell {
 	span: number;
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** The twelve abbreviations a monthly lane labels its cells with. */
+export const MONTHS = [
+	'Jan',
+	'Feb',
+	'Mar',
+	'Apr',
+	'May',
+	'Jun',
+	'Jul',
+	'Aug',
+	'Sep',
+	'Oct',
+	'Nov',
+	'Dec'
+];
 
 /** `2021` alone, or `2021–22` for a window. */
 const windowLabel = (start: number, every: number): string =>

@@ -77,6 +77,11 @@ export interface DossierLane {
 	/** Null for a lane about the card rather than about one person. */
 	personName: string | null;
 	cells: DossierCell[];
+	/**
+	 * Cells holding something, of cells that could — one fraction, one
+	 * population. Everything the lane has EVER held is `documents.length`, which
+	 * is a different question and has its own field.
+	 */
 	filed: number;
 	/** How many cells could hold something: filed plus gaps. */
 	expected: number;
@@ -409,20 +414,26 @@ function buildLane(
 		cadence: laneRow.cadence,
 		every: laneRow.every,
 		personName,
-		documents: held,
-		filed: held.length
+		documents: held
 	};
 
 	if (laneRow.cadence === 'none') {
 		// No cells: paper with no rhythm has nothing to be missing FROM, and a
-		// grid drawn over it would invent an expectation nobody stated.
-		return { ...base, cells: [], expected: held.length, gaps: 0 };
+		// grid drawn over it would invent an expectation nobody stated. Its
+		// fraction is therefore everything it holds, over itself.
+		return { ...base, cells: [], filed: held.length, expected: held.length, gaps: 0 };
 	}
 
 	if (laneRow.cadence === 'once') {
 		// A slot. One cell, and the empty one is the finding.
 		const cell = onceCell(held.map((d) => d.id));
-		return { ...base, cells: [cell], expected: 1, gaps: cell.state === 'gap' ? 1 : 0 };
+		return {
+			...base,
+			cells: [cell],
+			filed: cell.state === 'filed' ? 1 : 0,
+			expected: 1,
+			gaps: cell.state === 'gap' ? 1 : 0
+		};
 	}
 
 	// Only dated documents can occupy a cell. An undated one still counts as
@@ -474,6 +485,12 @@ function buildLane(
 	return {
 		...base,
 		cells,
+		// BOTH numbers off the same cells, or the fraction is not one. `filed`
+		// used to be every document the lane had ever held, across every year,
+		// while `expected` counted the windows of the ONE year being drawn — so
+		// an employer with a year of payslips behind it read "12/8", and each
+		// screen that noticed grew a private counter instead.
+		filed: cells.filter((c) => c.state === 'filed').length,
 		// What could hold something: what does, plus what should and does not. A
 		// window still running is neither.
 		expected: cells.filter((c) => c.state === 'filed' || c.state === 'gap').length,
@@ -594,7 +611,12 @@ export async function loadDossier(
 		// all, it is the card's one general place for paper that isn't a
 		// payslip or a declaration, and hiding it the moment it empties out
 		// would hide the only sign that place exists.
-		const lanes = builtLanes.filter((l) => l.cadence === 'none' || l.filed > 0 || l.gaps > 0);
+		// `documents.length`, not `filed`: `filed` counts the cells of the year
+		// being drawn, so a lane holding two years of payslips would vanish the
+		// moment you paged to a year with none in it.
+		const lanes = builtLanes.filter(
+			(l) => l.cadence === 'none' || l.documents.length > 0 || l.gaps > 0
+		);
 
 		// Everything not in a lane, plus everything in a lane with no rhythm.
 		const history = held

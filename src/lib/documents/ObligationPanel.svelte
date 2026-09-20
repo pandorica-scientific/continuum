@@ -12,15 +12,15 @@
 	// means the reason is always available: it is the very input the derivation
 	// ran on.
 	import { enhance } from '$app/forms';
+	import Icon from '$lib/components/Icon.svelte';
 	import { countryName, flagEmoji } from '$lib/countries';
 	import PeriodListing from '$lib/statements/PeriodListing.svelte';
-	import type { ResolvedResidence } from '$lib/documents/tax-years';
+	import { cardState, STATE_WORDS } from '$lib/documents/tax-years';
 	import type { TaxYearCardPayload, TaxYearDocument } from '$lib/server/documents/tax-years';
 
 	let {
 		card,
 		documents,
-		residences,
 		people,
 		onopen,
 		onclose
@@ -28,8 +28,6 @@
 		card: TaxYearCardPayload;
 		/** The paper already on this cell, deduplicated by the caller. */
 		documents: TaxYearDocument[];
-		/** Everybody's residence for THIS year — what makes the year ambiguous or not. */
-		residences: ResolvedResidence[];
 		people: { id: string; name: string }[];
 		onopen: (id: string) => void;
 		onclose: () => void;
@@ -38,13 +36,8 @@
 	const nameOf = (id: string | null) =>
 		id === null ? '' : (people.find((p) => p.id === id)?.name ?? '');
 
-	/** The state word for the header chip. The same five words the cells carry. */
-	const stateWord = $derived.by(() => {
-		if (card.rows.length === 0) return 'nothing owed';
-		if (card.rows.every((r) => r.state === 'filed')) return 'filed';
-		if (card.rows.some((r) => r.state === 'filed')) return 'partly filed';
-		return card.rows.some((r) => r.state === 'open') ? 'not due yet' : 'never filed';
-	});
+	/** The state word for the header chip, from the fold the grid itself uses. */
+	const stateWord = $derived(STATE_WORDS[cardState(card)]);
 
 	/**
 	 * The reason worth acting on, if there is one.
@@ -55,31 +48,33 @@
 	 */
 	const lead = $derived(card.reasons[0]);
 
-	/** The other reasons, so a card held up by three things does not claim one. */
-	const rest = $derived(card.reasons.slice(1));
-
-	/** Every country this year is torn between, so the choice can name them. */
-	const candidates = $derived([
-		...new Set(residences.flatMap((r) => (r.residence.ambiguous ? r.residence.candidates : [])))
+	/**
+	 * The other KINDS of reason, so a card held up by three things does not claim
+	 * one — and does not re-announce the lead's own kind. A promotion is two role
+	 * periods at one employer, which read as "also a role period" until this
+	 * dropped the lead's source rather than just the lead.
+	 */
+	const rest = $derived([
+		...new Set(
+			card.reasons.filter((r) => r.source !== card.reasons[0]?.source).map((r) => r.source)
+		)
 	]);
 
 	/**
-	 * The year somebody MOVED: two countries from one tier and nothing filed.
+	 * Read off the card, never re-decided.
 	 *
-	 * This is where the circularity bites — the rule reads residence off a filed
-	 * statement, and a year with no statement has none — so the panel says it out
-	 * loud instead of picking a country.
+	 * `unclear` is the year somebody MOVED — where the circularity bites, since
+	 * the rule reads residence off a filed statement and a year with no statement
+	 * has none. `unknown` is the different, quieter case of nothing on record: no
+	 * move to date, and no other country to file a nil return in.
 	 *
-	 * A year with NO evidence at all is a different thing and gets a different
-	 * sentence below: there is no move to date and no other country to file a nil
-	 * return in, so offering that choice would be offering nothing.
+	 * Deriving this a second time from the raw residences is how a panel comes to
+	 * disagree with the cell that opened it — the card's judgement is scoped to
+	 * the people on THIS card, and a local copy was not.
 	 */
-	const torn = $derived(candidates.length > 1);
-
-	/** Nothing anywhere says where they lived — the question, not the contest. */
-	const blank = $derived(
-		residences.length > 0 && residences.every((r) => r.residence.periods.length === 0)
-	);
+	const torn = $derived(card.returnKind === 'unclear');
+	const blank = $derived(card.returnKind === 'unknown');
+	const candidates = $derived(card.candidates);
 
 	/** The other country in play, for "a nil return on the other". */
 	const other = $derived(candidates.find((code) => code !== card.country) ?? null);
@@ -88,6 +83,14 @@
 	const whose = $derived(
 		card.rows.length > 0 ? card.rows.map((r) => r.personId) : people.map((p) => p.id)
 	);
+
+	/** Close the open form and reload what it changed — see the same in the record. */
+	const closeAfter =
+		() =>
+		async ({ update }: { update: () => Promise<void> }) => {
+			choosing = null;
+			await update();
+		};
 
 	/** Which of the two ways out is open. Neither, until somebody asks. */
 	let choosing = $state<'split' | 'one' | null>(null);
@@ -121,16 +124,7 @@
 			aria-label="Close {card.year} {countryName(card.country)}"
 			onclick={onclose}
 		>
-			<svg
-				width="14"
-				height="14"
-				viewBox="0 0 16 16"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="1.5"
-				stroke-linecap="round"
-				aria-hidden="true"><path d="M4.5 4.5 11.5 11.5M11.5 4.5 4.5 11.5" /></svg
-			>
+			✕
 		</button>
 	</div>
 
@@ -167,9 +161,9 @@
 				<span class="reason">{REASON_WORD[lead.source]}</span>
 			{/if}
 			{#if rest.length > 0}
-				<span class="quiet also">
-					also {[...new Set(rest.map((r) => REASON_WORD[r.source]))].join(' and ')}
-				</span>
+				<span class="quiet also"
+					>also {rest.map((source) => REASON_WORD[source]).join(' and ')}</span
+				>
 			{/if}
 		</div>
 	{/if}
@@ -180,39 +174,16 @@
 		<!-- No tier answered at all. There is no move to date here, so the panel
 		     asks the question rather than offering a choice between two countries
 		     it cannot name. -->
-		<div class="warn">
-			<span class="warn-icon" aria-hidden="true">
-				<svg
-					width="14"
-					height="14"
-					viewBox="0 0 16 16"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.5"
-					stroke-linecap="round"
-					><circle cx="8" cy="8" r="5.5" /><path d="M8 5.2v3.4M8 10.8v.1" /></svg
-				>
-			</span>
+		{#snippet blankNote()}
 			<span>
 				Nothing on record says where anybody lived in {card.year}, so this cannot yet say whether
 				{countryName(card.country)}'s is the return you owed for living there or a second one it
 				wanted. Say it on the residence row above, or record citizenship in the household.
 			</span>
-		</div>
+		{/snippet}
+		{@render warn(blankNote)}
 	{:else if torn}
-		<div class="warn">
-			<span class="warn-icon" aria-hidden="true">
-				<svg
-					width="14"
-					height="14"
-					viewBox="0 0 16 16"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.5"
-					stroke-linecap="round"
-					><circle cx="8" cy="8" r="5.5" /><path d="M8 5.2v3.4M8 10.8v.1" /></svg
-				>
-			</span>
+		{#snippet tornNote()}
 			<span>
 				{#if other}
 					{card.year} has {countryName(other)}'s return outstanding too, and neither settles which
@@ -224,7 +195,8 @@
 				it does not pick one. Each side is then a full return or a nil return, and that is your choice,
 				not the app's.
 			</span>
-		</div>
+		{/snippet}
+		{@render warn(tornNote)}
 
 		<div class="choice">
 			<span class="quiet">This year will be</span>
@@ -251,23 +223,8 @@
 		{#if choosing === 'split' && other}
 			<!-- Two rows, one gesture: the day is the only thing a derivation cannot
 			     work out, and everything else follows from it. -->
-			<form
-				method="POST"
-				action="?/splitResidence"
-				use:enhance={() =>
-					async ({ update }) => {
-						choosing = null;
-						await update();
-					}}
-				class="ask"
-			>
-				{#if whose.length === 1}
-					<input type="hidden" name="personId" value={whose[0]} />
-				{:else}
-					<select name="personId" aria-label="Who moved" required>
-						{#each whose as id (id)}<option value={id}>{nameOf(id)}</option>{/each}
-					</select>
-				{/if}
+			<form method="POST" action="?/splitResidence" use:enhance={closeAfter} class="ask">
+				{@render whoPicker('Who moved')}
 				<input type="hidden" name="year" value={card.year} />
 				<span class="quiet">Lived in</span>
 				<select name="fromCountry" aria-label="Where the year started" required>
@@ -289,23 +246,8 @@
 				</span>
 			</form>
 		{:else if choosing === 'one'}
-			<form
-				method="POST"
-				action="?/setResidence"
-				use:enhance={() =>
-					async ({ update }) => {
-						choosing = null;
-						await update();
-					}}
-				class="ask"
-			>
-				{#if whose.length === 1}
-					<input type="hidden" name="personId" value={whose[0]} />
-				{:else}
-					<select name="personId" aria-label="Who" required>
-						{#each whose as id (id)}<option value={id}>{nameOf(id)}</option>{/each}
-					</select>
-				{/if}
+			<form method="POST" action="?/setResidence" use:enhance={closeAfter} class="ask">
+				{@render whoPicker('Who')}
 				<input type="hidden" name="year" value={card.year} />
 				<input type="hidden" name="country" value={card.country} />
 				<span class="quiet">
@@ -326,7 +268,7 @@
 			subtitle={card.rows.map((r) => r.personName).join(', ')}
 			{documents}
 			{onopen}
-			onclose={() => onclose()}
+			{onclose}
 		/>
 	{/if}
 
@@ -349,6 +291,29 @@
 		</form>
 	</div>
 </div>
+
+{#snippet whoPicker(label: string)}
+	<!-- One person needs no picker; a household does. Same control either way, so
+	     the two forms that ask do not each carry their own copy of it. -->
+	{#if whose.length === 1}
+		<input type="hidden" name="personId" value={whose[0]} />
+	{:else}
+		<select name="personId" aria-label={label} required>
+			{#each whose as id (id)}<option value={id}>{nameOf(id)}</option>{/each}
+		</select>
+	{/if}
+{/snippet}
+
+{#snippet warn(body: import('svelte').Snippet)}
+	<!-- One amber note, two sentences that can fill it. The icon was written out
+	     twice, byte for byte, which is two places to edit it. -->
+	<div class="warn">
+		<span class="warn-icon" aria-hidden="true">
+			<Icon name="info" size={14} />
+		</span>
+		{@render body()}
+	</div>
+{/snippet}
 
 <style>
 	/* Hung off the lane it belongs to, in the colour of the state that opened it:

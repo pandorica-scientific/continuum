@@ -30,6 +30,20 @@ export function hueTokens(countries: string[]): Map<string, string> {
 	return new Map(sorted.map((code, i) => [code, PALETTE[i % PALETTE.length]]));
 }
 
+/**
+ * The hue every country on one screen is drawn in, with a fallback.
+ *
+ * Both Income & Tax views paint spans, residence cells and lane cells by
+ * country, and both need the same assignment or the two readings of one shelf
+ * would disagree about what blue means.
+ */
+export function countryHues(codes: readonly (string | null)[]): (country: string | null) => string {
+	const hues = hueTokens(codes.filter((code): code is string => code !== null));
+	// The last of the reserve, kept back for "no country yet": a card with none
+	// must not borrow the colour of a country it is not in.
+	return (country) => (country && hues.get(country)) || '--series-r10';
+}
+
 // A jurisdiction's readable name, from the one place countries are named.
 // Re-exported rather than moved outright: the tax screen asks a hue module for
 // the name beside the hue, and both of its callers read it from here.
