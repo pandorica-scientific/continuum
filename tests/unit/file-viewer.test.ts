@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	fileKind,
+	fileKindForExt,
 	fileNameFrom,
 	isPlainClick,
 	viewerFileFor,
@@ -128,5 +129,28 @@ describe('naming the file on screen', () => {
 	it('falls back to what kind of file it is', () => {
 		expect(viewerTitle([], 'image')).toBe('Image');
 		expect(viewerTitle([undefined, ''], 'pdf')).toBe('Document');
+	});
+});
+
+describe('fileKindForExt', () => {
+	// The inspector states the extension it already holds — `PDF`, `XLSX` — so
+	// the dot and the case are this function's problem, not every call site's.
+	it('reads an extension with or without its dot, in any case', () => {
+		expect(fileKindForExt('PDF')).toBe('pdf');
+		expect(fileKindForExt('.pdf')).toBe('pdf');
+		expect(fileKindForExt('JPG')).toBe('image');
+	});
+
+	// The case this exists for. A spreadsheet renders in nothing, and the
+	// inspector used to point an <iframe> at it — which downloaded the file on
+	// load, before anybody clicked. Nothing may preview a download-only format.
+	it('calls a spreadsheet a download, so nothing tries to draw it', () => {
+		expect(fileKindForExt('xlsx')).toBe('download');
+		expect(fileKindForExt('csv')).toBe('download');
+		expect(fileKindForExt('ofx')).toBe('download');
+	});
+
+	it('has no opinion about an empty extension, which is a download', () => {
+		expect(fileKindForExt('')).toBe('download');
 	});
 });

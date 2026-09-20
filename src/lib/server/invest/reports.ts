@@ -18,6 +18,7 @@ import { SYSTEM_SHELF_KEYS } from '$lib/documents/shelves';
 import { systemShelfId } from '$lib/server/documents/shelves';
 import { enqueueExtraction } from '$lib/server/documents/extract/queue';
 import { archiveScopePredicate } from '$lib/server/documents/visibility';
+import { attachmentKind } from '$lib/tax';
 import type { AboutDocument } from '$lib/server/documents/targets';
 import { ingestReport, parseBrokerReport, type BrokerIngestResult } from './ingest';
 
@@ -116,6 +117,17 @@ export async function uploadBrokerReport(
 				.from(account)
 				.where(eq(account.kind, 'brokerage'));
 
+			// Said out loud rather than left as an empty `targetIds`. A report
+			// attached to nothing is invisible on every screen and surfaces only
+			// as the Statements shelf's `unplaced` count, which is how an XTB
+			// report sat unnoticed for two days.
+			const unattached =
+				brokerageAccounts.length === 1
+					? null
+					: brokerageAccounts.length === 0
+						? ('no-brokerage-account' as const)
+						: ('several-brokerage-accounts' as const);
+
 			documentId = uuidv7();
 			await insertDocumentAggregate(
 				{
@@ -137,12 +149,16 @@ export async function uploadBrokerReport(
 					periodOn: `${reportDay.slice(0, 4)}-01-01`,
 					periodEndOn: `${reportDay.slice(0, 4)}-12-31`,
 					targetIds: brokerageAccounts.length === 1 ? [brokerageAccounts[0].id] : [],
-					tagNames: [brokerKey, reportDay.slice(0, 4)]
+					// The broker's own key and the year it covers, plus the tag that
+					// says WHAT this is. The broker card's Annual report lane claims
+					// that tag, so a report filed here lands in the same lane as one
+					// filed from the Tax screen — two routes, one shelf, one lane.
+					tagNames: [brokerKey, reportDay.slice(0, 4), attachmentKind('broker').tag]
 				},
 				tx
 			);
 
-			return { broker: brokerLabel, ...ingestResult };
+			return { broker: brokerLabel, ...ingestResult, unattached };
 		});
 
 		// After the commit, never inside it: a queued job pointing at a document

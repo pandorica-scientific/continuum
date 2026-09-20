@@ -12,7 +12,14 @@ import {
 import { fail } from '@sveltejs/kit';
 import { desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { account, bank, person, transaction, transferPair } from '$lib/server/db/schema';
+import {
+	account,
+	bank,
+	organisation,
+	person,
+	transaction,
+	transferPair
+} from '$lib/server/db/schema';
 import { loadRateTable } from '$lib/server/fx/table';
 import { balanceAge, balanceAgeLabel } from '$lib/statements/balance-age';
 import { logoHref } from '$lib/server/banks/logos';
@@ -32,7 +39,7 @@ import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
 	const baseCurrency = await getBaseCurrency();
-	const [accounts, rates, banks, people] = await Promise.all([
+	const [accounts, rates, banks, people, organisations] = await Promise.all([
 		db
 			.select({
 				id: account.id,
@@ -46,6 +53,7 @@ export const load: PageServerLoad = async () => {
 				numbers: account.numbers,
 				ownerPersonId: account.ownerPersonId,
 				ownerName: person.name,
+				organisationId: account.organisationId,
 				archivedAt: account.archivedAt
 			})
 			.from(account)
@@ -57,7 +65,14 @@ export const load: PageServerLoad = async () => {
 			.select({ id: person.id, name: person.name })
 			.from(person)
 			.where(isNull(person.deactivatedAt))
-			.orderBy(person.name)
+			.orderBy(person.name),
+		// Every organisation, not just brokers. A pension held at an insurer is
+		// the same fact as a portfolio held at a broker, and a list filtered by
+		// kind would hide the second case without ever saying so.
+		db
+			.select({ id: organisation.id, name: organisation.name })
+			.from(organisation)
+			.orderBy(organisation.name)
 	]);
 	const bankEmoji = new Map(banks.map((b) => [b.key, b.emoji]));
 	const today = new Date().toISOString().slice(0, 10);
@@ -98,6 +113,7 @@ export const load: PageServerLoad = async () => {
 			name: a.name,
 			bank: a.bank,
 			ownerPersonId: a.ownerPersonId,
+			organisationId: a.organisationId,
 			canChangeCurrency: (held.get(a.id) ?? 0) === 0,
 			archived: a.archivedAt !== null,
 			// The same count the currency rule uses: an account that never carried
@@ -212,6 +228,7 @@ export const load: PageServerLoad = async () => {
 			color: shareById.get(r.id)?.color ?? 'var(--fg3)'
 		})),
 		people,
+		organisations,
 		cashTotalFormatted: formatMinor(cashTotal, baseCurrency),
 		baseCurrencyDisplay: displayCurrency(baseCurrency),
 		donut,
@@ -242,6 +259,7 @@ export const actions: Actions = {
 			id: uuidv7(),
 			name,
 			ownerPersonId: asOptionalRowId(form.get('ownerPersonId')) ?? null,
+			organisationId: asOptionalRowId(form.get('organisationId')) ?? null,
 			emoji: chosen.emoji,
 			bank: bankKey,
 			kind,
@@ -260,6 +278,8 @@ export const actions: Actions = {
 			kind: String(form.get('kind') ?? 'current'),
 			// Empty means joint. A real answer, not an absence.
 			ownerPersonId: asOptionalRowId(form.get('ownerPersonId')) ?? null,
+			// Empty means held at no organisation, which is every bank account.
+			organisationId: asOptionalRowId(form.get('organisationId')) ?? null,
 			numbers: parseAccountNumbers(String(form.get('numbers') ?? '')),
 			currency:
 				String(form.get('currency') ?? '')

@@ -13,7 +13,7 @@
  * visit Portugal twice, which is what the partial unique index in `life.ts`
  * guarantees and what `ON CONFLICT DO NOTHING` here leans on.
  */
-import { and, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, lt, notExists, sql } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { db, type Db } from '$lib/server/db';
 import { trip, tripDestination, tripMember, visit, visitMember } from '$lib/server/db/schema';
@@ -302,19 +302,57 @@ export async function addManualVisit(input: NewVisit, handle: Db = db): Promise<
 export async function removeManualVisit(
 	country: string,
 	region: string,
+	personId: string,
 	handle: Db = db
 ): Promise<number> {
-	const rows = await handle
-		.delete(visit)
+	// Scoped to the person, not just the place. Two people can scratch the same
+	// region, and a delete by country and region alone took back both — one
+	// person's undo silently erasing somebody else's visit.
+	const mine = await handle
+		.select({ id: visit.id })
+		.from(visit)
+		.innerJoin(visitMember, eq(visitMember.visitId, visit.id))
 		.where(
 			and(
 				eq(visit.country, country.toUpperCase()),
 				eq(visit.region, region),
-				eq(visit.source, 'manual')
+				eq(visit.source, 'manual'),
+				eq(visitMember.personId, personId)
 			)
-		)
-		.returning({ id: visit.id });
-	return rows.length;
+		);
+	if (mine.length === 0) return 0;
+
+	const ids = mine.map((row) => row.id);
+	// The membership goes first, always. A visit naming two people is still a
+	// visit for the other one, so only a visit left with nobody on it is
+	// deleted — the row means "somebody was here", and nobody is not somebody.
+	await handle
+		.delete(visitMember)
+		.where(and(inArray(visitMember.visitId, ids), eq(visitMember.personId, personId)));
+
+	const orphaned = await handle
+		.select({ id: visit.id })
+		.from(visit)
+		.where(
+			and(
+				inArray(visit.id, ids),
+				notExists(
+					handle
+						.select({ one: sql`1` })
+						.from(visitMember)
+						.where(eq(visitMember.visitId, visit.id))
+				)
+			)
+		);
+	if (orphaned.length > 0) {
+		await handle.delete(visit).where(
+			inArray(
+				visit.id,
+				orphaned.map((row) => row.id)
+			)
+		);
+	}
+	return ids.length;
 }
 
 export interface MapFigures {

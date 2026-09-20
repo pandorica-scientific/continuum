@@ -124,7 +124,8 @@ export async function loadStatements(handle: Db = db) {
  *
  * Returns the id of every document it just filed, so a caller can ask for
  * extraction once ITS OWN transaction — which this function only ever
- * borrows, never opens — has actually committed.
+ * borrows, never opens — has actually committed, plus every upload it SKIPPED
+ * as a duplicate so the caller can discard those bytes and say what happened.
  */
 export async function attachDocumentsToStatement(
 	statementId: string,
@@ -133,18 +134,35 @@ export async function attachDocumentsToStatement(
 	country: string,
 	attachments: StatementAttachment[],
 	handle: Queryable
-): Promise<string[]> {
-	if (attachments.length === 0) return [];
+): Promise<{ filedIds: string[]; skipped: { original: string; existingName: string }[] }> {
+	if (attachments.length === 0) return { filedIds: [], skipped: [] };
 
 	const linked = await handle
-		.select({ name: document.name })
+		.select({ name: document.name, contentHash: document.contentHash })
 		.from(documentLink)
 		.innerJoin(document, eq(document.id, documentLink.documentId))
 		.where(eq(documentLink.targetId, statementId));
 	const taken = new Set(linked.map((row) => row.name));
+	// Scoped to THIS statement, not the whole archive: one certificate can
+	// legitimately support two years' returns, and refusing the second would
+	// refuse a true fact. What is never true is the same bytes twice on one.
+	//
+	// Payslips have deduped on this column since `salary/entries.ts`, and bank
+	// imports on theirs — tax attachments stored the hash and never read it,
+	// which is how one Polish form came to be filed under two different names.
+	const byHash = new Map<string, string>();
+	for (const row of linked) {
+		if (row.contentHash) byHash.set(row.contentHash, row.name);
+	}
 
 	const filedIds: string[] = [];
+	const skipped: { original: string; existingName: string }[] = [];
 	for (const attachment of attachments) {
+		const duplicateOf = attachment.contentHash ? byHash.get(attachment.contentHash) : undefined;
+		if (duplicateOf) {
+			skipped.push({ original: attachment.original ?? '', existingName: duplicateOf });
+			continue;
+		}
 		// Codes by the time they get here — `saveStatement` and the Tax screen's
 		// upload both refuse anything else with a message — so this is the
 		// guard against a caller that did not, not a second place that decides.
@@ -193,9 +211,12 @@ export async function attachDocumentsToStatement(
 			.insert(documentLink)
 			.values({ documentId, targetId: statementId })
 			.onConflictDoNothing();
+		// Recorded as we go, so two identical files in ONE batch dedupe too —
+		// not just a file arriving a week after its twin.
+		if (attachment.contentHash) byHash.set(attachment.contentHash, name);
 		filedIds.push(documentId);
 	}
-	return filedIds;
+	return { filedIds, skipped };
 }
 
 /**
@@ -256,14 +277,19 @@ export async function saveStatement(input: StatementInput, handle: Db = db): Pro
 				.returning({ id: taxStatement.id });
 			const id = saved[0].id;
 
-			filedDocumentIds = await attachDocumentsToStatement(
+			// `skipped` is dropped here on purpose: `saveStatement` is the whole
+			// form, and a duplicate attachment inside it is not a reason to
+			// interrupt saving the statement itself. The Tax screen's own attach
+			// action, which is where a household uploads one file deliberately,
+			// does report it.
+			({ filedIds: filedDocumentIds } = await attachDocumentsToStatement(
 				id,
 				input.personId,
 				input.year,
 				country,
 				input.attachments,
 				tx
-			);
+			));
 
 			// A document already on the shelf is linked, never re-filed. Filing a
 			// second copy of paper the household already has is how a shelf fills

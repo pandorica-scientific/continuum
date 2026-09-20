@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-import { ATTACHMENT_KINDS, attachmentKind, statementDocumentName } from '$lib/tax';
+import { ATTACHMENT_KINDS, attachmentKind, derivedNameFor, statementDocumentName } from '$lib/tax';
 
 describe('statementDocumentName', () => {
 	it('keeps the two-argument name it had before kinds existed', () => {
@@ -134,5 +134,21 @@ describe('pairing a batch of uploads with what each one is', () => {
 	it('names each document after its own country, not the statement’s', () => {
 		expect(statementDocumentName(2025, 'AT', 'employer')).toBe('2025 AT employer earnings report');
 		expect(statementDocumentName(2025, 'CZ', 'statement')).toBe('2025 CZ tax statement');
+	});
+});
+
+describe('derivedNameFor', () => {
+	it('rebuilds the name a broker report would have been given', () => {
+		expect(derivedNameFor(['broker report'], 2025, 'PL')).toBe('2025 PL broker earnings report');
+	});
+
+	it('keeps a filename suffix where the name carried one', () => {
+		expect(derivedNameFor(['broker report'], 2025, 'PL', 'x.pdf')).toBe(
+			'2025 PL broker earnings report · x.pdf'
+		);
+	});
+
+	it('has no opinion about a document carrying no attachment tag', () => {
+		expect(derivedNameFor(['holiday'], 2025, 'PL')).toBeNull();
 	});
 });

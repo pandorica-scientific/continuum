@@ -257,6 +257,7 @@ CREATE TABLE "account" (
 	"kind" text DEFAULT 'current' NOT NULL,
 	"currency" text NOT NULL,
 	"owner_person_id" uuid,
+	"organisation_id" uuid,
 	"numbers" jsonb DEFAULT '[]'::jsonb NOT NULL,
 	"balance_minor" bigint DEFAULT 0 NOT NULL,
 	"balance_on" date,
@@ -965,6 +966,7 @@ ALTER TABLE "tag_link" ADD CONSTRAINT "tag_link_tag_id_tag_id_fk" FOREIGN KEY ("
 ALTER TABLE "tag_link" ADD CONSTRAINT "tag_link_target_id_entity_id_fk" FOREIGN KEY ("target_id") REFERENCES "public"."entity"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "account" ADD CONSTRAINT "account_currency_currency_code_fk" FOREIGN KEY ("currency") REFERENCES "public"."currency"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "account" ADD CONSTRAINT "account_owner_person_id_person_id_fk" FOREIGN KEY ("owner_person_id") REFERENCES "public"."person"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "account" ADD CONSTRAINT "account_organisation_id_organisation_id_fk" FOREIGN KEY ("organisation_id") REFERENCES "public"."organisation"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "category" ADD CONSTRAINT "category_group_key_category_group_key_fk" FOREIGN KEY ("group_key") REFERENCES "public"."category_group"("key") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "import_file" ADD CONSTRAINT "import_file_account_id_account_id_fk" FOREIGN KEY ("account_id") REFERENCES "public"."account"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "import_file" ADD CONSTRAINT "import_file_currency_currency_code_fk" FOREIGN KEY ("currency") REFERENCES "public"."currency"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -1078,6 +1080,7 @@ CREATE INDEX "entity_kind_idx" ON "entity" USING btree ("kind");--> statement-br
 CREATE INDEX "tag_link_target_idx" ON "tag_link" USING btree ("target_id");--> statement-breakpoint
 CREATE INDEX "account_currency_idx" ON "account" USING btree ("currency");--> statement-breakpoint
 CREATE INDEX "account_owner_person_idx" ON "account" USING btree ("owner_person_id");--> statement-breakpoint
+CREATE INDEX "account_organisation_idx" ON "account" USING btree ("organisation_id");--> statement-breakpoint
 CREATE INDEX "category_group_key_idx" ON "category" USING btree ("group_key");--> statement-breakpoint
 CREATE INDEX "import_file_currency_idx" ON "import_file" USING btree ("currency");--> statement-breakpoint
 CREATE INDEX "import_file_account_idx" ON "import_file" USING btree ("account_id");--> statement-breakpoint
@@ -1267,7 +1270,7 @@ ALTER TABLE account ADD CONSTRAINT account_kind_check
 	CHECK (kind in ('current', 'savings', 'brokerage'));
 --> statement-breakpoint
 ALTER TABLE organisation ADD CONSTRAINT organisation_kind_check
-	CHECK (kind in ('employer', 'authority', 'insurer', 'other'));
+	CHECK (kind in ('employer', 'authority', 'insurer', 'broker', 'other'));
 --> statement-breakpoint
 ALTER TABLE shelf ADD CONSTRAINT shelf_template_check
 	CHECK (template in ('queue', 'wallet', 'completeness', 'dossier', 'timeline', 'kit', 'obligations'));

@@ -1,6 +1,7 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import SummaryBand from '$lib/components/SummaryBand.svelte';
 	import ControlRow from '$lib/components/ControlRow.svelte';
@@ -12,8 +13,25 @@
 
 	let { data } = $props();
 
-	/** null is the household: the union of everybody, which is where it opens. */
-	let member = $state<string | null>(null);
+	/**
+	 * null is the household: the union of everybody, which is where it opens.
+	 *
+	 * Kept in the ADDRESS rather than in local state, the same way a collapsed
+	 * dossier card is. Opening a country and coming back used to land on
+	 * Household whatever tab you left from, because local state does not survive
+	 * a navigation — and the tab is a question about what you are looking at,
+	 * which is exactly what an address is for.
+	 */
+	const member = $derived(page.url.searchParams.get('who') || null);
+
+	function show(next: string | null) {
+		const url = new URL(page.url);
+		if (next) url.searchParams.set('who', next);
+		else url.searchParams.delete('who');
+		// Replaces rather than pushes: flicking between tabs is looking, not
+		// travelling, and it should not take five Backs to leave the screen.
+		goto(url, { replaceState: true, keepFocus: true, noScroll: true });
+	}
 
 	const who = $derived([
 		{ value: '', label: 'Household' },
@@ -66,7 +84,7 @@
 		<Segmented
 			options={who}
 			value={member ?? ''}
-			onchange={(value) => (member = value === '' ? null : value)}
+			onchange={(value) => show(value === '' ? null : value)}
 		/>
 	{/snippet}
 </ControlRow>

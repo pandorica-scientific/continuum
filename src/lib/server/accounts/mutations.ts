@@ -3,7 +3,7 @@
 
 import { count, eq } from 'drizzle-orm';
 import { db, type Db } from '$lib/server/db';
-import { account, bank, person, transaction } from '$lib/server/db/schema';
+import { account, bank, organisation, person, transaction } from '$lib/server/db/schema';
 import { asEnumValue } from '$lib/enums';
 
 export type AccountMutationResult =
@@ -19,6 +19,15 @@ export interface UpdateAccountInput {
 	numbers: string[];
 	/** Only honoured while the account holds nothing. See below. */
 	currency: string | null;
+	/**
+	 * Which counterparty this account is held at, or null.
+	 *
+	 * Null for every bank account and that is the expected case: a bank is named
+	 * by `bank`, a picker row rather than a record. A broker is different — it
+	 * also issues the paper a tax return is built from, so it is a card on
+	 * Income & Tax as well as a portfolio here.
+	 */
+	organisationId: string | null;
 }
 
 export async function updateAccount(
@@ -45,6 +54,18 @@ export async function updateAccount(
 		if (input.ownerPersonId) {
 			const [owner] = await tx.select().from(person).where(eq(person.id, input.ownerPersonId));
 			if (!owner) return { ok: false as const, status: 400, message: 'That person is not here.' };
+		}
+
+		// Same reasoning as the owner above: a row this form names has to exist,
+		// and saying so is better than a foreign-key error nobody can read.
+		if (input.organisationId) {
+			const [held] = await tx
+				.select()
+				.from(organisation)
+				.where(eq(organisation.id, input.organisationId));
+			if (!held) {
+				return { ok: false as const, status: 400, message: 'That organisation is not here.' };
+			}
 		}
 
 		/**
@@ -95,6 +116,7 @@ export async function updateAccount(
 				bank: input.bank,
 				kind: asEnumValue('account.kind', input.kind, existing.kind),
 				ownerPersonId: input.ownerPersonId,
+				organisationId: input.organisationId,
 				numbers: input.numbers,
 				currency
 			})

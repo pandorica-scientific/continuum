@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { error, fail } from '@sveltejs/kit';
+import { asc } from 'drizzle-orm';
+import { db } from '$lib/server/db';
+import { person } from '$lib/server/db/schema';
 import { asOptionalRowId } from '$lib/ids';
 import { countryName } from '$lib/life/geo/countries';
 import {
@@ -44,6 +47,12 @@ export const load: PageServerLoad = async ({ params, url, depends }) => {
 
 	return {
 		who: who ?? null,
+		// The same tabs the world map draws. They follow you in here rather than
+		// vanishing, so switching person does not mean going back first.
+		people: await db
+			.select({ id: person.id, name: person.name })
+			.from(person)
+			.orderBy(asc(person.name)),
 		/** Filtered to places with an engraving on disk; URL carries the build stamp since these are served `immutable`. */
 		sights: (await placesFor(code))
 			.filter((one) => hasArt(one.id))
@@ -72,16 +81,25 @@ export const actions: Actions = {
 		const region = String(form.get('region') ?? '').trim();
 		if (!region) return fail(400, { on: 'scratch', message: 'Which region?' });
 
-		// Credited to whoever's tab the scratch happened on; a visit with no
-		// member still counts towards the household.
+		// Credited to whoever's tab the scratch happened on. The household tab has
+		// nobody to credit — it is the union of everybody's visits, a reading
+		// rather than a record — so a scratch there is refused rather than
+		// written with no member. A member-less visit is a fact no person's tab
+		// can show and nothing can afterwards attribute.
 		const who = asOptionalRowId(form.get('who'));
+		if (!who) {
+			return fail(400, {
+				on: 'scratch',
+				message: 'Pick a person first — the household view only shows everyone together.'
+			});
+		}
 
 		await addManualVisit({
 			country: code,
 			region,
 			city: null,
 			year: Number(localToday().slice(0, 4)),
-			members: who ? [who] : []
+			members: [who]
 		});
 		return { scratched: true };
 	},
@@ -95,10 +113,21 @@ export const actions: Actions = {
 		const region = String(form.get('region') ?? '').trim();
 		if (!region) return fail(400, { on: 'scratch', message: 'Which region?' });
 
+		// Same rule as scratching, for the same reason: the household view is a
+		// reading of everybody's visits, and taking one back there would be
+		// removing somebody else's without saying whose.
+		const who = asOptionalRowId(form.get('who'));
+		if (!who) {
+			return fail(400, {
+				on: 'scratch',
+				message: 'Pick a person first — the household view only shows everyone together.'
+			});
+		}
+
 		// Refused rather than reported as done: `{ unscratched: false }` still
 		// reads as success to every caller, so an undo that removed nothing
 		// would say "put back" and be contradicted by the next load.
-		const removed = await removeManualVisit(code, region);
+		const removed = await removeManualVisit(code, region, who);
 		if (removed === 0) {
 			return fail(409, {
 				on: 'scratch',

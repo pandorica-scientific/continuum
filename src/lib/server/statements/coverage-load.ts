@@ -23,6 +23,8 @@ import {
 	transaction
 } from '$lib/server/db/schema';
 import {
+	bandFor,
+	bandsForAccount,
 	coverageDecade,
 	coverageRow,
 	countGaps,
@@ -127,7 +129,7 @@ const tail = (numbers: string[]): string =>
  * belongs to.
  */
 async function readCoverage(handle: Queryable) {
-	const [accounts, loans, filed, yearly, firstTxn] = await Promise.all([
+	const [accounts, loans, statements, firstTxn] = await Promise.all([
 		handle
 			.select({
 				id: account.id,
@@ -167,34 +169,11 @@ async function readCoverage(handle: Queryable) {
 			.where(
 				and(
 					eq(shelf.key, 'statements'),
-					eq(document.type, 'bank_statement'),
-					inArray(entity.kind, ['account', 'loan']),
-					sql`${document.periodOn} is not null`
-				)
-			),
-		handle
-			.select({
-				accountId: documentLink.targetId,
-				id: document.id,
-				name: document.name,
-				ext: document.ext,
-				typeLabel: documentType.label,
-				addedOn: document.addedOn,
-				periodOn: document.periodOn,
-				periodEndOn: document.periodEndOn
-			})
-			.from(document)
-			.innerJoin(shelf, eq(shelf.id, document.shelfId))
-			.innerJoin(documentType, eq(documentType.key, document.type))
-			.innerJoin(documentLink, eq(documentLink.documentId, document.id))
-			// Through the supertype rather than straight into `account`: a loan is a
-			// thing a bank numbers and sends statements about too, and joining one
-			// concrete table is what kept a mortgage's paper off this ribbon.
-			.innerJoin(entity, eq(entity.id, documentLink.targetId))
-			.where(
-				and(
-					eq(shelf.key, 'statements'),
-					eq(document.type, 'broker_report'),
+					// Both types in ONE query. Which band each document draws in is
+					// read off its period by `bandFor`, not off its type: a bank that
+					// sends a yearly summary and a broker that reports quarterly are
+					// both real, and the type cannot tell you which.
+					inArray(document.type, ['bank_statement', 'broker_report']),
 					inArray(entity.kind, ['account', 'loan']),
 					sql`${document.periodOn} is not null`
 				)
@@ -207,6 +186,15 @@ async function readCoverage(handle: Queryable) {
 			.from(transaction)
 			.groupBy(transaction.accountId)
 	]);
+
+	// Split by the period each document declares, not by the type it carries.
+	const asCoverage = (row: (typeof statements)[number]) => ({
+		id: row.id,
+		periodOn: row.periodOn as string,
+		periodEndOn: row.periodEndOn
+	});
+	const filed = statements.filter((row) => bandFor(asCoverage(row)) === 'monthly');
+	const yearly = statements.filter((row) => bandFor(asCoverage(row)) === 'yearly');
 
 	// The earlier of the first statement and the first movement. An account with
 	// neither has never been used, and gets no row rather than twelve gaps.
@@ -238,6 +226,31 @@ async function readCoverage(handle: Queryable) {
 	}));
 
 	return { accounts: [...withEvidence, ...loanRows], filed, yearly };
+}
+
+/**
+ * The one place a band membership is decided, shared by the ribbon and by the
+ * two figures the banner shows.
+ *
+ * Three readers used to make this judgement separately — `loadCoverage`,
+ * `gapsAcrossYears` and `coverageAccountCount` each spelled
+ * `kind === 'brokerage'` themselves — which is three chances to disagree about
+ * which accounts the shelf is even talking about.
+ */
+function bandReader(
+	filed: { accountId: string }[],
+	yearly: { accountId: string }[]
+): (account: { id: string; kind: string }) => { monthly: boolean; yearly: boolean } {
+	const monthlyPaper = new Set(filed.map((f) => f.accountId));
+	const yearlyPaper = new Set(yearly.map((y) => y.accountId));
+	return (account) =>
+		bandsForAccount({
+			hasMonthlyPaper: monthlyPaper.has(account.id),
+			hasYearlyPaper: yearlyPaper.has(account.id),
+			// The fallback, and only the fallback: a broker is asked for a year's
+			// report before it has filed one, everything else for its months.
+			expects: account.kind === 'brokerage' ? 'yearly' : 'monthly'
+		});
 }
 
 /**
@@ -284,13 +297,14 @@ export async function loadCoverage(
 			)
 		);
 
-	// Cash accounts only. A brokerage account does not send monthly statements
-	// and never will, so putting it in this band drew eleven red months a year
-	// for an account that is entirely up to date — and `accounts/+page.server`
-	// has drawn the same line between cash and investments all along. It belongs
-	// in the yearly band below.
+	// Which bands each account earns a row on, from what it actually holds
+	// rather than from its `kind`. See `bandsForAccount` — in particular why an
+	// account with no yearly paper keeps its month row, which is what stops an
+	// unfiled mortgage disappearing off this shelf entirely.
+	const bandsFor = bandReader(filed, yearly);
+
 	const rows: CoverageRow[] = accounts
-		.filter((a) => a.kind !== 'brokerage' && a.firstEvidence !== null)
+		.filter((a) => a.firstEvidence !== null && bandsFor(a).monthly)
 		.map((a) => ({
 			accountId: a.id,
 			label: a.name,
@@ -305,11 +319,10 @@ export async function loadCoverage(
 			)
 		}));
 
-	// The yearly band: the investments side of that same line. A brokerage
-	// account reports once a year, so this is where it is asked whether it did —
-	// and it is asked whether or not it has ever filed one, because an account
-	// with movements and no report is exactly the finding this shelf is for.
-	const yearlyAccounts = accounts.filter((a) => a.kind === 'brokerage' && a.firstEvidence !== null);
+	// The yearly band: an account is asked about its years once it has filed
+	// any, and not before. A decade of gaps for an account that has never sent
+	// yearly paper is a question nobody asked.
+	const yearlyAccounts = accounts.filter((a) => a.firstEvidence !== null && bandsFor(a).yearly);
 	const decadesWithPaper = yearly
 		.map((y) => decadeStart(Number((y.periodOn as string).slice(0, 4))))
 		.sort();
@@ -376,13 +389,14 @@ export async function loadCoverage(
  * answer to one question.
  */
 export async function gapsAcrossYears(today: string, handle: Queryable = db): Promise<number> {
-	const { accounts, filed } = await readCoverage(handle);
+	const { accounts, filed, yearly } = await readCoverage(handle);
+	const bandsFor = bandReader(filed, yearly);
 	const thisYear = Number(today.slice(0, 4));
 	let total = 0;
 	for (const a of accounts) {
-		// Cash accounts only, matching the band that draws them. A brokerage
-		// account's missing months are not missing anything.
-		if (a.kind === 'brokerage' || !a.firstEvidence) continue;
+		// Only the accounts the month band actually draws, so the banner's figure
+		// counts the same holes the ribbon does.
+		if (!a.firstEvidence || !bandsFor(a).monthly) continue;
 		const from = Number(a.firstEvidence.slice(0, 4));
 		const statements = filed
 			.filter((f) => f.accountId === a.id && f.periodOn)
@@ -396,6 +410,7 @@ export async function gapsAcrossYears(today: string, handle: Queryable = db): Pr
 
 /** How many accounts the ribbon draws. The banner's first figure. */
 export async function coverageAccountCount(handle: Queryable = db): Promise<number> {
-	const { accounts } = await readCoverage(handle);
-	return accounts.filter((a) => a.kind !== 'brokerage' && a.firstEvidence !== null).length;
+	const { accounts, filed, yearly } = await readCoverage(handle);
+	const bandsFor = bandReader(filed, yearly);
+	return accounts.filter((a) => a.firstEvidence !== null && bandsFor(a).monthly).length;
 }

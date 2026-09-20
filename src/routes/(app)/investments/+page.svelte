@@ -543,6 +543,19 @@
 				{form.result.operationsAdded} operations added, {form.result.operationsKnown} already known ·
 				{form.result.holdings} holdings as of {form.result.snapshotDay}
 			</span>
+			<!-- The ledger landed either way; this is about where the PAPER went.
+			     Silence here is what let a report sit unattached and unnoticed. -->
+			{#if form.result.unattached === 'no-brokerage-account'}
+				<span class="quiet warn">
+					Filed, but not attached to an account. Add a brokerage account and upload again to see it
+					on the Statements shelf.
+				</span>
+			{:else if form.result.unattached === 'several-brokerage-accounts'}
+				<span class="quiet warn">
+					Filed. You have more than one brokerage account, so attach it to the right one from the
+					Accounts screen.
+				</span>
+			{/if}
 		{/if}
 	</section>
 </div>
@@ -561,6 +574,12 @@
 />
 
 <style>
+	/* The ledger landed; the paper may not have. Orange rather than red: nothing
+	   failed, but something needs doing before the report can be found again. */
+	.quiet.warn {
+		color: var(--orange);
+	}
+
 	.error {
 		border: 1px solid var(--red);
 		background: var(--red-tint);

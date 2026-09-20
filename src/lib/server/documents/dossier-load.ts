@@ -28,7 +28,8 @@ import {
 	person,
 	property,
 	shelf,
-	subject
+	subject,
+	taxFilingOverride
 } from '$lib/server/db/schema';
 import {
 	monthlyCells,
@@ -44,6 +45,7 @@ import {
 	engagementsFor
 } from '$lib/server/organisations/engagements';
 import { lanesFor, type LaneRow } from '$lib/server/organisations/mutations';
+import { SYSTEM_SHELF_KEYS } from '$lib/documents/shelves';
 import type { ShelfRow } from './shelves';
 
 export interface CardDocument {
@@ -236,6 +238,9 @@ async function shelfDocuments(
 	cardIds: string[],
 	handle: Queryable
 ): Promise<{ byCard: Map<string, CardDocument[]>; loose: CardDocument[] }> {
+	// The one shelf with a Tax years tab, which is the only place a document can
+	// be accounted for other than a card on this shelf.
+	const hasTaxYears = shelfRow.key === SYSTEM_SHELF_KEYS.incomeTax;
 	const rows = await handle
 		.select({
 			id: document.id,
@@ -277,6 +282,33 @@ async function shelfDocuments(
 	for (const link of links)
 		cardOf.set(link.documentId, [...(cardOf.get(link.documentId) ?? []), link.targetId]);
 
+	/**
+	 * Which (year, country) the household has said it does not file.
+	 *
+	 * Read here because of what it does to the rule below: a dismissed card is
+	 * not DRAWN on the Tax years tab, so paper filed to it is accounted for by
+	 * neither tab and has to keep its place on the loose card. Only the
+	 * household-level rows matter — a per-person override says WHO owes a
+	 * return, not whether the card exists.
+	 *
+	 * One query against a table that holds a handful of rows, and only on the
+	 * shelf that has a Tax years tab at all.
+	 */
+	const dismissed = new Set<string>();
+	if (hasTaxYears) {
+		const rows = await handle
+			.select({
+				year: taxFilingOverride.year,
+				country: taxFilingOverride.country,
+				expected: taxFilingOverride.expected,
+				personId: taxFilingOverride.personId
+			})
+			.from(taxFilingOverride);
+		for (const row of rows) {
+			if (row.personId === null && !row.expected) dismissed.add(`${row.year} ${row.country}`);
+		}
+	}
+
 	const byCard = new Map<string, CardDocument[]>();
 	const loose: CardDocument[] = [];
 	for (const row of rows) {
@@ -297,6 +329,29 @@ async function shelfDocuments(
 		};
 		const cards = cardOf.get(row.id);
 		if (!cards || cards.length === 0) {
+			/**
+			 * Already accounted for by the Tax years tab, so not drawn again here.
+			 *
+			 * The shelf's rule is that everything on it is either on a card or at
+			 * the end of it — but this shelf has a SECOND tab, and a return sitting
+			 * on a (year, country) card has a home already. Drawing it under "Not
+			 * assigned yet" as well said it was homeless when it was not, which is
+			 * the one thing that card is for saying.
+			 *
+			 * `tax_document` and no looser: only that type becomes a filing
+			 * (`tax-years.ts` builds its cards from exactly those), so only it is
+			 * certain to have a card to be accounted for ON. A broker report with
+			 * a country and a period is drawn on a card that already exists but
+			 * creates none of its own, so it stays here.
+			 */
+			if (
+				hasTaxYears &&
+				doc.onTaxYear &&
+				row.type === 'tax_document' &&
+				!dismissed.has(`${doc.onTaxYear.year} ${doc.onTaxYear.country}`)
+			) {
+				continue;
+			}
 			// Named no card on this shelf. Drawn under "Not assigned yet" rather
 			// than dropped: everything on the shelf is either on a card or
 			// accounted for at the end of it.
