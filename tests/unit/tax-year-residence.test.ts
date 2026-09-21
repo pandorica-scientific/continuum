@@ -16,6 +16,18 @@ const input = (over: Partial<TaxYearInput> = {}): TaxYearInput => ({
 	...over
 });
 
+const job = (
+	personId: string,
+	country: string,
+	startsOn: string,
+	endsOn: string | null = null
+) => ({
+	personId,
+	country,
+	startsOn,
+	endsOn
+});
+
 const keys = (cards: { year: number; country: string }[]) =>
 	cards.map((card) => `${card.year} ${card.country}`).sort();
 
@@ -126,5 +138,48 @@ describe('residence as a source of cards', () => {
 		expect(tier(2024)).toBe('employment');
 		expect(tier(2025)).toBe('statement');
 		expect(tier(2026)).toBe('citizenship');
+	});
+
+	// A household's earliest year is not a year every member of it owed a return
+	// for. Without a per-person floor, somebody added later acquires a
+	// never-filed return for every year back to a housemate's first job.
+	it('does not raise years for a person before they had anything', () => {
+		const cards = taxYearCards(
+			input({
+				people: [
+					{ id: 'p1', name: 'Robert' },
+					{ id: 'p2', name: 'Newcomer' }
+				],
+				engagements: [job('p1', 'CZ', '2015-01-01')],
+				citizenship: { p1: 'CZ', p2: 'CZ' },
+				birthYears: { p2: 2024 },
+				thisYear: 2026
+			})
+		);
+		const rowsFor = (year: number) =>
+			cards.find((c) => c.year === year && c.country === 'CZ')?.rows.map((r) => r.personId) ?? [];
+		expect(rowsFor(2015)).toEqual(['p1']);
+		expect(rowsFor(2024)).toEqual(['p1', 'p2']);
+	});
+
+	// No work, no paper, no birth year: asked about the year in progress and no
+	// earlier one, rather than about every year somebody else has been working.
+	it('asks only about this year for a person nothing is known about', () => {
+		const cards = taxYearCards(
+			input({
+				people: [
+					{ id: 'p1', name: 'Robert' },
+					{ id: 'p2', name: 'Unknown' }
+				],
+				engagements: [job('p1', 'CZ', '2020-01-01')],
+				citizenship: { p1: 'CZ', p2: 'CZ' },
+				thisYear: 2022
+			})
+		);
+		const rowsFor = (year: number) =>
+			cards.find((c) => c.year === year && c.country === 'CZ')?.rows.map((r) => r.personId) ?? [];
+		expect(rowsFor(2020)).toEqual(['p1']);
+		expect(rowsFor(2021)).toEqual(['p1']);
+		expect(rowsFor(2022)).toEqual(['p1', 'p2']);
 	});
 });

@@ -398,6 +398,10 @@ export const actions: Actions = {
 			await discardUploads(attachments);
 			return fail(result.status, { message: result.message });
 		}
+		// A duplicate inside the form is not reported — saving the statement is the
+		// point — but its bytes are already on the volume with nothing pointing at
+		// them, so they go the same way a refused upload's would.
+		await discardUploads(attachments.filter((a) => result.skipped?.includes(a.storedName)));
 		return { ok: true };
 	},
 
@@ -442,7 +446,7 @@ export const actions: Actions = {
 		// points at them now. Discarded here rather than left behind, because the
 		// document they duplicate is already keeping a copy.
 		await discardUploads(
-			attachments.filter((a) => filed.skipped.some((s) => s.original === (a.original ?? '')))
+			attachments.filter((a) => filed.skipped.some((s) => s.storedName === a.storedName))
 		);
 		// After the commit, never inside it: a queued job pointing at a document
 		// the transaction went on to roll back is work with nothing to read.

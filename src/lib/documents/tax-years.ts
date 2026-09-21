@@ -88,6 +88,12 @@ export interface TaxYearInput {
 	 * switches itself on when somebody answers.
 	 */
 	citizenship?: Record<string, string | null>;
+	/**
+	 * `person.birth_year`, by person id. Bounds the citizenship tier for somebody
+	 * with no paper and no work of their own: a household's earliest year is not
+	 * a year every member of it owed a return for.
+	 */
+	birthYears?: Record<string, number | null>;
 }
 
 export interface TaxYearRow {
@@ -217,7 +223,7 @@ export interface ResolvedResidence {
  * for why that absence is the design rather than an omission.
  */
 export function taxResidences(input: TaxYearInput): ResolvedResidence[] {
-	const { engagements, floorYear, thisYear } = prepare(input);
+	const { engagements, filings, floorYear, thisYear } = prepare(input);
 	const fold = <T extends { country: string }>(rows: readonly T[]) =>
 		rows
 			.map((row) => ({ ...row, country: foldCountry(row.country) }))
@@ -225,9 +231,41 @@ export function taxResidences(input: TaxYearInput): ResolvedResidence[] {
 	const declarations = fold(input.residenceDeclarations ?? []);
 	const statements = fold(input.residenceStatements ?? []);
 
+	/**
+	 * The first year THIS person can owe anything.
+	 *
+	 * The household floor is the earliest engagement or filing across everybody,
+	 * and the citizenship tier answers every year it is asked about — so without
+	 * a per-person floor, somebody added to the household in 2025 acquires a
+	 * never-filed return for every year back to a housemate's first job in 2015.
+	 * Nothing about them says they owed one.
+	 *
+	 * Their own earliest evidence, then: a role period, a filing, a declaration,
+	 * or the year they were born. A person with none of those is asked about no
+	 * year at all rather than about all of them.
+	 */
+	const own = (personId: string): number | null => {
+		const years = [
+			...engagements
+				.filter((e) => e.personId === personId && e.startsOn !== null)
+				.map((e) => yearOf(e.startsOn as string)),
+			...filings.filter((f) => f.personId === personId).map((f) => f.year),
+			...declarations.filter((row) => row.personId === personId).map((row) => row.year),
+			...statements.filter((row) => row.personId === personId).map((row) => row.year),
+			...(input.birthYears?.[personId] ? [input.birthYears[personId] as number] : [])
+		];
+		return years.length > 0 ? Math.min(...years) : null;
+	};
+
 	const resolved: ResolvedResidence[] = [];
-	for (const person of input.people)
-		for (let year = floorYear; year <= thisYear; year++)
+	for (const person of input.people) {
+		// Nothing at all on record for them: asked about THIS year and no earlier
+		// one. Citizenship answers whatever it is asked, so an unbounded question
+		// turns "we know they are Czech" into "they owe a decade of returns" —
+		// while the year in progress is one they really are resident for, and is
+		// the gap year this tier exists to raise.
+		const from = own(person.id) ?? thisYear;
+		for (let year = Math.max(floorYear, from); year <= thisYear; year++)
 			resolved.push({
 				personId: person.id,
 				year,
@@ -246,6 +284,7 @@ export function taxResidences(input: TaxYearInput): ResolvedResidence[] {
 					citizenship: input.citizenship?.[person.id] ?? null
 				})
 			});
+	}
 	return resolved;
 }
 

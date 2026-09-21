@@ -84,7 +84,20 @@ interface StatementInput {
 	linkDocumentIds: string[];
 }
 
-type TaxResult = { ok: true } | { ok: false; status: number; message: string };
+type TaxResult =
+	| {
+			ok: true;
+			/**
+			 * Stored names whose bytes reached the volume and were then not filed,
+			 * because a document on this statement already holds the same content.
+			 *
+			 * Reported so the caller can discard them: writing the file and then
+			 * pointing nothing at it leaves it on the volume for ever. Absent on
+			 * every other `ok`, which files everything it was given.
+			 */
+			skipped?: string[];
+	  }
+	| { ok: false; status: number; message: string };
 
 /**
  * Thrown to roll a statement back when the paper it named cannot be linked.
@@ -143,7 +156,17 @@ export async function attachDocumentsToStatement(
 	country: string,
 	attachments: StatementAttachment[],
 	handle: Queryable
-): Promise<{ filedIds: string[]; skipped: { original: string; existingName: string }[] }> {
+): Promise<{
+	filedIds: string[];
+	/**
+	 * What was NOT filed, keyed by `storedName`.
+	 *
+	 * Not by `original`: two files can reach one batch under one browser
+	 * filename, and a caller discarding "the skipped ones" by that name would
+	 * delete the bytes of the copy it had just committed.
+	 */
+	skipped: { storedName: string; original: string; existingName: string }[];
+}> {
 	if (attachments.length === 0) return { filedIds: [], skipped: [] };
 
 	const linked = await handle
@@ -165,11 +188,15 @@ export async function attachDocumentsToStatement(
 	}
 
 	const filedIds: string[] = [];
-	const skipped: { original: string; existingName: string }[] = [];
+	const skipped: { storedName: string; original: string; existingName: string }[] = [];
 	for (const attachment of attachments) {
 		const duplicateOf = attachment.contentHash ? byHash.get(attachment.contentHash) : undefined;
 		if (duplicateOf) {
-			skipped.push({ original: attachment.original ?? '', existingName: duplicateOf });
+			skipped.push({
+				storedName: attachment.storedName,
+				original: attachment.original ?? '',
+				existingName: duplicateOf
+			});
 			continue;
 		}
 		// Codes by the time they get here — `saveStatement` and the Tax screen's
@@ -266,6 +293,7 @@ export async function saveStatement(input: StatementInput, handle: Db = db): Pro
 	};
 
 	let filedDocumentIds: string[] = [];
+	let skippedUploads: { storedName: string }[] = [];
 	// A refusal from inside the transaction, carried out past the rollback.
 	let refusal: TaxResult | null = null;
 	try {
@@ -287,12 +315,13 @@ export async function saveStatement(input: StatementInput, handle: Db = db): Pro
 				.returning({ id: taxStatement.id });
 			const id = saved[0].id;
 
-			// `skipped` is dropped here on purpose: `saveStatement` is the whole
-			// form, and a duplicate attachment inside it is not a reason to
+			// `skipped` is not REPORTED here, on purpose: `saveStatement` is the
+			// whole form, and a duplicate attachment inside it is not a reason to
 			// interrupt saving the statement itself. The Tax screen's own attach
 			// action, which is where a household uploads one file deliberately,
-			// does report it.
-			({ filedIds: filedDocumentIds } = await attachDocumentsToStatement(
+			// does say so. Its bytes are still discarded below — reaching the
+			// volume and then having nothing point at them is a leak either way.
+			({ filedIds: filedDocumentIds, skipped: skippedUploads } = await attachDocumentsToStatement(
 				id,
 				input.personId,
 				input.year,
@@ -346,7 +375,11 @@ export async function saveStatement(input: StatementInput, handle: Db = db): Pro
 	// After the commit, never inside it: a queued job pointing at a document
 	// the transaction went on to roll back is work with nothing to read.
 	for (const documentId of filedDocumentIds) await enqueueExtraction(documentId, handle);
-	return { ok: true };
+	// Absent when nothing was skipped, which is every ordinary save: a caller
+	// checking `ok` should not have to think about a field that is always empty.
+	return skippedUploads.length > 0
+		? { ok: true, skipped: skippedUploads.map((upload) => upload.storedName) }
+		: { ok: true };
 }
 
 export async function deleteStatement(id: string): Promise<TaxResult> {

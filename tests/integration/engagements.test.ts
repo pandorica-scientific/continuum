@@ -104,6 +104,26 @@ describe('an engagement', () => {
 		);
 	});
 
+	// The form was opened, somebody else pressed "End it", and the promotion
+	// arrived afterwards. Overwriting the recorded end date would rewrite when
+	// the role actually ended, and with it which months the lane expects.
+	it('refuses to promote a role period that has already ended', async () => {
+		const org = await makeOrganisation(db, { name: 'MSD Czech Republic' });
+		const person = await makePerson(db, { name: 'Robert' });
+		const closed = await makeEngagement(db, {
+			organisationId: org.id,
+			personId: person.id,
+			startsOn: '2025-01-01',
+			endsOn: '2025-06-30'
+		});
+		await expect(
+			promoteEngagement({ id: closed.id, role: 'Next', startsOn: '2025-09-01' }, db)
+		).rejects.toThrow(/already ended/);
+		const rows = await engagementsFor(org.id, db);
+		expect(rows).toHaveLength(1);
+		expect(rows[0].endsOn).toBe('2025-06-30');
+	});
+
 	it('refuses a promotion dated before the role it follows', async () => {
 		const org = await makeOrganisation(db, { name: 'MSD Czech Republic' });
 		const person = await makePerson(db, { name: 'Robert' });

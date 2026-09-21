@@ -120,7 +120,12 @@ export async function loadTaxYears(
 		tags
 	] = await Promise.all([
 		handle
-			.select({ id: person.id, name: person.name, citizenship: person.citizenship })
+			.select({
+				id: person.id,
+				name: person.name,
+				citizenship: person.citizenship,
+				birthYear: person.birthYear
+			})
 			.from(person)
 			.orderBy(person.name),
 		// The country travels with the role period, from the organisation it is
@@ -237,7 +242,8 @@ export async function loadTaxYears(
 		residenceStatements: statements
 			.filter((s) => s.role === 'residence')
 			.map((s) => ({ personId: s.personId, year: s.year, country: s.country })),
-		citizenship: Object.fromEntries(people.map((p) => [p.id, p.citizenship]))
+		citizenship: Object.fromEntries(people.map((p) => [p.id, p.citizenship])),
+		birthYears: Object.fromEntries(people.map((p) => [p.id, p.birthYear]))
 	};
 	// Resolved ONCE and handed to the cards. Two readings of it would let the
 	// residence row disagree with the grid beneath it, which is the very thing
