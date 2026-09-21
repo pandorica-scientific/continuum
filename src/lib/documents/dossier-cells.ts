@@ -41,6 +41,27 @@ export const MONTHS = [
 	'Dec'
 ];
 
+/**
+ * Where each cell starts, 1-based, as a CSS grid column.
+ *
+ * A running sum of the spans before it, NOT the cell's index: `monthlyCells`
+ * merges the months one document covers into a single box, so a quarterly
+ * filing occupies three columns and everything after it would be drawn three
+ * columns too far left if the index were used.
+ */
+export function columnStarts(cells: readonly DossierCell[]): number[] {
+	let at = 1;
+	return cells.map((cell) => {
+		const start = at;
+		at += cell.span;
+		return start;
+	});
+}
+
+/** How many columns a whole lane occupies. */
+export const columnCount = (cells: readonly DossierCell[]): number =>
+	cells.reduce((n, cell) => n + cell.span, 0);
+
 /** `2021` alone, or `2021–22` for a window. */
 const windowLabel = (start: number, every: number): string =>
 	every === 1 ? String(start) : `${start}–${String(start + every - 1).slice(-2)}`;

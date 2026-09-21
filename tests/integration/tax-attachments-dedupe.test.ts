@@ -76,8 +76,14 @@ describe('duplicate tax attachments', () => {
 
 		expect(first.filedIds).toHaveLength(1);
 		expect(second.filedIds).toHaveLength(0);
+		// `storedName` is what identifies the upload whose bytes must be discarded:
+		// two files can reach one batch under one browser filename.
 		expect(second.skipped).toEqual([
-			{ original: 'report-again.pdf', existingName: '2025 CZ broker earnings report' }
+			{
+				storedName: expect.any(String),
+				original: 'report-again.pdf',
+				existingName: '2025 CZ broker earnings report'
+			}
 		]);
 	});
 

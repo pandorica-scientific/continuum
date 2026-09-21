@@ -16,8 +16,8 @@
 	import Icon from '$lib/components/Icon.svelte';
 	import { countryName, countryOptions, flagEmoji } from '$lib/countries';
 	import { ENUMS } from '$lib/enums';
-	import { MONTHS } from '$lib/documents/dossier-cells';
-	import type { CardDocument, DossierCard } from '$lib/server/documents/dossier-load';
+	import { columnCount, columnStarts, MONTHS } from '$lib/documents/dossier-cells';
+	import type { CardDocument, DossierCard, DossierLane } from '$lib/server/documents/dossier-load';
 
 	let {
 		card,
@@ -42,8 +42,20 @@
 		onyear: (year: number) => void;
 	} = $props();
 
-	/** The lanes with a rhythm, and the lanes without: two shapes, one card. */
-	const timed = $derived(card.lanes.filter((lane) => lane.cadence !== 'none'));
+	/**
+	 * Three shapes, one card.
+	 *
+	 * Only a MONTHLY lane belongs in the twelve-column grid — that is what the
+	 * Jan…Dec header means. A yearly one (a broker's annual report, an office's
+	 * filing) has one cell per year and would otherwise draw 2021 under "Jan",
+	 * and a two-year window would overlap its neighbour. It gets a row scaled to
+	 * its own cells instead. A lane with no rhythm has nothing to be missing from
+	 * and is a list.
+	 */
+	const monthly = $derived(card.lanes.filter((lane) => lane.cadence === 'monthly'));
+	const windowed = $derived(
+		card.lanes.filter((lane) => lane.cadence === 'yearly' || lane.cadence === 'once')
+	);
 	const loose = $derived(card.lanes.filter((lane) => lane.cadence === 'none'));
 
 	/**
@@ -139,7 +151,9 @@
 				no country — set it
 			</button>
 		{/if}
-		<span class="quiet">the employment record — month by month</span>
+		<span class="quiet">
+			the record{monthly.length > 0 ? ' — month by month' : ''}
+		</span>
 		{#if card.id !== null}
 			<button
 				type="button"
@@ -207,12 +221,14 @@
 	{/if}
 
 	<div class="scroll">
-		<div class="months">
-			<span></span>
-			{#each MONTHS as month (month)}
-				<span class="mono month-head">{month}</span>
-			{/each}
-		</div>
+		{#if monthly.length > 0}
+			<div class="months">
+				<span></span>
+				{#each MONTHS as month (month)}
+					<span class="mono month-head">{month}</span>
+				{/each}
+			</div>
+		{/if}
 
 		<!-- POSITIONS. A promotion is a second period, never an edit to the first:
 		     a lane counts expected filings from the earliest start, so overwriting
@@ -262,38 +278,35 @@
 			{/if}
 		</div>
 
-		{#each timed as lane (lane.id)}
+		{#each monthly as lane (lane.id)}
 			<div class="row">
-				<span class="row-label">
-					<span>{lane.label}</span>
-					<span class="mono quiet" class:short={lane.gaps > 0}>{lane.filed}/{lane.expected}</span>
-				</span>
-				{#each lane.cells as cell, i (cell.key)}
-					{#if cell.state === 'filed'}
-						<button
-							type="button"
-							class="cell filed"
-							style:grid-column="{i + 2} / span {cell.span}"
-							onclick={() => onopen(cell.documentIds[0])}
-							aria-label="Filed: {cell.label}"
-						>
-							<Icon name="check" size={13} />
-							{#if cell.documentIds.length > 1}
-								<span class="mono many">{cell.documentIds.length}</span>
-							{/if}
-						</button>
-					{:else}
-						<span
-							class="cell {cell.state}"
-							style:grid-column="{i + 2} / span {cell.span}"
-							role="img"
-							aria-label="{CELL_WORD[cell.state]}: {cell.label}"
-						></span>
-					{/if}
-				{/each}
+				{@render laneLabel(lane)}
+				{@render laneCells(lane)}
 			</div>
 		{/each}
 	</div>
+
+	<!-- A yearly lane draws one cell per year, so it gets a grid of its own size
+	     rather than being squeezed under twelve month headings. -->
+	{#each windowed as lane (lane.id)}
+		<div class="scroll">
+			<div class="years" style:--columns={columnCount(lane.cells)}>
+				<span></span>
+				{#each lane.cells as cell, i (cell.key)}
+					<span
+						class="mono month-head"
+						style:grid-column="{columnStarts(lane.cells)[i] + 1} / span {cell.span}"
+					>
+						{cell.label}
+					</span>
+				{/each}
+			</div>
+			<div class="years" style:--columns={columnCount(lane.cells)}>
+				{@render laneLabel(lane)}
+				{@render laneCells(lane)}
+			</div>
+		</div>
+	{/each}
 
 	<!-- The forms, under the row they correct rather than beside it: a date input
 	     inside a 34px bar would push every month column out of line. -->
@@ -365,6 +378,43 @@
 		</form>
 	{/if}
 </div>
+
+{#snippet laneLabel(lane: DossierLane)}
+	<span class="row-label">
+		<span>{lane.label}</span>
+		<span class="mono quiet" class:short={lane.gaps > 0}>{lane.filed}/{lane.expected}</span>
+	</span>
+{/snippet}
+
+{#snippet laneCells(lane: DossierLane)}
+	<!-- Placed by the running sum of the spans before it, never by index: one
+	     document covering three months is ONE cell three columns wide, and every
+	     cell after it would be drawn three columns early. -->
+	{#each lane.cells as cell, i (cell.key)}
+		{@const start = columnStarts(lane.cells)[i] + 1}
+		{#if cell.state === 'filed'}
+			<button
+				type="button"
+				class="cell filed"
+				style:grid-column="{start} / span {cell.span}"
+				onclick={() => onopen(cell.documentIds[0])}
+				aria-label="Filed: {cell.label}"
+			>
+				<Icon name="check" size={13} />
+				{#if cell.documentIds.length > 1}
+					<span class="mono many">{cell.documentIds.length}</span>
+				{/if}
+			</button>
+		{:else}
+			<span
+				class="cell {cell.state}"
+				style:grid-column="{start} / span {cell.span}"
+				role="img"
+				aria-label="{CELL_WORD[cell.state]}: {cell.label}"
+			></span>
+		{/if}
+	{/each}
+{/snippet}
 
 <style>
 	/* Hung off its own span by a rule in the source's hue, so the record reads as
@@ -452,6 +502,15 @@
 		grid-template-columns: 110px repeat(12, minmax(0, 1fr));
 		gap: var(--space-2);
 		min-width: 560px;
+	}
+	/* A yearly lane's own width: as many columns as it has years. */
+	.years {
+		display: grid;
+		grid-template-columns: 110px repeat(var(--columns), minmax(44px, 1fr));
+		gap: var(--space-2);
+		align-items: center;
+		min-width: 320px;
+		padding-bottom: var(--space-2);
 	}
 	.row {
 		align-items: center;

@@ -528,11 +528,18 @@ export async function promoteEngagement(
 		.select({
 			organisationId: engagement.organisationId,
 			personId: engagement.personId,
-			startsOn: engagement.startsOn
+			startsOn: engagement.startsOn,
+			endsOn: engagement.endsOn
 		})
 		.from(engagement)
 		.where(eq(engagement.id, input.id));
 	if (!current) throw new Error('That role period is no longer there.');
+	// Only the OPEN period can be promoted. A closed one already records when the
+	// role ended, and overwriting that with the day before a new start would
+	// rewrite history — which a form opened before somebody else pressed "End it"
+	// would otherwise do without saying anything.
+	if (current.endsOn !== null)
+		throw new Error('That role period has already ended; add the new one instead.');
 	// A promotion cannot predate the role it promotes: the closing date would
 	// land before the opening one, which the CHECK on the table refuses anyway.
 	if (current.startsOn !== null && input.startsOn <= current.startsOn)

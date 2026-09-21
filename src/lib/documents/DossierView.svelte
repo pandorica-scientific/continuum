@@ -11,6 +11,7 @@
 	import Icon from '$lib/components/Icon.svelte';
 	import PeriodListing from '$lib/statements/PeriodListing.svelte';
 	import { enhance } from '$app/forms';
+	import { columnCount, columnStarts } from '$lib/documents/dossier-cells';
 	import { submitAction } from '$lib/actions/result';
 	import type { DossierLane, DossierPayload } from '$lib/server/documents/dossier-load';
 	import type { ProposalRow } from '$lib/server/organisations/proposals-load';
@@ -153,19 +154,6 @@
 	 * The running sum of the spans before it, not the index — a lane running
 	 * every two years has its second cell at column 3.
 	 */
-	function columnStarts(lane: DossierLane): number[] {
-		let at = 1;
-		return lane.cells.map((cell) => {
-			const start = at;
-			at += cell.span;
-			return start;
-		});
-	}
-
-	/** How many columns the whole lane occupies. */
-	const columnCount = (lane: DossierLane): number =>
-		lane.cells.reduce((n, cell) => n + cell.span, 0);
-
 	const columnLabel = (lane: DossierLane, key: string): string =>
 		lane.cadence === 'monthly'
 			? `${lane.cells.find((c) => c.key === key)?.label ?? ''} ${key.slice(0, 4)}`
@@ -557,11 +545,11 @@
 							{/each}
 						{:else}
 							<div class="scroll">
-								<div class="cells" style:--columns={columnCount(lane)}>
+								<div class="cells" style:--columns={columnCount(lane.cells)}>
 									{#each lane.cells as cell, i (cell.key)}
 										<span
 											class="mono cell-head"
-											style:grid-column="{columnStarts(lane)[i]} / span {cell.span}"
+											style:grid-column="{columnStarts(lane.cells)[i]} / span {cell.span}"
 										>
 											{cell.label}
 										</span>
@@ -569,7 +557,7 @@
 									{#each lane.cells as cell, i (cell.key)}
 										<div
 											class="cell {cell.state}"
-											style:grid-column="{columnStarts(lane)[i]} / span {cell.span}"
+											style:grid-column="{columnStarts(lane.cells)[i]} / span {cell.span}"
 										>
 											{#if cell.state === 'filed'}
 												<button
