@@ -50,7 +50,9 @@ export async function writeVisitsForEndedTrips(handle: Db = db): Promise<number>
 		})
 		.from(tripDestination)
 		.innerJoin(trip, eq(trip.id, tripDestination.tripId))
-		.where(lt(trip.endsOn, today));
+		// Not a trip waiting out its undo: it would light the map for a minute
+		// and leave a visit behind it once the sweep deleted the trip.
+		.where(and(lt(trip.endsOn, today), isNull(trip.removedAt)));
 
 	const rows = destinations.map((destination) => ({
 		id: uuidv7(),

@@ -16,6 +16,7 @@ import { uuidv7 } from 'uuidv7';
 import { foldCountry } from '$lib/countries';
 import { derivedNameFor } from '$lib/tax';
 import { db, inTransaction, type Queryable } from '$lib/server/db';
+import { getFilingAge } from '$lib/server/settings';
 import { dayBefore } from '$lib/dates';
 import {
 	document,
@@ -117,7 +118,8 @@ export async function loadTaxYears(
 		dated,
 		links,
 		engagedOrganisations,
-		tags
+		tags,
+		filingAge
 	] = await Promise.all([
 		handle
 			.select({
@@ -205,7 +207,11 @@ export async function loadTaxYears(
 		handle
 			.select({ documentId: tagLink.targetId, name: tag.name })
 			.from(tagLink)
-			.innerJoin(tag, eq(tag.id, tagLink.tagId))
+			.innerJoin(tag, eq(tag.id, tagLink.tagId)),
+		// From when somebody owes a return for merely having lived somewhere. A
+		// household setting because the age differs by country, and because the
+		// alternative — a constant — is what handed a newborn a nil return.
+		getFilingAge(handle)
 	]);
 
 	const tagsOf = new Map<string, string[]>();
@@ -243,7 +249,8 @@ export async function loadTaxYears(
 			.filter((s) => s.role === 'residence')
 			.map((s) => ({ personId: s.personId, year: s.year, country: s.country })),
 		citizenship: Object.fromEntries(people.map((p) => [p.id, p.citizenship])),
-		birthYears: Object.fromEntries(people.map((p) => [p.id, p.birthYear]))
+		birthYears: Object.fromEntries(people.map((p) => [p.id, p.birthYear])),
+		filingAge
 	};
 	// Resolved ONCE and handed to the cards. Two readings of it would let the
 	// residence row disagree with the grid beneath it, which is the very thing

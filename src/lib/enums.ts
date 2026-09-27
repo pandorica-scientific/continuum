@@ -62,23 +62,58 @@ export const ENTITY_KINDS = [
 	// An employer, the tax office, an insurer. A kind rather than a table of its
 	// own so a document files against one through `document_link` unchanged.
 	'organisation',
-	// The three Life records a household files paper against or attaches a
-	// contact to: the booking confirmations and tickets for a trip, the receipt
-	// for a bottle, the page a recipe was torn out of. A direct `document_id` on
-	// each table would answer only one question ("this flight's confirmation")
-	// and give tagging and contacts each their own table too.
-	//
-	// `trip_idea` is deliberately absent: an idea is removed with an undo bar and
-	// is not something anybody files a receipt against.
+	// The Life records a household files paper against or attaches a contact
+	// to: the booking confirmations and tickets for a trip, the receipt for a
+	// bottle, the page a recipe was torn out of. A direct `document_id` on each
+	// table would answer only one question ("this flight's confirmation") and
+	// give tagging and contacts each their own table too.
 	'trip',
 	'bottle',
-	'recipe'
+	'recipe',
+	// An idea holds the plan somebody drew up for it — a travel planner's PDF —
+	// so it is a record paper files against too. Once absent on the grounds that
+	// nobody files a receipt against a maybe; a plan is exactly what a maybe has.
+	'trip_idea'
 ] as const;
 
 export type EntityKind = (typeof ENTITY_KINDS)[number];
 
 export const ENUMS = {
 	'person.role': ['admin', 'member'],
+
+	// What a bearer token may do under /api. 'read' answers GET and HEAD only;
+	// 'read-write' may also change rows. Set when the token is created and
+	// changeable afterwards, because the token's hash is its id and nothing
+	// about the raw token encodes what it is allowed to do.
+	'api_token.access': ['read', 'read-write'],
+
+	/**
+	 * The parts of the household a token may be limited to: every module the
+	 * Settings toggles name, plus `ledger` for the accounts, transactions,
+	 * categories and rules no toggle owns. A table belongs to exactly one of
+	 * these or to `shared` — people, tags, the entity registry — which is not
+	 * grantable and so only a token limited to nothing reaches. Written out
+	 * rather than read from the module registry, because this file is loaded by
+	 * drizzle-kit outside Vite; `tests/unit/api-areas.test.ts` holds the two
+	 * lists together.
+	 */
+	'api_token.area': [
+		'ledger',
+		'import',
+		'property',
+		'investments',
+		'loans',
+		'retirement',
+		'salary',
+		'home',
+		'calendar',
+		'tax',
+		'documents',
+		'contacts',
+		'trips',
+		'cookbook',
+		'collections'
+	],
 
 	'account.kind': ['current', 'savings', 'brokerage'],
 
@@ -351,6 +386,7 @@ export type DocumentTypeKey = EnumValue<'document.type'> | (string & {});
  */
 export const ENUM_COLUMNS: { table: string; column: string; enum: EnumKey }[] = [
 	{ table: 'person', column: 'role', enum: 'person.role' },
+	{ table: 'api_token', column: 'access', enum: 'api_token.access' },
 	{ table: 'account', column: 'kind', enum: 'account.kind' },
 	{ table: 'organisation', column: 'kind', enum: 'organisation.kind' },
 	{ table: 'shelf', column: 'template', enum: 'shelf.template' },

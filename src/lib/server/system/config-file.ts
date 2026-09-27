@@ -29,7 +29,9 @@ export const EXPORTABLE_KEYS = [
 	'payslipNetLabels',
 	// Bonus labels were never exportable at all, which meant a config restore
 	// silently dropped everything the bonus reader had learned.
-	'payslipBonusLabels'
+	'payslipBonusLabels',
+	// From what age a member owes a return for merely having lived somewhere.
+	'tax.filingAge'
 ] as const;
 
 interface ConfigFile {

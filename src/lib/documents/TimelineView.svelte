@@ -207,13 +207,52 @@
 
 	function markWords(mark: HouseholdResidence): string {
 		if (mark.evidence) return EVIDENCE_WORDS[mark.evidence];
-		return mark.countries.length > 1 ? 'both owe something' : 'nothing on record';
+		if (mark.countries.length < 2) return 'nothing on record';
+		// The count, not "both": a household torn between three candidates owes a
+		// return in each of the three, and "both" counts one of them out. It is
+		// also four characters shorter than the sentence it replaces, which is
+		// what lets the caption finish inside a year-wide column.
+		return `${mark.countries.length} returns owed`;
+	}
+
+	/**
+	 * What a residence cell says to a screen reader.
+	 *
+	 * The cell draws flags, which are `aria-hidden` — so the countries have to
+	 * arrive here in words, or the only thing announced is the year.
+	 */
+	function markLabel(year: number, mark: HouseholdResidence): string {
+		const names = mark.countries.map(countryName).join(' · ');
+		const how = markWords(mark);
+		return `Tax residence for ${year}: ${names ? `${names} — ${how}` : how}`;
 	}
 
 	const unproved = $derived([...marks.values()].filter((m) => m.state !== 'proved').length);
 
 	/** The year whose residence form is open, at most one. */
 	let declaring = $state<number | null>(null);
+	/** Whether the "why a return is owed" note is open. Its button is the only way to open or close it. */
+	let noteOpen = $state(false);
+	/**
+	 * Whether the open residence form is stating PART of a year.
+	 *
+	 * Whole year is the common answer and the one the blank dates already meant,
+	 * so the form starts there and the two date fields appear only when somebody
+	 * says the year was split. Reset whenever another year is opened: a tick left
+	 * over from the year before is a date pair nobody asked for.
+	 */
+	let partial = $state(false);
+	// Bound only so each date can be required while the other is empty: a
+	// ticked "only part of" with neither date is a split nobody dated, and
+	// saving it as the whole year would contradict the tick.
+	let partFrom = $state('');
+	let partTo = $state('');
+	function declare(year: number): void {
+		declaring = declaring === year ? null : year;
+		partial = false;
+		partFrom = '';
+		partTo = '';
+	}
 	const nameOf = (id: string) => people.find((p) => p.id === id)?.name ?? '—';
 
 	/** The declarations standing for a year — the only tier that can be withdrawn. */
@@ -398,6 +437,17 @@
 				<span class="rule"></span>
 			</div>
 
+			<!-- The years again. One axis does not mean one label for it: by the time
+			     the reader is down here the heading is several hundred pixels above,
+			     and a cell that says "never filed" without saying WHEN is a cell you
+			     have to click to read. Same columns, same row, stated twice. -->
+			<div class="grid">
+				<span></span>
+				{#each axis as year (year)}
+					<span class="mono year-head">{year}</span>
+				{/each}
+			</div>
+
 			<!-- Residence decides which return is THE return, so it is read before the
 		     lanes and left correctable — including the year it cannot call. -->
 			<div class="grid row">
@@ -409,30 +459,36 @@
 				</span>
 				{#each axis as year (year)}
 					{@const mark = marks.get(year)!}
+					{@const names = mark.countries.map(countryName).join(' · ')}
+					<!-- The flags carry the countries and the names do not: three of them
+					     never fit a year-wide column, and a cell that paints over its
+					     neighbour says less than a clipped one. The spelling-out lives in
+					     the label, the hover and the country rows below. No arrow between
+					     them either — the candidates are sorted, so an arrow would assert a
+					     direction of travel nobody has stated yet. -->
 					<button
 						type="button"
 						class="tall res {mark.state}"
 						style:--hue="var({hueFor(mark.countries[0] ?? null)})"
 						aria-expanded={declaring === year}
-						aria-label="Tax residence for {year}"
-						onclick={() => (declaring = declaring === year ? null : year)}
+						aria-label={markLabel(year, mark)}
+						title={markLabel(year, mark)}
+						onclick={() => declare(year)}
 					>
-						{#if mark.countries.length === 0}
-							<span class="cell-word">set it</span>
-						{:else if mark.state === 'unsettled' && mark.countries.length > 1}
-							<span class="cell-word warnword">
-								{#each mark.countries as code, i (code)}{i > 0 ? ' → ' : ''}<span aria-hidden="true"
-										>{flagEmoji(code)}</span
-									>{/each} · moved when?
-							</span>
-						{:else}
-							<span class="cell-word">
-								{#each mark.countries as code (code)}<span aria-hidden="true"
-										>{flagEmoji(code)}</span
-									>{/each}
-								{mark.countries.map(countryName).join(' · ')}
-							</span>
-						{/if}
+						<span class="cell-word">
+							{#if mark.countries.length === 0}
+								<span class="word">set it</span>
+							{:else}
+								<span class="flags" aria-hidden="true">
+									{#each mark.countries as code (code)}<span>{flagEmoji(code)}</span>{/each}
+								</span>
+								{#if mark.countries.length === 1}
+									<span class="word">{names}</span>
+								{:else if mark.state === 'unsettled'}
+									<span class="word">moved?</span>
+								{/if}
+							{/if}
+						</span>
 						<span class="cell-note">{markWords(mark)}</span>
 					</button>
 				{/each}
@@ -443,11 +499,25 @@
 			{/if}
 
 			<!-- The circularity, said out loud where it bites: the rule reads residence
-		     off a filed statement, and the years in question have none. -->
-			<div class="note">
-				<span class="note-icon" aria-hidden="true">
-					<Icon name="info" size={14} />
-				</span>
+		     off a filed statement, and the years in question have none.
+
+		     Folded away, because it is read once and then in the way: a paragraph
+		     and a legend sat permanently between the residence row and the returns
+		     it decides. The button alone opens and closes it: opening on hover or
+		     focus as well kept it open under the very click meant to close it, and
+		     left aria-expanded saying closed over a note plainly on screen. -->
+			<div class="note" class:open={noteOpen}>
+				<button
+					type="button"
+					class="note-trigger"
+					aria-expanded={noteOpen}
+					onclick={() => (noteOpen = !noteOpen)}
+				>
+					<span class="note-icon" aria-hidden="true">
+						<Icon name="info" size={14} />
+					</span>
+					why a return is owed at all
+				</button>
 				<span class="note-body">
 					<span>
 						A return is owed because you were <strong>resident</strong>, not because you earned. A
@@ -512,11 +582,11 @@
 									{#if cell.state === 'filed'}
 										{@const held = card ? paperCount(card) : 0}
 										<Icon name="check" size={13} />
-										filed{held > 1 ? ` · ${held}` : ''}
+										<span class="word">filed{held > 1 ? ` · ${held}` : ''}</span>
 									{:else if cell.state === 'partial'}
-										{cell.filed}/{cell.owed} filed
+										<span class="word">{cell.filed}/{cell.owed} filed</span>
 									{:else}
-										never filed
+										<span class="word">never filed</span>
 									{/if}
 								</span>
 								<span class="cell-note" class:warnword={card?.returnKind === 'unclear'}>
@@ -667,12 +737,18 @@
 	     in is two of these, and both halves owe a return. So the form states one
 	     side at a time and says so, rather than offering a picker that quietly
 	     makes the other country wrong. -->
+	{@const mark = marks.get(year)!}
+	{@const proposed = mark.countries}
 	<div class="res-panel">
 		<div class="res-head">
 			<span class="res-title">Where did you live in {year}?</span>
 			<span class="quiet">
-				A filed statement answers this on its own. Say it by hand where none was, and add a second
-				for the other half of a year you moved in.
+				{#if proposed.length > 0}
+					As it stands, {year} reads
+					<strong>{proposed.map(countryName).join(' · ')}</strong> — {markWords(mark)}.
+				{/if}
+				A filed statement answers this on its own. Say it by hand where none was, and take two answers
+				for a year somebody moved in — one per country.
 			</span>
 		</div>
 		<form method="POST" action="?/setResidence" use:enhance class="res-form">
@@ -680,21 +756,79 @@
 			<select name="personId" aria-label="Who" required>
 				{#each people as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
 			</select>
-			<select name="country" aria-label="Country" required>
-				{#each countryOptions() as c (c.code)}
-					<option value={c.code} selected={c.code === years.knownCountries[0]}>{c.name}</option>
-				{/each}
+			<!-- THE YEAR'S OWN CANDIDATES FIRST, and one of them selected. The
+			     default here was `knownCountries[0]` — the household's alphabetically
+			     first country, the same suggestion for every year on the axis, which
+			     for a year spent somewhere else is a wrong answer one click from
+			     being saved. What this year's evidence proposes is the only sensible
+			     default, and a move year puts both halves at the top of the list. -->
+			<select name="country" aria-label="Country for {year}" required>
+				{#if proposed.length > 0}
+					<optgroup label="{year} reads">
+						{#each proposed as code (code)}
+							<option value={code} selected={code === proposed[0]}>{countryName(code)}</option>
+						{/each}
+					</optgroup>
+				{/if}
+				<optgroup label={proposed.length > 0 ? 'Somewhere else' : 'Country'}>
+					{#each countryOptions().filter((c) => !proposed.includes(c.code)) as c (c.code)}
+						<option
+							value={c.code}
+							selected={proposed.length === 0 && c.code === years.knownCountries[0]}
+							>{c.name}</option
+						>
+					{/each}
+				</optgroup>
 			</select>
-			<label class="res-span">
-				<span class="quiet">from</span>
-				<input type="date" name="fromOn" aria-label="Resident from" />
+			<!-- "Leave both dates blank for the whole year" was a convention stated in
+			     a footnote under the fields it governed, which is the wrong order to
+			     read it in. The whole year is now the answer the form starts on, and
+			     the dates exist only once somebody says the year was split. Bounded
+			     to the year too: the picker opened on today and offered a date the
+			     action then refused for not being in {year}. -->
+			<label class="res-part">
+				<input type="checkbox" bind:checked={partial} />
+				<span>only part of {year}</span>
 			</label>
-			<label class="res-span">
-				<span class="quiet">to</span>
-				<input type="date" name="toOn" aria-label="Resident until" />
-			</label>
+			{#if partial}
+				<input type="hidden" name="partial" value="1" />
+				<!-- The pair travels together, so a narrow panel does not wrap "to"
+				     onto the next line away from "from". -->
+				<span class="res-dates">
+					<label class="res-span">
+						<span class="quiet">from</span>
+						<input
+							type="date"
+							name="fromOn"
+							aria-label="Resident from"
+							min="{year}-01-01"
+							max="{year}-12-31"
+							bind:value={partFrom}
+							required={!partTo}
+						/>
+					</label>
+					<label class="res-span">
+						<span class="quiet">to</span>
+						<input
+							type="date"
+							name="toOn"
+							aria-label="Resident until"
+							min="{year}-01-01"
+							max="{year}-12-31"
+							bind:value={partTo}
+							required={!partFrom}
+						/>
+					</label>
+				</span>
+			{/if}
 			<button type="submit" class="btn small btn-primary">Save</button>
 		</form>
+		{#if partial}
+			<p class="quiet res-hint">
+				Give at least one date. The other may be left empty — a date in <em>from</em> alone means
+				from that day to the end of {year}.
+			</p>
+		{/if}
 		{#each declaredFor(year) as said (said.personId + said.country)}
 			<form method="POST" action="?/clearResidence" use:enhance class="res-said">
 				<input type="hidden" name="personId" value={said.personId} />
@@ -707,7 +841,6 @@
 			</form>
 		{/each}
 		<div class="res-foot">
-			<span class="quiet">Leave both dates blank for the whole year.</span>
 			<button type="button" class="btn small" onclick={() => (declaring = null)}>Close</button>
 		</div>
 	</div>
@@ -795,10 +928,21 @@
 		gap: var(--space-6);
 	}
 	/* THE one geometry: a 250px stub, then a column per year. Every band uses it,
-	   which is what makes a span mean the same thing in all of them. */
+	   which is what makes a span mean the same thing in all of them.
+
+	   The floor is per COLUMN, not per grid: `minmax(0, 1fr)` under one whole-grid
+	   minimum let a seventh year shave every cell instead of widening the board,
+	   and the cells then wrote over each other. 96px holds the widest thing a
+	   cell has to say — "residence unclear" at 9px measures 76 and the flags with
+	   "moved?" 73, both inside the 88px the cell's padding leaves — so a column
+	   is never narrower than its words and the board scrolls instead of shaving
+	   them. Six years still fit a laptop window without scrolling, which is why
+	   this is 96 and not a round 100. The whole-grid minimum stays for the other
+	   end: two columns and a stub still fill a narrow window. */
 	.grid {
+		--cell: 96px;
 		display: grid;
-		grid-template-columns: 250px repeat(var(--years), minmax(0, 1fr));
+		grid-template-columns: 250px repeat(var(--years), minmax(var(--cell), 1fr));
 		gap: var(--space-4);
 		min-width: 700px;
 	}
@@ -974,14 +1118,33 @@
 		font-family: inherit;
 		padding: 0 var(--space-2);
 		box-sizing: border-box;
+		/* A cell is a box its own width. Both lines below clamp themselves, and
+		   this is the backstop for anything that one day forgets to. */
+		overflow: hidden;
+		min-width: 0;
 	}
 	.cell-word {
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-3);
+		max-width: 100%;
+		min-width: 0;
 		font-size: var(--text-xs);
 		color: var(--fg2);
 		white-space: nowrap;
+		overflow: hidden;
+	}
+	/* Flags keep their width and the words give way: a cell narrowed past its
+	   content should lose the end of a country name, not which countries. */
+	.flags {
+		display: inline-flex;
+		gap: var(--space-1);
+		flex: none;
+	}
+	.word {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 	.cell-note {
 		font-size: 9px;
@@ -1064,8 +1227,11 @@
 		height: 1px;
 		background: var(--bd2);
 	}
+	/* One line until it is wanted. The border stays so the row still reads as a
+	   thing you can open, rather than a stray sentence. */
 	.note {
 		display: flex;
+		flex-direction: column;
 		align-items: flex-start;
 		gap: var(--space-4);
 		margin-left: 25px;
@@ -1073,18 +1239,41 @@
 		border: 1px solid var(--bd);
 		border-radius: var(--radius-md);
 		background: var(--card);
+		width: fit-content;
+		max-width: 100%;
+	}
+	.note-trigger {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-4);
+		border: 0;
+		padding: 0;
+		background: transparent;
+		font-family: inherit;
+		font-size: var(--text-xs);
+		color: var(--fg2);
+		cursor: pointer;
+	}
+	.note-trigger:hover {
+		color: var(--fg1);
 	}
 	.note-icon {
 		display: inline-flex;
 		flex: none;
 		color: var(--fg3);
 	}
+	/* Open only while the button says so. `display: none` and not height: the
+	   tier legend wraps, so there is no height to animate to that would not be
+	   wrong at some width. */
 	.note-body {
-		display: flex;
+		display: none;
 		flex-direction: column;
 		gap: var(--space-3);
 		font-size: var(--text-xs);
 		color: var(--fg2);
+	}
+	.note.open .note-body {
+		display: flex;
 	}
 	.tiers {
 		display: flex;
@@ -1143,6 +1332,22 @@
 		align-items: center;
 		flex-wrap: wrap;
 		gap: var(--space-4);
+	}
+	.res-part {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-3);
+		font-size: var(--text-sm);
+		color: var(--fg2);
+	}
+	.res-dates {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-4);
+	}
+	.res-hint {
+		margin: var(--space-4) 0 0;
+		font-size: var(--text-xs);
 	}
 	.res-said,
 	.res-foot {

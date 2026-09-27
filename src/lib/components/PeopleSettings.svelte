@@ -54,7 +54,7 @@
 		<div class="person-row" class:dimmed={p.deactivatedAt}>
 			<span class="avatar">{p.initials}</span>
 			<span class="mod-label">
-				<span>{p.name}</span>
+				<span class="name">{p.name}</span>
 				{#if label}<span class="note">{label}</span>{/if}
 			</span>
 
@@ -143,6 +143,15 @@
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-3);
+		flex: none;
+	}
+	/* A select is as wide as its widest option unless told otherwise, and the
+	   country list holds "United States Minor Outlying Islands" — which made one
+	   picker wider than the name beside it. The chosen country is spelled out in
+	   the row's own note either way. */
+	.cit-form select {
+		width: 170px;
+		max-width: 100%;
 	}
 	/* Mirrors the module list on the same screen: a bordered row per entry. */
 	.people {
@@ -150,11 +159,17 @@
 		flex-direction: column;
 		gap: 0;
 	}
+	/* FOUR things sit in this row — avatar, name, citizenship, actions — and it
+	   had three columns. The actions fell into an implicit second row, landed in
+	   the 26px avatar column and drew outside the card, which is what an admin
+	   saw against everybody but themselves (their own row has no actions, so it
+	   fitted). Flex has no track count to get wrong: the actions keep to the
+	   right, and drop to a line of their own when the row runs out of width. */
 	.person-row {
-		display: grid;
-		grid-template-columns: 26px minmax(0, 1fr) auto;
+		display: flex;
 		align-items: center;
-		gap: var(--space-6);
+		flex-wrap: wrap;
+		gap: var(--space-4) var(--space-6);
 		padding: 11px 0;
 		border-top: 1px solid var(--bd);
 	}
@@ -165,6 +180,7 @@
 		opacity: 0.55;
 	}
 	.avatar {
+		flex: none;
 		width: 26px;
 		height: 26px;
 		border-radius: 26px;
@@ -173,11 +189,20 @@
 		place-items: center;
 		font-size: var(--text-xs);
 	}
+	/* The one thing that gives way, so everything after it sits at the right. */
 	.mod-label {
 		display: flex;
 		flex-direction: column;
+		flex: 1 1 10em;
 		min-width: 0;
 		font-size: var(--text-md);
+	}
+	/* The name only. The note wraps instead: it is where a country the 170px
+	   picker cuts short is spelled out in full, so it must never be cut too. */
+	.mod-label > .name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.note {
 		color: var(--fg2);
@@ -198,6 +223,9 @@
 		gap: var(--space-3);
 		flex-wrap: wrap;
 		justify-content: flex-end;
+		/* Holds the actions at the right edge on the line they end up on —
+		   including a line of their own, once the row has wrapped. */
+		margin-left: auto;
 	}
 	.add-form {
 		display: grid;

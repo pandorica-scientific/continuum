@@ -94,7 +94,31 @@ export interface TaxYearInput {
 	 * a year every member of it owed a return for.
 	 */
 	birthYears?: Record<string, number | null>;
+	/**
+	 * The age from which citizenship ALONE raises a return, from the household's
+	 * settings. Defaults to `DEFAULT_FILING_AGE`; 0 turns the rule off, and it
+	 * does nothing for anybody whose birth year is unknown.
+	 */
+	filingAge?: number;
 }
+
+/**
+ * The age from which somebody owes a return for merely having lived somewhere.
+ *
+ * A newborn is tax-resident from the day they are born, and the citizenship
+ * tier answers every year it is asked about — so a baby added to the household
+ * arrived already owing a nil return for the year of their birth, and one every
+ * year after it. That is not a fact about any tax system; it is the floor tier
+ * answering a question nobody should have asked.
+ *
+ * The age of majority is the default because it is the age at which a person
+ * files for themselves anywhere this app is used, and the household can move it
+ * (Settings → Household) for a country that starts earlier. It bounds the FLOOR
+ * only: a minor with a job, a filing on record or a residence somebody declared
+ * has evidence of their own, and every tier above citizenship still answers for
+ * them at any age.
+ */
+export const DEFAULT_FILING_AGE = 18;
 
 export interface TaxYearRow {
 	personId: string;
@@ -257,6 +281,8 @@ export function taxResidences(input: TaxYearInput): ResolvedResidence[] {
 		return years.length > 0 ? Math.min(...years) : null;
 	};
 
+	const filingAge = input.filingAge ?? DEFAULT_FILING_AGE;
+
 	const resolved: ResolvedResidence[] = [];
 	for (const person of input.people) {
 		// Nothing at all on record for them: asked about THIS year and no earlier
@@ -265,25 +291,43 @@ export function taxResidences(input: TaxYearInput): ResolvedResidence[] {
 		// while the year in progress is one they really are resident for, and is
 		// the gap year this tier exists to raise.
 		const from = own(person.id) ?? thisYear;
-		for (let year = Math.max(floorYear, from); year <= thisYear; year++)
+		const birthYear = input.birthYears?.[person.id] ?? null;
+		for (let year = Math.max(floorYear, from); year <= thisYear; year++) {
+			// This person's OWN evidence for this year. "Their own" is the whole
+			// point: everybody else in the house having a Czech year says nothing
+			// about a two-year-old.
+			const declared = declarations
+				.filter((row) => row.personId === person.id && row.year === year)
+				.map((row) => ({ country: row.country, fromOn: row.fromOn, toOn: row.toOn }));
+			const statementCountries = statements
+				.filter((row) => row.personId === person.id && row.year === year)
+				.map((row) => row.country);
+			const employmentCountries = engagements
+				.filter((e) => e.personId === person.id && yearsOf(e, floorYear, thisYear).includes(year))
+				.map((e) => e.country);
+			// A child with nothing of their own in this year owes nothing in it. The
+			// floor tier would otherwise hand a newborn a nil return for the year
+			// they were born and one every year after — see DEFAULT_FILING_AGE. A
+			// minor who DOES have evidence keeps it: this only refuses to invent an
+			// obligation out of citizenship and an age.
+			const minor = birthYear !== null && year - birthYear < filingAge;
+			const evidence =
+				declared.length > 0 ||
+				statementCountries.length > 0 ||
+				employmentCountries.length > 0 ||
+				filings.some((f) => f.personId === person.id && f.year === year);
+			if (minor && !evidence) continue;
 			resolved.push({
 				personId: person.id,
 				year,
 				residence: residenceForYear({
-					declared: declarations
-						.filter((row) => row.personId === person.id && row.year === year)
-						.map((row) => ({ country: row.country, fromOn: row.fromOn, toOn: row.toOn })),
-					statementCountries: statements
-						.filter((row) => row.personId === person.id && row.year === year)
-						.map((row) => row.country),
-					employmentCountries: engagements
-						.filter(
-							(e) => e.personId === person.id && yearsOf(e, floorYear, thisYear).includes(year)
-						)
-						.map((e) => e.country),
+					declared,
+					statementCountries,
+					employmentCountries,
 					citizenship: input.citizenship?.[person.id] ?? null
 				})
 			});
+		}
 	}
 	return resolved;
 }

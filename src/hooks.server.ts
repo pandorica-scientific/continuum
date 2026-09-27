@@ -5,7 +5,7 @@ import { building } from '$app/environment';
 import '$lib/server/extensions';
 import { validateSession } from '$lib/server/auth';
 import { csrfRefusal, sameSiteFormPost } from '$lib/server/auth/csrf';
-import { authorizeApiRequest } from '$lib/server/api/respond';
+import { authorizeApiRequest, isApiPath } from '$lib/server/api/respond';
 import { isPublicPath, requestGates } from '$lib/server/auth/gates';
 import { bootSteps, bootTasks } from '$lib/server/boot';
 import { isSetUp } from '$lib/server/settings';
@@ -72,7 +72,15 @@ const handleRequest = async (
 	// database. SvelteKit's own origin check used to run even earlier, ahead of
 	// this hook entirely — which is why it could not be improved and had to be
 	// replaced (see vite.config.ts and $lib/server/auth/csrf).
-	if (!sameSiteFormPost(event.request)) return csrfRefusal(event.request);
+	//
+	// Not under /api, which authenticates with a bearer token and never reads a
+	// cookie: a cross-site form cannot attach an Authorization header, so there
+	// is no ambient credential for a forged post to ride on. A script uploading
+	// a file to /api/v1/files sends multipart with no Origin, and would be
+	// refused here for a threat that cannot reach it.
+	if (!isApiPath(event.url.pathname) && !sameSiteFormPost(event.request)) {
+		return csrfRefusal(event.request);
+	}
 
 	await ensureReady();
 
@@ -80,7 +88,12 @@ const handleRequest = async (
 
 	event.locals.person = await validateSession(event.cookies);
 
-	const apiRefusal = await authorizeApiRequest(pathname, event.request, event.getClientAddress());
+	const apiRefusal = await authorizeApiRequest(
+		pathname,
+		event.request,
+		event.getClientAddress(),
+		event.locals
+	);
 	if (apiRefusal) return apiRefusal;
 
 	// Reasons to refuse that this product does not have; empty here. A gate

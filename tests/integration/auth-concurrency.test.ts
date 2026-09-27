@@ -242,12 +242,15 @@ describe('authentication concurrency', () => {
 			lastUsedAt: initialUse
 		});
 
-		expect(await verifyToken(raw, testDb, new Date('2026-08-15T10:01:00.000Z'))).toBe(true);
+		expect(await verifyToken(raw, testDb, new Date('2026-08-15T10:01:00.000Z'))).toEqual({
+			access: 'read',
+			areas: null
+		});
 		let rows = await testDb.select().from(schema.apiToken);
 		expect(rows[0].lastUsedAt).toEqual(initialUse);
 
 		const laterUse = new Date('2026-08-15T10:10:00.000Z');
-		expect(await verifyToken(raw, testDb, laterUse)).toBe(true);
+		expect(await verifyToken(raw, testDb, laterUse)).toEqual({ access: 'read', areas: null });
 		rows = await testDb.select().from(schema.apiToken);
 		expect(rows[0].lastUsedAt).toEqual(laterUse);
 	});

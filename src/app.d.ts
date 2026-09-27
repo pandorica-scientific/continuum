@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { SessionPerson } from '$lib/server/auth';
+import type { ApiGrant } from '$lib/server/api/areas';
 
 declare global {
 	namespace App {
 		interface Locals {
 			person: SessionPerson | null;
+
+			/** Under /api only: what the bearer token may do and where, set by the boundary. */
+			apiToken?: ApiGrant;
 
 			/**
 			 * Unused by the core.

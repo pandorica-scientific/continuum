@@ -96,10 +96,13 @@ never in plaintext; enrollment links single-use, expiring and consumed in the
 same transaction that creates the password/session; authentication
 generations preventing an in-flight sign-in from surviving a password
 change/deactivation; failed sign-ins limited by both account and address, with
-separate bounded budgets for bearer tokens and enrollment; `/api/v1` bearer
-enforcement
-at the route boundary and a read-only surface with no write endpoints or
-webhooks. Initial setup is one atomic singleton claim and caps the submitted
+separate bounded budgets for bearer tokens and enrollment; `/api` bearer
+enforcement and each token's access (read-only unless an administrator chose
+read-write) and areas (everything, or only the areas an administrator ticked)
+decided at the route boundary, failing closed for a route nobody placed, with the
+sign-in tables, settings, password hashes and calendar credentials unreachable
+through the API to either; files attached over the API are PDFs checked by their
+contents and stored under a name the server mints; and no webhooks. Initial setup is one atomic singleton claim and caps the submitted
 household at twenty people before any password hashing begins.
 
 ## In scope

@@ -824,6 +824,11 @@ export const actions: Actions = {
 		if (!Number.isInteger(year) || year < 1900 || year > 2200)
 			return fail(400, { message: 'That year does not look right.' });
 		if (!isCountryCode(country)) return fail(400, { message: 'Name the country as a code.' });
+		// Blank means the whole year only when nobody said it was split.
+		if (form.get('partial') && fromOn === null && toOn === null)
+			return fail(400, {
+				message: `Give at least one date for part of ${year}, or untick "only part of".`
+			});
 
 		const dated = /^\d{4}-\d{2}-\d{2}$/;
 		for (const value of [fromOn, toOn])

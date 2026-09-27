@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { fail, redirect } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { asOptionalRowId, asRowId } from '$lib/ids';
 import { db } from '$lib/server/db';
 import { person, tripIdea, tripIdeaHeart } from '$lib/server/db/schema';
-import { createTrip, ideaExists, removeIdea } from '$lib/server/life/trips';
+import { createTrip, ideaExists, promoteIdea } from '$lib/server/life/trips';
 import type { Actions, PageServerLoad } from './$types';
 
 /** A trip promoted from an idea arrives with the idea's id in the query and pre-fills from it. */
@@ -18,7 +18,10 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	if (!ideaId) return { idea: null, people };
 
-	const [idea] = await db.select().from(tripIdea).where(eq(tripIdea.id, ideaId));
+	const [idea] = await db
+		.select()
+		.from(tripIdea)
+		.where(and(eq(tripIdea.id, ideaId), isNull(tripIdea.removedAt)));
 	if (!idea) return { idea: null, people };
 
 	const hearts = await db
@@ -74,19 +77,18 @@ export const actions: Actions = {
 		const fromIdeaId = (await ideaExists(asOptionalRowId(form.get('fromIdeaId'))))
 			? asOptionalRowId(form.get('fromIdeaId'))!
 			: null;
-		const id = await createTrip({
+		const input = {
 			name,
 			emoji: entered.emoji,
 			startsOn,
 			endsOn,
 			notes: '',
 			destinations: [{ country, region: entered.region || null, city: entered.city || null }],
-			members: entered.members.filter(Boolean),
-			fromIdeaId
-		});
-
-		// Promoting an idea takes it off the board — it's the same plan now, not a duplicate.
-		if (fromIdeaId) await removeIdea(fromIdeaId);
+			members: entered.members.filter(Boolean)
+		};
+		// Promoting an idea takes it off the board — it's the same plan now, not a
+		// duplicate — and carries its note, stamp and plans onto the trip.
+		const id = fromIdeaId ? await promoteIdea(fromIdeaId, input) : await createTrip(input);
 
 		redirect(303, `/trips/${id}`);
 	}

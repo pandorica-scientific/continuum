@@ -4,6 +4,7 @@
 // nobody worked is the year this has to get right.
 import { describe, expect, it } from 'vitest';
 import { taxResidences, taxYearCards, type TaxYearInput } from '$lib/documents/tax-years';
+import { foldFilingAge } from '$lib/server/settings';
 
 const ROBERT = { id: 'p1', name: 'Robert' };
 
@@ -152,14 +153,78 @@ describe('residence as a source of cards', () => {
 				],
 				engagements: [job('p1', 'CZ', '2015-01-01')],
 				citizenship: { p1: 'CZ', p2: 'CZ' },
-				birthYears: { p2: 2024 },
+				birthYears: { p2: 2004 },
 				thisYear: 2026
 			})
 		);
 		const rowsFor = (year: number) =>
 			cards.find((c) => c.year === year && c.country === 'CZ')?.rows.map((r) => r.personId) ?? [];
 		expect(rowsFor(2015)).toEqual(['p1']);
-		expect(rowsFor(2024)).toEqual(['p1', 'p2']);
+		// 2022 is the year they turned eighteen; 2021 is a year they were a minor
+		// with nothing of their own, which owes nothing.
+		expect(rowsFor(2021)).toEqual(['p1']);
+		expect(rowsFor(2022)).toEqual(['p1', 'p2']);
+	});
+
+	// The bug this rule exists for: a baby born into the household arrived
+	// already owing a nil return for the year of their birth, because the
+	// citizenship tier answers every year it is asked about.
+	it('raises nothing for a child with no income of their own', () => {
+		const cards = taxYearCards(
+			input({
+				people: [
+					{ id: 'p1', name: 'Robert' },
+					{ id: 'p2', name: 'Oliwia' }
+				],
+				engagements: [job('p1', 'CZ', '2021-01-01')],
+				citizenship: { p1: 'CZ', p2: 'PL' },
+				birthYears: { p1: 1992, p2: 2026 },
+				thisYear: 2026
+			})
+		);
+		// No Polish card at all: the only thing that wanted one was a newborn's
+		// citizenship.
+		expect(keys(cards)).toEqual(['2021 CZ', '2022 CZ', '2023 CZ', '2024 CZ', '2025 CZ', '2026 CZ']);
+		expect(cards.every((card) => card.rows.every((row) => row.personId === 'p1'))).toBe(true);
+	});
+
+	// A minor with a job, a filing or a declared residence has evidence of their
+	// own, and the age bound never touches those tiers.
+	it('still raises the year a minor actually earned in', () => {
+		const cards = taxYearCards(
+			input({
+				people: [{ id: 'p2', name: 'Oliwia' }],
+				engagements: [job('p2', 'PL', '2042-06-01', '2042-08-31')],
+				citizenship: { p2: 'PL' },
+				birthYears: { p2: 2026 },
+				thisYear: 2042
+			})
+		);
+		expect(keys(cards)).toEqual(['2042 PL']);
+		expect(cards[0].rows).toEqual([{ personId: 'p2', personName: 'Oliwia' }]);
+	});
+
+	// The household's own answer wins over the default: a country that starts
+	// earlier, or a household that wants the floor tier off the age rule.
+	it('takes the filing age from the household', () => {
+		const withAge = (filingAge: number) =>
+			keys(
+				taxYearCards(
+					input({
+						people: [{ id: 'p2', name: 'Oliwia' }],
+						citizenship: { p2: 'PL' },
+						birthYears: { p2: 2010 },
+						filingAge,
+						thisYear: 2026
+					})
+				)
+			);
+		// Sixteen in 2026, so a sixteen-year-old floor raises the year and the
+		// default does not.
+		expect(withAge(16)).toEqual(['2026 PL']);
+		expect(withAge(18)).toEqual([]);
+		// Zero turns the rule off entirely.
+		expect(withAge(0)).toEqual(['2026 PL']);
 	});
 
 	// No work, no paper, no birth year: asked about the year in progress and no
@@ -181,5 +246,37 @@ describe('residence as a source of cards', () => {
 		expect(rowsFor(2020)).toEqual(['p1']);
 		expect(rowsFor(2021)).toEqual(['p1']);
 		expect(rowsFor(2022)).toEqual(['p1', 'p2']);
+	});
+});
+
+// The setting is typed into a form, so blank and scientific-notation input
+// have to be refused rather than read the way Number() reads them: '' as 0
+// would put every newborn back on the grid.
+describe('reading the filing age from a form or the settings table', () => {
+	it('takes a whole age from 0 to 120, as a number or as digits', () => {
+		expect(foldFilingAge(18)).toBe(18);
+		expect(foldFilingAge(' 16 ')).toBe(16);
+		expect(foldFilingAge('0')).toBe(0);
+		expect(foldFilingAge(120)).toBe(120);
+	});
+
+	it('refuses blank, non-decimal and out-of-range input', () => {
+		for (const bad of [
+			'',
+			'   ',
+			'1e1',
+			'0x12',
+			'-1',
+			'18.5',
+			'121',
+			'abc',
+			null,
+			undefined,
+			-1,
+			18.5,
+			121
+		]) {
+			expect(foldFilingAge(bad)).toBeNull();
+		}
 	});
 });

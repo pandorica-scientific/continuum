@@ -56,9 +56,28 @@ export async function removeDocument(
 	documentId: string,
 	handle: Db = db
 ): Promise<RemoveDocumentResult> {
-	let storedName: string | null = null;
+	const removed = await removeDocumentRow(documentId, handle);
+	if (!removed.ok) return removed;
+	// Committed. Only now are the bytes nobody's.
+	if (removed.storedName) await removeUpload(removed.storedName);
+	return { ok: true };
+}
+
+/**
+ * Everything `removeDocument` does but unlink the file, whose stored name comes
+ * back instead.
+ *
+ * For a caller removing a document as part of a larger change: on its
+ * transaction this runs as a savepoint, so a refusal undoes this one document
+ * and leaves the caller's other work standing, and the caller unlinks the file
+ * once ITS transaction has committed.
+ */
+export async function removeDocumentRow(
+	documentId: string,
+	handle: Queryable = db
+): Promise<{ ok: true; storedName: string | null } | (RemoveDocumentResult & { ok: false })> {
 	try {
-		await handle.transaction(async (tx) => {
+		return await handle.transaction(async (tx) => {
 			// The existence check, inside the transaction: a removal may not name
 			// a row that is not there.
 			const present = await assertDocumentExists(documentId, tx);
@@ -84,16 +103,12 @@ export async function removeDocument(
 			if (!removed.ok) {
 				throw new RemovalRefused({ ok: false, status: 404, message: NO_SUCH_DOCUMENT });
 			}
-			storedName = removed.storedName;
+			return { ok: true as const, storedName: removed.storedName };
 		});
 	} catch (error) {
 		if (error instanceof RemovalRefused) return error.outcome;
 		throw error;
 	}
-
-	// Committed. Only now are the bytes nobody's.
-	if (storedName) await removeUpload(storedName);
-	return { ok: true };
 }
 
 /** What an editor says when it will not make the change. One sentence, once. */
