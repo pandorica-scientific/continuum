@@ -17,8 +17,12 @@
  */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** An id that no row can have, so a lookup with it finds nothing. */
-const NO_SUCH_ROW = '00000000-0000-0000-0000-000000000000';
+/**
+ * An id that no row can have, so a lookup with it finds nothing. Exported for
+ * the table API, which refuses to write it: a row holding it would be found by
+ * every malformed id.
+ */
+export const NO_SUCH_ROW = '00000000-0000-0000-0000-000000000000';
 
 export function asRowId(value: unknown): string {
 	if (typeof value !== 'string') return NO_SUCH_ROW;

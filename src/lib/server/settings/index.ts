@@ -200,10 +200,13 @@ export async function getFilingAge(handle: Queryable = db): Promise<number> {
 
 /** A whole age from 0 to 120, or null for anything that is not one. 0 means everybody from birth. */
 export function foldFilingAge(value: unknown): number | null {
-	// Digits only for text: Number() reads '' and '  ' as 0, which would put
-	// every newborn on the grid, and takes '1e1' and '0x12' as 10 and 18.
-	const age =
-		typeof value === 'string' ? (/^\d+$/.test(value.trim()) ? Number(value.trim()) : null) : value;
+	// Plain decimal notation for text, then the same whole-number test the birth
+	// year and the other number fields use — so "18.0" is eighteen here as
+	// "1990.0" is a birth year there. The notation gate is what this adds over
+	// a bare Number(): that reads '' and '  ' as 0, which would put every
+	// newborn on the grid, and takes '1e1' and '0x12' as 10 and 18.
+	const text = typeof value === 'string' ? value.trim() : null;
+	const age = text === null ? value : /^\d+(\.\d+)?$/.test(text) ? Number(text) : null;
 	if (typeof age !== 'number' || !Number.isInteger(age) || age < 0 || age > 120) return null;
 	return age;
 }

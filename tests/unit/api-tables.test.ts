@@ -1,8 +1,9 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import { is } from 'drizzle-orm';
 import { getTableConfig, PgTable } from 'drizzle-orm/pg-core';
 import * as schema from '$lib/server/db/schema';
-import { apiTables, describeTables, fromJson, toJson } from '$lib/server/api/tables';
+import { apiTables, areasWithData, describeTables, fromJson, toJson } from '$lib/server/api/tables';
 import { ApiError } from '$lib/server/api/errors';
 
 const EVERYTHING = { access: 'read', areas: null } as const;
@@ -86,7 +87,8 @@ describe('which tables /api/v1/tables reaches', () => {
 				'document_type',
 				'lane',
 				'shelf',
-				'shelf_type'
+				'shelf_type',
+				'subject'
 			],
 			trips: [
 				'place',
@@ -118,11 +120,20 @@ describe('which tables /api/v1/tables reaches', () => {
 				'net_worth_snapshot',
 				'organisation',
 				'person',
-				'subject',
 				'tag',
 				'tag_link'
 			]
 		});
+	});
+
+	// Settings offers only these, so no token is limited to an area that answers
+	// 403 to every call.
+	it('offers a token only the areas something belongs to', () => {
+		const areas = areasWithData();
+		expect(areas).toContain('trips');
+		expect(areas).toContain('ledger');
+		expect(areas).not.toContain('retirement');
+		expect(areas).not.toContain('home');
 	});
 
 	it('writes to every reachable table but a connected calendar and the job queue', () => {
@@ -180,30 +191,50 @@ describe('which tables /api/v1/tables reaches', () => {
 		}
 	});
 
+	// What code finds a shelf or reads a document type by, and the flags the
+	// screens decide deletes on.
+	it('fixes a shelf key once written and never writes the system or built-in flags', () => {
+		expect(column('shelf', 'key')).toMatchObject({ writable: true, updatable: false });
+		expect(column('shelf', 'label')).toMatchObject({ writable: true, updatable: true });
+		expect(column('shelf', 'system').writable).toBe(false);
+		expect(column('document_type', 'builtin').writable).toBe(false);
+	});
+
+	it('stamps removed_at on a trip or an idea with the server clock', () => {
+		expect(column('trip', 'removed_at').serverClock).toBe(true);
+		expect(column('trip_idea', 'removed_at').serverClock).toBe(true);
+		expect(column('trip', 'starts_on').serverClock).toBe(false);
+	});
+
 	it('keeps a connected calendar read-only', () => {
 		expect(table('calendar_account').writable).toBe(false);
 		expect(table('calendar_account').columns.every((c) => !c.writable)).toBe(true);
 	});
 
 	// Derived from foreign keys, so a table added later that points at a document
-	// — directly or through its text or identity — is filtered for payslips too.
-	it('knows which column names the document a row is about, through a chain of keys', () => {
+	// — directly, through its text or identity, or through the entity registry a
+	// document belongs to — is filtered for payslips too.
+	it('knows every column that can name a document, through a chain of keys', () => {
 		const about = [...apiTables().values()]
-			.filter((t) => t.documentColumn)
-			.map((t) => `${t.name}.${t.documentColumn?.name}`)
+			.flatMap((t) => t.documentColumns.map((c) => `${t.name}.${c.name}`))
 			.sort();
 		expect(about).toEqual([
+			'contact_link.target_id',
 			'document.id',
 			'document_identity.document_id',
 			'document_identity_number.document_id',
 			'document_link.document_id',
+			'document_link.target_id',
 			'document_text.document_id',
 			'document_text_chunk.document_id',
 			'engagement.document_id',
+			'entity.id',
 			'equity_grant.document_id',
 			'import_file.document_id',
+			'lane.entity_id',
 			'property_bill.document_id',
 			'salary_entry.document_id',
+			'tag_link.target_id',
 			'trip_booking.document_id'
 		]);
 	});
@@ -287,6 +318,81 @@ describe('values across the wire', () => {
 		]) {
 			expect(() => fromJson(created, loose)).toThrow(/ISO 8601/);
 		}
+	});
+
+	// Postgres takes every one of these, and the app cannot read any back: 'NaN'
+	// fails every sum over the column, a date in the server's own DateStyle is
+	// read month-first, and '-infinity' is no day at all.
+	it('refuses what Postgres would take and the app could not read', () => {
+		const units = column('equity_tranche', 'units');
+		for (const bad of ['NaN', 'Infinity', '-Infinity', 'nan', '', '1,5', true]) {
+			expect(() => fromJson(units, bad), String(bad)).toThrow(/a number/);
+		}
+		expect(fromJson(units, 1.5)).toBe('1.5');
+		expect(fromJson(units, '10.250000')).toBe('10.250000');
+
+		const startsOn = column('trip', 'starts_on');
+		for (const bad of [
+			'03/04/2026',
+			'-infinity',
+			'infinity',
+			'2026-02-30',
+			'2026-9-27',
+			20260927
+		]) {
+			expect(() => fromJson(startsOn, bad), String(bad)).toThrow(/ISO 8601 day/);
+		}
+		expect(fromJson(startsOn, '2026-09-27')).toBe('2026-09-27');
+	});
+
+	// Stored, a year below 100 comes back from the driver as 19xx.
+	it('refuses a timestamp before the year the driver can read back', () => {
+		const created = column('tag', 'created_at');
+		expect(() => fromJson(created, '0050-01-01T00:00:00Z')).toThrow(/from the year 100/);
+		expect(fromJson(created, '0100-01-01T00:00:00Z')).toEqual(new Date('0100-01-01T00:00:00Z'));
+	});
+
+	it('refuses a value of the wrong kind rather than letting Postgres coerce it', () => {
+		expect(() => fromJson(column('trip', 'name'), true)).toThrow(/text/);
+		expect(() => fromJson(column('trip', 'name'), 12)).toThrow(/text/);
+		expect(() => fromJson(column('trip_place', 'ordinal'), true)).toThrow(/whole number/);
+		expect(() => fromJson(column('trip_place', 'ordinal'), 1.5)).toThrow(/whole number/);
+		expect(fromJson(column('trip_place', 'ordinal'), 3)).toBe(3);
+		expect(() => fromJson(column('trip', 'id'), true)).toThrow(/a uuid/);
+		expect(() => fromJson(column('trip', 'id'), 'not-a-uuid')).toThrow(/a uuid/);
+	});
+
+	// asRowId turns junk into this id so that it matches nothing; a row holding
+	// it would be matched by every malformed id a form sends.
+	it('refuses the all-zeros uuid', () => {
+		expect(() => fromJson(column('trip', 'id'), '00000000-0000-0000-0000-000000000000')).toThrow(
+			/all-zeros/
+		);
+	});
+
+	// Every kind of column a reachable table has is one fromJson was taught; a
+	// kind added later fails here rather than being passed through unchecked.
+	it('knows every kind of column a reachable table has', () => {
+		const known = new Set([
+			'PgBigInt64',
+			'PgBoolean',
+			'PgChar',
+			'PgDateString',
+			'PgDoublePrecision',
+			'PgInteger',
+			'PgJsonb',
+			'PgNumeric',
+			'PgReal',
+			'PgText',
+			'PgTimestamp',
+			'PgUUID'
+		]);
+		const unknown = [...apiTables().values()].flatMap((t) =>
+			t.columns
+				.filter((c) => !known.has(c.column.columnType))
+				.map((c) => `${t.name}.${c.name}: ${c.column.columnType}`)
+		);
+		expect(unknown).toEqual([]);
 	});
 
 	it('passes JSON through to a jsonb column and refuses an object anywhere else', () => {

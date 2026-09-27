@@ -111,6 +111,7 @@ import {
 	attachDocument,
 	documentTargetSpec,
 	DOCUMENT_TARGET_KINDS,
+	fileableTargetIds,
 	isDocumentTargetKind,
 	loadTargetNames,
 	pickableTargetsForShelf,
@@ -695,6 +696,27 @@ async function readTags(form: FormData): Promise<string[]> {
 		.filter(Boolean);
 }
 
+/**
+ * The same agreement for the records the form files against: the `linkIds`
+ * it posts, narrowed to the ones a document may be filed against NOW.
+ *
+ * The form was drawn a while ago. A trip deleted in another tab since is
+ * waiting a minute for the sweep, which would take paper filed against it
+ * alone along with it, and an id that names nothing would be a foreign-key
+ * failure. Both are left out, and `dropped` says so, so the screen can tell
+ * the household instead of filing half of what it asked without a word.
+ */
+async function readLinkIds(form: FormData): Promise<{ targetIds: string[]; dropped: boolean }> {
+	const posted = form.getAll('linkIds').map(String).filter(Boolean);
+	const fileable = await fileableTargetIds(posted);
+	const targetIds = posted.filter((id) => fileable.has(id));
+	return { targetIds, dropped: targetIds.length < posted.length };
+}
+
+/** What a save that left a record out says. One sentence, shared. */
+const LINK_DROPPED =
+	'A record it was to be filed against is no longer there, so it was not linked to it.';
+
 export const actions: Actions = {
 	/** Capture: a file, a generated name, and the Inbox. No required enrichment, ever. */
 	addDocument: async ({ request }) => {
@@ -714,6 +736,7 @@ export const actions: Actions = {
 			return fail(400, { message: 'Choose a file, or give the document a name.' });
 		}
 
+		const { targetIds, dropped } = await readLinkIds(form);
 		const shared = {
 			shelfId,
 			type: asDocumentType(form.get('type'), await documentTypeKeys()),
@@ -725,7 +748,7 @@ export const actions: Actions = {
 				String(form.get('expiryVerb') ?? 'expires'),
 				'expires'
 			),
-			targetIds: form.getAll('linkIds').map(String).filter(Boolean),
+			targetIds,
 			newSubjectName: String(form.get('newSubject') ?? '').trim() || undefined,
 			tagNames: await readTags(form)
 		};
@@ -764,7 +787,12 @@ export const actions: Actions = {
 			addedIds.push(documentId);
 		}
 		void runCpuQueue().catch(() => undefined);
-		return { ok: true, addedIds, addedShelf: shelfKey };
+		return {
+			ok: true,
+			addedIds,
+			addedShelf: shelfKey,
+			...(dropped ? { message: LINK_DROPPED } : {})
+		};
 	},
 
 	/**
@@ -974,6 +1002,8 @@ export const actions: Actions = {
 			return fail(400, { message: 'A statement cannot stop covering months before it starts.' });
 		}
 
+		// Set inside the transaction below, reported once it has committed.
+		let dropped = false;
 		await db.transaction(async (tx) => {
 			await tx
 				.update(document)
@@ -1009,9 +1039,18 @@ export const actions: Actions = {
 				.where(
 					and(eq(documentLink.documentId, id), inArray(entity.kind, [...DOCUMENT_TARGET_KINDS]))
 				);
+			// And only records paper may be filed against right now. A trip deleted
+			// and waiting out its minute is one the screen could not name, so the
+			// form did not post it: read as unticked, the save would drop the link,
+			// and an undo would bring the trip back without its paper. It is left
+			// alone, like a kind the screen does not draw — and nothing is newly
+			// filed against it, for the sweep to delete a minute later.
+			const heldIds = held.map((row) => row.targetId);
+			const fileable = await fileableTargetIds([...heldIds, ...wanted], tx);
+			dropped = wanted.some((targetId) => !fileable.has(targetId) && !heldIds.includes(targetId));
 			const { remove, add } = linkDiff(
-				held.map((row) => row.targetId),
-				wanted
+				heldIds.filter((targetId) => fileable.has(targetId)),
+				wanted.filter((targetId) => fileable.has(targetId))
 			);
 			if (remove.length > 0) {
 				await tx
@@ -1052,7 +1091,7 @@ export const actions: Actions = {
 			// against the links just written.
 			if (form.has('laneId')) await assignLane(id, String(form.get('laneId')) || null, tx);
 		});
-		return { ok: true };
+		return { ok: true, ...(dropped ? { message: LINK_DROPPED } : {}) };
 	},
 
 	/** Put different bytes behind the same record. */
@@ -1134,7 +1173,7 @@ export const actions: Actions = {
 		// 'other' and turn "no type selected" into "retype everything to Other".
 		const normalisedType = type ? asDocumentType(type, await documentTypeKeys()) : '';
 		const addTags = await readTags(form);
-		const linkIds = form.getAll('linkIds').map(String).filter(Boolean);
+		const { targetIds: linkIds, dropped } = await readLinkIds(form);
 
 		// Same salary guard as the inspector, applied to the whole selection.
 		// Skipped rather than refused — a 40-document edit shouldn't fail
@@ -1175,17 +1214,18 @@ export const actions: Actions = {
 				for (const targetId of linkIds) await autoAssignLane(targetId, id, tx);
 			}
 		});
+		const notes = [
+			guarded.length === 1
+				? 'One payslip carries a salary entry, so its type was left as it is.'
+				: guarded.length > 1
+					? `${guarded.length} payslips carry a salary entry, so their types were left as they are.`
+					: null,
+			dropped ? LINK_DROPPED : null
+		].filter((note) => note !== null);
 		return {
 			ok: true,
 			skipped: guarded.length,
-			...(guarded.length > 0
-				? {
-						message:
-							guarded.length === 1
-								? 'One payslip carries a salary entry, so its type was left as it is.'
-								: `${guarded.length} payslips carry a salary entry, so their types were left as they are.`
-					}
-				: {})
+			...(notes.length > 0 ? { message: notes.join(' ') } : {})
 		};
 	},
 	// ---- The rail's own edits: rename, reorder, add, reassign-then-delete ----

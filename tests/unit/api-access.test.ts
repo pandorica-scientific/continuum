@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it, vi } from 'vitest';
 
 // Access is decided at the boundary from what the token row says, so the row is
@@ -17,12 +18,17 @@ vi.mock('$lib/server/api/tokens', () => ({
 
 const { authorizeApiRequest } = await import('$lib/server/api/respond');
 
-function call(method: string, pathname: string, token: string, locals?: { apiToken?: unknown }) {
+function call(
+	method: string,
+	pathname: string,
+	token: string,
+	locals: { apiToken?: unknown } = {}
+) {
 	const request = new Request(`http://continuum.test${pathname}`, {
 		method,
 		headers: { authorization: `Bearer ${token}` }
 	});
-	return authorizeApiRequest(pathname, request, '192.0.2.40', locals as never);
+	return authorizeApiRequest(pathname, null, request, '192.0.2.40', locals as never);
 }
 
 describe('what a read-only token may do', () => {
@@ -32,7 +38,7 @@ describe('what a read-only token may do', () => {
 	});
 
 	it('is refused every write, including on an endpoint added later', async () => {
-		for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+		for (const method of ['POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']) {
 			const refused = await call(method, '/api/v1/future-resource', 'reader');
 			expect(refused?.status).toBe(403);
 			expect(await refused?.json()).toMatchObject({ error: expect.stringMatching(/read-only/) });
@@ -79,7 +85,8 @@ describe('a token limited to some areas', () => {
 		]) {
 			const refused = await call('GET', pathname, 'planner');
 			expect(refused?.status, pathname).toBe(403);
-			expect(await refused?.json()).toMatchObject({ error: expect.stringMatching(/trips only/) });
+			// In the words Settings uses, not the internal area keys.
+			expect(await refused?.json()).toMatchObject({ error: expect.stringMatching(/Trips only/) });
 		}
 	});
 
@@ -99,6 +106,23 @@ describe('a token limited to some areas', () => {
 		expect(
 			await call('DELETE', '/api/v1/files/0190a000-0000-7000-8000-000000000000', 'planner')
 		).toBeNull();
+	});
+
+	// The router decodes `%73` to `s` before it picks the table, so the area is
+	// read from the decoded name as well.
+	it('is refused a table outside its areas however its name is spelled', async () => {
+		expect((await call('GET', '/api/v1/tables/%73alary_entry', 'planner'))?.status).toBe(403);
+	});
+
+	// Files are placed to one segment below them; a route added deeper is
+	// nobody's yet, and so refused.
+	it('is refused a route added below files or a table', async () => {
+		for (const pathname of [
+			'/api/v1/files/0190a000-0000-7000-8000-000000000000/versions',
+			'/api/v1/tables/trip_idea/export'
+		]) {
+			expect((await call('GET', pathname, 'planner'))?.status, pathname).toBe(403);
+		}
 	});
 
 	it('reaches nothing with an empty list', async () => {

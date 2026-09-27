@@ -74,6 +74,42 @@ interface CreateDocumentInput {
 	country?: string | null;
 }
 
+/**
+ * One file attached to one record and filed on a shelf as a document: what the
+ * Trips screen does with a booking's confirmation and `/api/v1/files` with a
+ * plan. Defined once, so the two cannot drift apart on what such paper is.
+ *
+ * `other` rather than a guess: neither a confirmation nor a plan is one of the
+ * shapes the archive knows, and mislabelling one as a receipt would put it in
+ * front of the wrong readers. Nothing expires, and nothing is tagged.
+ */
+export function attachmentFiling(input: {
+	id: string;
+	name: string;
+	shelfId: string;
+	storedName: string;
+	ext: string;
+	contentHash: string;
+	targetId: string;
+	addedOn: string;
+}): CreateDocumentInput {
+	return {
+		id: input.id,
+		name: input.name,
+		shelfId: input.shelfId,
+		type: 'other',
+		note: null,
+		storedName: input.storedName,
+		ext: input.ext,
+		addedOn: input.addedOn,
+		expiresOn: null,
+		expiryVerb: 'expires',
+		targetIds: [input.targetId],
+		tagNames: [],
+		contentHash: input.contentHash
+	};
+}
+
 export async function createDocument(input: CreateDocumentInput, handle: Db = db): Promise<void> {
 	await handle.transaction((tx) => insertDocumentAggregate(input, tx));
 	// After the commit, never inside it: a queued job pointing at a document the

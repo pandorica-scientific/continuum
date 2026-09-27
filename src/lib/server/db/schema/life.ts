@@ -63,8 +63,8 @@ type ArtDefinition = Record<string, unknown>;
  * Separate from `trip` rather than a nullable-dates trip, because the two are
  * read completely differently — an idea is browsed, a trip is prepared for —
  * and a table of trips where most rows have no dates makes every query about
- * real trips say "and starts is not null". `trip.fromIdeaId` records where a
- * trip came from when one was promoted.
+ * real trips say "and starts is not null". Promotion carries an idea's note,
+ * stamp and links onto the new trip and deletes the idea in one transaction.
  */
 export const tripIdea = pgTable('trip_idea', {
 	id: uuid('id').primaryKey(),
@@ -124,10 +124,10 @@ export const trip = pgTable(
 		notes: text('notes').notNull().default(''),
 		art: jsonb('art').$type<ArtDefinition>(),
 		/**
-		 * The idea this trip was promoted from, kept as provenance.
-		 *
-		 * SET NULL: removing an idea from the board must not delete the holiday
-		 * it turned into.
+		 * Unused: nothing writes it any more. It recorded the idea a trip was
+		 * promoted from while promotion left the idea behind; promotion now
+		 * moves the idea's contents onto the trip and deletes the idea, so there
+		 * is nothing left to point at. Kept because the schema is additive only.
 		 */
 		fromIdeaId: uuid('from_idea_id').references(() => tripIdea.id, { onDelete: 'set null' }),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

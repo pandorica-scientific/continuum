@@ -4,7 +4,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { asOptionalRowId, asRowId } from '$lib/ids';
 import { db } from '$lib/server/db';
 import { person, tripIdea, tripIdeaHeart } from '$lib/server/db/schema';
-import { createTrip, ideaExists, promoteIdea } from '$lib/server/life/trips';
+import { createTrip, promoteIdea } from '$lib/server/life/trips';
 import type { Actions, PageServerLoad } from './$types';
 
 /** A trip promoted from an idea arrives with the idea's id in the query and pre-fills from it. */
@@ -72,11 +72,9 @@ export const actions: Actions = {
 			return fail(400, { message: 'Where is it going? Two letters, like PT.', entered });
 		}
 
-		// `asOptionalRowId`, not the required variant — that turns an absent field into
-		// the nil uuid, a real value no idea has, and the foreign key rejects it with a 500.
-		const fromIdeaId = (await ideaExists(asOptionalRowId(form.get('fromIdeaId'))))
-			? asOptionalRowId(form.get('fromIdeaId'))!
-			: null;
+		// Absent is a trip from nothing. Anything else goes to `promoteIdea`,
+		// which makes an ordinary trip of an idea that is gone or never was.
+		const fromIdeaId = asOptionalRowId(form.get('fromIdeaId'));
 		const input = {
 			name,
 			emoji: entered.emoji,

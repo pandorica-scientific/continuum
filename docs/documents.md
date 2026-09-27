@@ -8,12 +8,12 @@ inside it, and visible only to the people who should see it.
 Four independent things describe a document. Keeping them apart is what stops
 the archive turning into a folder tree nobody can navigate.
 
-|           | What it answers                 | Shape                                                                                                       |
-| --------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| **Shelf** | where in life it belongs        | one per document, a row you own                                                                             |
-| **Type**  | what kind of paper it is        | one per document, from a list you can grow                                                                  |
-| **Links** | what it concerns                | many — a person, flat, tenancy, account, loan, contact, organisation, subject, transaction or tax statement |
-| **Tags**  | anything else you cut across by | many, free text                                                                                             |
+|           | What it answers                 | Shape                                                                                                                                        |
+| --------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Shelf** | where in life it belongs        | one per document, a row you own                                                                                                              |
+| **Type**  | what kind of paper it is        | one per document, from a list you can grow                                                                                                   |
+| **Links** | what it concerns                | many — a person, flat, tenancy, account, loan, contact, organisation, subject, trip, trip idea, bottle, recipe, transaction or tax statement |
+| **Tags**  | anything else you cut across by | many, free text                                                                                                                              |
 
 A payslip lives on **Income & Tax**, is of type **payslip**, links to
 **Zaměstnavatel s.r.o.**, and might be tagged `2025 return`. Move the shelf and
@@ -27,7 +27,8 @@ arrived_.
 ### What a document can be about
 
 A person, a flat, a tenancy, an account, a loan, a contact, an organisation, a
-subject — and a transaction or a tax statement, which are filed from their own
+subject, a trip or a trip idea, a bottle, a recipe — and a transaction or a tax
+statement, which are filed from their own
 screens rather than picked here: a list of every transaction in the household is
 a list nobody can read by eye. The inspector shows them under **About**, narrowed
 to what the document's own shelf can point at. The pickable ones are chips you

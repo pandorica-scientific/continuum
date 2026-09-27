@@ -5,7 +5,7 @@ import { building } from '$app/environment';
 import '$lib/server/extensions';
 import { validateSession } from '$lib/server/auth';
 import { csrfRefusal, sameSiteFormPost } from '$lib/server/auth/csrf';
-import { authorizeApiRequest, isApiPath } from '$lib/server/api/respond';
+import { authorizeApiRequest, isApiRequest } from '$lib/server/api/respond';
 import { isPublicPath, requestGates } from '$lib/server/auth/gates';
 import { bootSteps, bootTasks } from '$lib/server/boot';
 import { isSetUp } from '$lib/server/settings';
@@ -74,11 +74,13 @@ const handleRequest = async (
 	// replaced (see vite.config.ts and $lib/server/auth/csrf).
 	//
 	// Not under /api, which authenticates with a bearer token and never reads a
-	// cookie: a cross-site form cannot attach an Authorization header, so there
-	// is no ambient credential for a forged post to ride on. A script uploading
-	// a file to /api/v1/files sends multipart with no Origin, and would be
-	// refused here for a threat that cannot reach it.
-	if (!isApiPath(event.url.pathname) && !sameSiteFormPost(event.request)) {
+	// cookie — the session below is not even looked up for it: a cross-site
+	// form cannot attach an Authorization header, so there is no ambient
+	// credential for a forged post to ride on. A script uploading a file to
+	// /api/v1/files sends multipart with no Origin, and would be refused here
+	// for a threat that cannot reach it.
+	const apiRequest = isApiRequest(event.url.pathname, event.route.id);
+	if (!apiRequest && !sameSiteFormPost(event.request)) {
 		return csrfRefusal(event.request);
 	}
 
@@ -86,10 +88,11 @@ const handleRequest = async (
 
 	const { pathname } = event.url;
 
-	event.locals.person = await validateSession(event.cookies);
+	event.locals.person = apiRequest ? null : await validateSession(event.cookies);
 
 	const apiRefusal = await authorizeApiRequest(
 		pathname,
+		event.route.id,
 		event.request,
 		event.getClientAddress(),
 		event.locals
@@ -104,7 +107,9 @@ const handleRequest = async (
 		if (refusal) return refusal;
 	}
 
-	const isPublic = isPublicPath(pathname);
+	// An API request has passed the token check above, whichever spelling of
+	// the path brought it here.
+	const isPublic = apiRequest || isPublicPath(pathname);
 
 	if (pathname === '/setup') {
 		// The wizard only exists until the first person is created.

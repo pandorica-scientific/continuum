@@ -29,6 +29,8 @@
 		emoji: string;
 		country: string | null;
 		hearts: { id: string }[];
+		art?: { svg: string; hue: string | null } | null;
+		stampStored?: boolean;
 	}
 
 	let {
@@ -110,7 +112,7 @@
 			</Field>
 		</div>
 
-		<StampPicker {name} {country} {city} />
+		<StampPicker {name} {country} {city} kept={idea?.stampStored ? (idea.art ?? null) : null} />
 
 		<fieldset class="who">
 			<legend>Who is going</legend>

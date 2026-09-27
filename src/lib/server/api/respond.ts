@@ -3,7 +3,8 @@
 
 import { verifyToken } from '$lib/server/api/tokens';
 import { tableReach } from '$lib/server/api/tables';
-import { describeAreas, reaches, reachOfPath, type ApiGrant } from '$lib/server/api/areas';
+import { reaches, reachOfPath, type ApiGrant } from '$lib/server/api/areas';
+import { describeReach } from '$lib/api/areas';
 import { blockedForSeconds, recordFailure } from '$lib/server/auth/ratelimit';
 import { ApiError } from './errors';
 
@@ -43,7 +44,21 @@ export function readBearerToken(request: Request): string | null {
  * The methods a read-only token may use. Everything else is a write, so a
  * method nobody thought about is refused rather than let through.
  */
-const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+const READ_METHODS = new Set(['GET', 'HEAD']);
+
+/**
+ * The path as the router matched it. SvelteKit decodes each segment before
+ * routing, so `/api/v1/tables/%74rip` is the `trip` table, and the area has
+ * to be read from the same spelling or it is read from a different table.
+ * `%25` stays encoded, as the router leaves it.
+ */
+function routedPath(pathname: string): string {
+	try {
+		return pathname.split('%25').map(decodeURI).join('%25');
+	} catch {
+		return pathname;
+	}
+}
 
 /**
  * Null when the caller is authorised, otherwise the response to return.
@@ -65,7 +80,7 @@ async function requireToken(
 	pathname: string,
 	request: Request,
 	address: string,
-	locals?: { apiToken?: ApiGrant }
+	locals: { apiToken?: ApiGrant }
 ): Promise<Response | null> {
 	const wait = blockedForSeconds('api', address);
 	if (wait > 0) return apiError('Too many failed attempts.', 429);
@@ -86,20 +101,31 @@ async function requireToken(
 	// refused to a limited token without its handler having to ask. The two
 	// routes that answer row by row (the table list, files) get the grant and
 	// check each row themselves.
-	const reach = reachOfPath(pathname, tableReach);
+	const reach = reachOfPath(routedPath(pathname), tableReach);
 	if (reach !== null && !reaches(grant, reach)) {
 		return apiError(
-			`This token reaches ${describeAreas(grant.areas ?? [])} only; an administrator can widen it in Settings → API tokens.`,
+			`This token reaches ${describeReach(grant.areas ?? [])} only; an administrator can widen it in Settings → API tokens.`,
 			403
 		);
 	}
-	if (locals) locals.apiToken = grant;
+	locals.apiToken = grant;
 	return null;
 }
 
 /** Every path the hook exempts from the sign-in redirect as self-authenticating. */
 export function isApiPath(pathname: string): boolean {
 	return pathname === '/api' || pathname.startsWith('/api/');
+}
+
+/**
+ * Whether a request is under the API boundary: by its path, or by the route it
+ * reached. The two differ only for a path spelled with escapes — `/%61pi/v1/…`
+ * is not `/api` to a prefix test, and is the `/api/v1/…` route to the router.
+ * Either one is enough, so no spelling reaches an API handler past the token
+ * check.
+ */
+export function isApiRequest(pathname: string, routeId: string | null): boolean {
+	return isApiPath(pathname) || (routeId !== null && isApiPath(routeId));
 }
 
 /**
@@ -112,11 +138,12 @@ export function isApiPath(pathname: string): boolean {
  */
 export async function authorizeApiRequest(
 	pathname: string,
+	routeId: string | null,
 	request: Request,
 	address: string,
-	locals?: { apiToken?: ApiGrant }
+	locals: { apiToken?: ApiGrant }
 ): Promise<Response | null> {
-	if (!isApiPath(pathname)) return null;
+	if (!isApiRequest(pathname, routeId)) return null;
 	return requireToken(pathname, request, address, locals);
 }
 

@@ -9,6 +9,7 @@
 	 * it stretches a lone card across the whole screen.
 	 */
 	import Icon from '$lib/components/Icon.svelte';
+	import { documentFileHref } from '$lib/ui/file-viewer';
 
 	interface Heart {
 		id: string;
@@ -35,8 +36,8 @@
 		hues: Record<string, string>;
 		/** The stamp, already inked, or null where the generator could not draw one. */
 		art: { svg: string; hue: string | null } | null;
-		/** Plans filed against the idea — a travel planner's PDF — each opening in a tab. */
-		papers?: { id: string; name: string }[];
+		/** Plans filed against the idea — a travel planner's PDF — each opening in the viewer. */
+		papers?: { id: string; name: string; ext: string; hasFile: boolean }[];
 		/**
 		 * Where "Make this a trip" goes with no script — a real route, carrying
 		 * the idea's id, so the card works in a browser that cannot open a dialog.
@@ -84,10 +85,26 @@
 		<h3>{name}</h3>
 		{#if note}<p class="note">{note}</p>{/if}
 		{#each papers as paper (paper.id)}
-			<a class="paper" href="/documents/{paper.id}/file" target="_blank">
-				<Icon name="receipt" size={13} />
-				<span>{paper.name}</span>
-			</a>
+			{#if paper.hasFile}
+				<!-- `data-file-ext` is what lets the in-page viewer take the click: a
+				     `/documents/<id>/file` link carries no extension of its own. -->
+				<a
+					class="paper"
+					href={documentFileHref(paper.id)}
+					target="_blank"
+					rel="noopener"
+					data-file-ext={paper.ext}
+				>
+					<Icon name="receipt" size={13} />
+					<span>{paper.name}</span>
+				</a>
+			{:else}
+				<!-- A record with no file behind it: named, not linked to a 404. -->
+				<span class="paper">
+					<Icon name="receipt" size={13} />
+					<span>{paper.name}</span>
+				</span>
+			{/if}
 		{/each}
 
 		<div class="foot">

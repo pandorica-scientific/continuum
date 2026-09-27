@@ -11,6 +11,7 @@
 	import EditTripDialog from '$lib/life/trips/EditTripDialog.svelte';
 	import AttachDialog from '$lib/life/trips/AttachDialog.svelte';
 	import { countryFlag } from '$lib/life/geo/countries';
+	import { documentFileHref } from '$lib/ui/file-viewer';
 
 	let { data, form } = $props();
 
@@ -117,11 +118,27 @@
 		<Eyebrow icon="folders" label="Plans" hue="--rose" caption="Filed in the archive." />
 		<div class="card pad papers">
 			{#each trip.papers as paper (paper.id)}
-				<a class="paper" href="/documents/{paper.id}/file" target="_blank">
-					<Icon name="receipt" size={13} />
-					{paper.name}
-					<span class="quiet">{paper.ext}</span>
-				</a>
+				{#if paper.hasFile}
+					<!-- Opens in the in-page viewer, which needs `data-file-ext`: a
+					     `/documents/<id>/file` link carries no extension of its own. -->
+					<a
+						class="paper"
+						href={documentFileHref(paper.id)}
+						target="_blank"
+						rel="noopener"
+						data-file-ext={paper.ext}
+					>
+						<Icon name="receipt" size={13} />
+						{paper.name}
+						<span class="quiet">{paper.ext}</span>
+					</a>
+				{:else}
+					<!-- A record with no file behind it: named, not linked to a 404. -->
+					<span class="paper">
+						<Icon name="receipt" size={13} />
+						{paper.name}
+					</span>
+				{/if}
 			{/each}
 		</div>
 	</section>

@@ -71,7 +71,9 @@ whether a finding is in scope:
   deployment choice the app cannot defend against.
 - **Form submissions are checked against the address the browser used.** The
   `Origin` header must match the `Host` the request was sent to, so a page on
-  another site cannot post to your ledger. Scheme is not compared: the app
+  another site cannot post to your ledger. `/api` is the one exception: it
+  answers only a bearer token, which a cross-site form cannot attach, and does
+  not even look the sign-in cookie up. Scheme is not compared: the app
   speaks HTTP and learns about TLS only from a proxy header, so comparing it
   would mean guessing. The residual gap is somebody who can already forge
   `Host` or terminate TLS inside your network, who is past this fence anyway.

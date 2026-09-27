@@ -2,14 +2,16 @@
 // One table, by its database name. Any token reads; only a read-write token
 // writes — the boundary in $lib/server/api/respond decides that before this runs.
 import { answering, grantOf, json } from '$lib/server/api/respond';
-import { ApiError } from '$lib/server/api/errors';
+import { ApiError, bodyTooLarge } from '$lib/server/api/errors';
 import { deleteRow, insertRows, listRows, updateRow } from '$lib/server/api/tables';
 import type { RequestHandler } from './$types';
 
 async function body(request: Request): Promise<unknown> {
 	try {
 		return await request.json();
-	} catch {
+	} catch (error) {
+		// Over the server's body limit, the read fails before any JSON is parsed.
+		if (bodyTooLarge(error)) throw new ApiError('The body is larger than the server takes.', 413);
 		throw new ApiError('The body must be JSON.', 400);
 	}
 }

@@ -21,7 +21,10 @@
  * already deleted is answered: 404, one sentence, from `assertDocumentExists`.
  */
 
+import { inArray, is, sql, type SQL } from 'drizzle-orm';
+import { getTableConfig, PgTable, type PgColumn } from 'drizzle-orm/pg-core';
 import { db, type Db, type Queryable } from '$lib/server/db';
+import * as schema from '$lib/server/db/schema';
 import { forgetPayslip, salaryEntryPeople } from '$lib/server/salary';
 import { deleteDocumentRow, IMPORT_STATEMENT_REFUSAL } from './mutations';
 import { removeUpload } from '$lib/server/system/files';
@@ -109,6 +112,61 @@ export async function removeDocumentRow(
 		if (error instanceof RemovalRefused) return error.outcome;
 		throw error;
 	}
+}
+
+let citing: { table: PgTable; column: PgColumn }[] | null = null;
+
+/**
+ * Every column that names a document as the evidence for a record of its own:
+ * a salary month's payslip, an import's statement, a bill, a grant letter, a
+ * role's contract, a booking's confirmation.
+ *
+ * Read off the schema's foreign keys rather than listed, so a table added later
+ * that points at a document counts without anybody remembering this file. A
+ * key that CASCADEs is left out: that row is PART of the document — its text,
+ * its identity fields, its links — and goes with it, so it is no claim on it.
+ */
+function citingColumns(): { table: PgTable; column: PgColumn }[] {
+	if (citing) return citing;
+	citing = [];
+	for (const exported of Object.values(schema)) {
+		if (!is(exported, PgTable)) continue;
+		for (const key of getTableConfig(exported).foreignKeys) {
+			const reference = key.reference();
+			if (reference.foreignTable !== schema.document || reference.columns.length !== 1) continue;
+			if (key.onDelete === 'cascade') continue;
+			citing.push({ table: exported, column: reference.columns[0] });
+		}
+	}
+	return citing;
+}
+
+/**
+ * Which of these documents something still claims: a link to any record, or a
+ * row elsewhere that cites it as its evidence.
+ *
+ * For a caller deciding what may go along with a record it is deleting — only
+ * paper nothing else claims — and asked once that record is gone, so its own
+ * links and the rows that cascade with it no longer count. One query, however
+ * many tables cite a document.
+ */
+export async function claimedDocuments(
+	documentIds: readonly string[],
+	handle: Queryable = db
+): Promise<Set<string>> {
+	if (documentIds.length === 0) return new Set();
+	const ids = [...documentIds];
+	const sources: SQL[] = [
+		sql`select ${schema.documentLink.documentId} as id from ${schema.documentLink}
+			where ${inArray(schema.documentLink.documentId, ids)}`,
+		...citingColumns().map(
+			({ table, column }) => sql`select ${column} as id from ${table} where ${inArray(column, ids)}`
+		)
+	];
+	const rows = (await handle.execute(sql.join(sources, sql` union `))) as unknown as {
+		id: string;
+	}[];
+	return new Set([...rows].map((row) => String(row.id)));
 }
 
 /** What an editor says when it will not make the change. One sentence, once. */

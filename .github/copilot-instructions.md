@@ -23,8 +23,9 @@ The application is layered around a shared household ledger:
 - `src/lib/modules/registry.ts` is the source of truth for module toggles,
   navigation areas, and route availability. `src/lib/overview/panels.ts` is
   the corresponding registry for Overview panels.
-- `src/routes/api/v1/` is the read-only, bearer-token-authenticated API. API
-  endpoints should reuse the same server queries as screens and serialize
+- `src/routes/api/v1/` is the bearer-token-authenticated API; a token is
+  read-only or read-write and may be limited to areas. API endpoints should
+  reuse the same server queries as screens and serialize
   amounts through the shared API helpers.
 - `src/lib/scan/core/` is deliberately independent of SvelteKit, `$app`, the
   database, and the server; preserve that boundary when changing scanning.

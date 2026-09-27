@@ -28,6 +28,11 @@
 
 	let { data, form } = $props();
 
+	// The areas a token can be limited to, less any with nothing of its own.
+	const areaOptions = $derived(
+		API_AREA_OPTIONS.filter((option) => data.apiAreas.includes(option.key))
+	);
+
 	// Follows the checkbox as clicked, not as last saved — a disabled field is
 	// never posted, so both must save when toggled and typed in the same visit.
 	let exemptLongHeld = $derived(data.investTax?.exemptLongHeld ?? false);
@@ -458,7 +463,17 @@
 				     this the floor tier handed a newborn a nil return for the year they
 				     were born and one every year after. -->
 				<div class="card">
-					<form method="POST" action="?/setFilingAge" use:enhance class="currency-form">
+					<!-- reset: false — the value is set as a property, so a default reset
+					     emptied the field after every save, and saving again posted a
+					     blank age the action refuses. -->
+					<form
+						method="POST"
+						action="?/setFilingAge"
+						use:enhance={() =>
+							async ({ update }) =>
+								update({ reset: false })}
+						class="currency-form"
+					>
 						<Field label="Owes a return from age">
 							<input
 								name="filingAge"
@@ -906,26 +921,46 @@
 			<!-- One control for creating a token and for changing an issued one. The
 			     area boxes show only while "Only these areas" is chosen, by :has()
 			     rather than state, so each token row carries its own choice with no
-			     bookkeeping. -->
+			     bookkeeping.
+
+			     `defaultChecked` beside every `checked`: a dynamic `checked` is a
+			     property only, and Svelte strips the server-rendered attribute, so a
+			     form reset had nothing to return to and cleared every choice. With
+			     no reach chosen the next submit is refused, or — once somebody
+			     clicks "Only these areas" to see the boxes again — saves a token
+			     that reaches nothing. The default is what was saved. -->
 			{#snippet reachFields(areas: readonly EnumValue<'api_token.area'>[] | null)}
 				<fieldset class="token-reach">
 					<legend>Reaches</legend>
 					<label class="reach-choice">
-						<input type="radio" name="reach" value="everything" checked={areas === null} />
+						<input
+							type="radio"
+							name="reach"
+							value="everything"
+							checked={areas === null}
+							defaultChecked={areas === null}
+						/>
 						Everything
 					</label>
 					<label class="reach-choice">
-						<input type="radio" name="reach" value="areas" checked={areas !== null} />
+						<input
+							type="radio"
+							name="reach"
+							value="areas"
+							checked={areas !== null}
+							defaultChecked={areas !== null}
+						/>
 						Only these areas
 					</label>
 					<span class="reach-areas">
-						{#each API_AREA_OPTIONS as area (area.key)}
+						{#each areaOptions as area (area.key)}
 							<label class="reach-area">
 								<input
 									type="checkbox"
 									name="area"
 									value={area.key}
 									checked={areas?.includes(area.key) ?? false}
+									defaultChecked={areas?.includes(area.key) ?? false}
 								/>
 								<span aria-hidden="true">{area.emoji}</span>
 								{area.label}
@@ -953,6 +988,10 @@
 					</div>
 				{/if}
 
+				<!-- The default reset, deliberately: the next token is a different one,
+				     so the label clears and access and reach go back to their own
+				     defaults — read-only, everything — rather than carrying the last
+				     token's choices into a form nobody re-read. -->
 				<form method="POST" action="?/createApiToken" use:enhance class="card token-add">
 					<label>
 						<span>Label</span>
@@ -982,7 +1021,15 @@
 							</span>
 							<details class="tr-reach">
 								<summary>Change what it reaches</summary>
-								<form method="POST" action="?/setApiTokenAreas" use:enhance class="token-add">
+								<!-- reset: false, so the boxes keep showing what was just saved. -->
+								<form
+									method="POST"
+									action="?/setApiTokenAreas"
+									use:enhance={() =>
+										async ({ update }) =>
+											update({ reset: false })}
+									class="token-add"
+								>
 									<input type="hidden" name="id" value={t.id} />
 									{@render reachFields(t.areas)}
 									<button type="submit" class="btn">Save</button>

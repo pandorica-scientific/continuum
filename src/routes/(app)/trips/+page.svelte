@@ -1,8 +1,9 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
+	import { onMount } from 'svelte';
 	import { enhance } from '$app/forms';
-	import { goto } from '$app/navigation';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
+	import ActionError from '$lib/components/ActionError.svelte';
 	import SummaryBand from '$lib/components/SummaryBand.svelte';
 	import ControlRow from '$lib/components/ControlRow.svelte';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
@@ -44,11 +45,13 @@
 			label: 'Upcoming trips',
 			value: String(data.figures.upcoming),
 			note:
-				data.figures.nextInDays === null
-					? 'nothing booked'
-					: data.figures.nextInDays === 0
+				data.figures.nextInDays !== null
+					? data.figures.nextInDays === 0
 						? 'one starts today'
 						: `next in ${data.figures.nextInDays} days`
+					: data.figures.upcoming > 0
+						? 'under way now'
+						: 'nothing booked'
 		},
 		{
 			label: 'Nights booked',
@@ -103,29 +106,49 @@
 			.sort(([a], [b]) => b - a);
 	});
 
-	/**
-	 * What the undo bar offers back for six seconds: an idea taken off the
-	 * board, or a trip deleted from its own page. Only the id and the name —
-	 * removal hides the row rather than deleting it, so undo brings back the
-	 * same record, hearts, stamp and plans included.
-	 */
-	let undo = $state<{ kind: 'idea' | 'trip'; id: string; name: string } | null>(null);
-	let undoTimer: ReturnType<typeof setTimeout> | null = null;
+	type Held = { kind: 'idea' | 'trip'; id: string; name: string };
 
-	function holdUndo(held: { kind: 'idea' | 'trip'; id: string; name: string }) {
+	/**
+	 * What the undo bar offers back: an idea taken off the board, or a trip
+	 * deleted from its own page. Only the id and the name — removal hides the
+	 * row rather than deleting it, so undo brings back the same record, hearts,
+	 * stamp and plans included.
+	 *
+	 * Seeded from what the server said, so the bar is in the page as served and
+	 * works with script switched off — its Undo is a plain form. A trip deleted
+	 * from its page arrives with `?removed=`; an idea taken off the board without
+	 * script comes back as the action's answer. Read once, when the page is made:
+	 * a later reload of the data (after another edit on this screen) must not
+	 * offer the same thing back again.
+	 */
+	// svelte-ignore state_referenced_locally
+	let undo = $state<Held | null>(
+		data.removedTrip
+			? { kind: 'trip', ...data.removedTrip }
+			: form?.removedIdea
+				? { kind: 'idea', ...form.removedIdea }
+				: null
+	);
+	let undoTimer: ReturnType<typeof setTimeout> | null = null;
+	/** The "too late" answer to an undo, once somebody has closed it. */
+	let lateDismissed = $state(false);
+
+	/** With script, the bar stays six seconds — well inside the server's minute. */
+	function holdUndo(held: Held) {
 		if (undoTimer) clearTimeout(undoTimer);
 		undo = held;
 		undoTimer = setTimeout(() => (undo = null), 6000);
 	}
 
-	// A trip deleted from its page arrives here with `?removed=`; the bar takes
-	// it once, and the address drops the parameter — a real navigation, so a
-	// later reload of this list does not offer the same trip back again.
-	$effect(() => {
-		const removed = data.removedTrip;
-		if (!removed) return;
-		holdUndo({ kind: 'trip', id: removed.id, name: removed.name });
-		goto('/trips', { replaceState: true, noScroll: true, keepFocus: true });
+	// No navigation to tidy `?removed=` off the address: that loaded the page
+	// twice and cancelled the scroll back to the top. A reload inside the
+	// minute offers the undo again, which is true — it can still be undone —
+	// and after the sweep the server has no name to offer.
+	onMount(() => {
+		if (undo) holdUndo(undo);
+		return () => {
+			if (undoTimer) clearTimeout(undoTimer);
+		};
 	});
 </script>
 
@@ -260,6 +283,7 @@
 			action={undo.kind === 'idea' ? '?/restoreIdea' : '?/restoreTrip'}
 			use:enhance={() => {
 				undo = null;
+				lateDismissed = false;
 				return async ({ update }) => update({ reset: false });
 			}}
 		>
@@ -267,6 +291,20 @@
 			<button class="undo-do" type="submit">Undo</button>
 		</form>
 		<button class="undo-x" type="button" onclick={() => (undo = null)} aria-label="Dismiss">
+			<Icon name="plus" size={14} />
+		</button>
+	</div>
+{:else if form?.on === 'undo' && !lateDismissed}
+	<!-- An undo that arrived after the sweep — a page without script keeps its
+	     bar until it is left — is told so where it was pressed. -->
+	<div class="undo late">
+		<ActionError message={form.message} />
+		<button
+			class="undo-x"
+			type="button"
+			onclick={() => (lateDismissed = true)}
+			aria-label="Dismiss"
+		>
 			<Icon name="plus" size={14} />
 		</button>
 	</div>
@@ -312,6 +350,12 @@
 		box-shadow: var(--shadow-float);
 		font-size: var(--text-md);
 		color: var(--fg1);
+	}
+	/* The floating bar is the box already; the message keeps only its colour. */
+	.late :global(.action-error) {
+		border: 0;
+		background: none;
+		padding: 0;
 	}
 	.undo-do {
 		min-height: auto;

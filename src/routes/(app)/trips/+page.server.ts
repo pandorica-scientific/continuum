@@ -9,7 +9,6 @@ import {
 	addIdea,
 	createTrip,
 	destinationLabel,
-	ideaExists,
 	listIdeas,
 	listTrips,
 	promoteIdea,
@@ -96,13 +95,23 @@ async function removedTripFrom(raw: string | null) {
 	return name ? { id, name } : null;
 }
 
+/** What an undo that arrived after the sweep says: honestly, too late. */
+const TOO_LATE = {
+	idea: 'Too late to undo: that idea has already been deleted for good.',
+	trip: 'Too late to undo: that trip has already been deleted for good.'
+} as const;
+
 export const actions: Actions = {
+	/**
+	 * Hands back what it took off the board, so a page drawn without script —
+	 * which never ran the undo bar's own code — draws the bar from this.
+	 */
 	removeIdea: async ({ request }) => {
 		const form = await request.formData();
 		const id = asRowId(form.get('id'));
 		if (!id) return fail(400, { message: 'No such idea.' });
-		await removeIdea(id);
-		return { removed: true };
+		const name = await removeIdea(id);
+		return { removedIdea: name === null ? null : { id, name } };
 	},
 
 	/**
@@ -113,7 +122,9 @@ export const actions: Actions = {
 	restoreIdea: async ({ request }) => {
 		const form = await request.formData();
 		const id = asRowId(form.get('id'));
-		await restoreIdea(id);
+		// An undo from a page left open past the sweep has nothing to bring back,
+		// and says so rather than reporting a success that changed nothing.
+		if (!(await restoreIdea(id))) return fail(410, { on: 'undo', message: TOO_LATE.idea });
 		return { restored: true };
 	},
 
@@ -121,8 +132,8 @@ export const actions: Actions = {
 	restoreTrip: async ({ request }) => {
 		const form = await request.formData();
 		const id = asRowId(form.get('id'));
-		// An undo from a page left open past the sweep has nothing to open.
-		redirect(303, (await restoreTrip(id)) ? `/trips/${id}` : '/trips');
+		if (!(await restoreTrip(id))) return fail(410, { on: 'undo', message: TOO_LATE.trip });
+		redirect(303, `/trips/${id}`);
 	},
 
 	addIdea: async ({ request }) => {
@@ -159,11 +170,9 @@ export const actions: Actions = {
 			return fail(400, { on: 'trip', message: 'Where is it going? Two letters, like PT.' });
 		}
 
-		// `asOptionalRowId`, not the required variant — that turns an absent field into
-		// the nil uuid, a real value no idea has, and the foreign key rejects it with a 500.
-		const fromIdeaId = (await ideaExists(asOptionalRowId(form.get('fromIdeaId'))))
-			? asOptionalRowId(form.get('fromIdeaId'))!
-			: null;
+		// Absent is a trip from nothing. Anything else goes to `promoteIdea`,
+		// which makes an ordinary trip of an idea that is gone or never was.
+		const fromIdeaId = asOptionalRowId(form.get('fromIdeaId'));
 		const input = {
 			name,
 			emoji: String(form.get('emoji') ?? ''),

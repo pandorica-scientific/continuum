@@ -7,7 +7,7 @@
  * computed here rather than in the component, so the list and the detail page
  * cannot disagree about the same trip.
  */
-import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, lt, sql } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { db, type Db, type Queryable } from '$lib/server/db';
 import {
@@ -32,10 +32,13 @@ import {
 	type ArtDefinition
 } from '$lib/life/art';
 import { orderBookings, type OrderableBooking } from '$lib/life/trips/booking-order';
-import { insertDocumentAggregate } from '$lib/server/documents/mutations';
+import { attachmentFiling, insertDocumentAggregate } from '$lib/server/documents/mutations';
 import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { SYSTEM_SHELF_KEYS } from '$lib/documents/shelves';
-import { removeDocumentRow } from '$lib/server/documents/lifecycle';
+import { claimedDocuments, removeDocumentRow } from '$lib/server/documents/lifecycle';
+import { isFileableTarget } from '$lib/server/documents/targets';
+import { archiveScopePredicate } from '$lib/server/documents/visibility';
+import { documentTypesOutOfReach } from '$lib/server/api/areas';
 import { removeUpload } from '$lib/server/system/files';
 
 export interface TripPerson {
@@ -80,6 +83,10 @@ export interface BookingView {
 	documentId: string | null;
 	/** What the attached confirmation is called, for the row to name it. */
 	documentName: string | null;
+	/** Its extension, which the in-page viewer needs to know how to show it. */
+	documentExt: string | null;
+	/** Whether it has a file behind it to open; a named record alone does not. */
+	documentHasFile: boolean;
 }
 
 export interface PlaceView {
@@ -96,6 +103,11 @@ export interface IdeaView {
 	country: string | null;
 	hearts: TripPerson[];
 	art: { svg: string; hue: string | null } | null;
+	/**
+	 * Whether `art` is a stamp stored on the idea, which becoming a trip keeps,
+	 * rather than one drawn from its name for this view alone.
+	 */
+	stampStored: boolean;
 	/** Plans and other paper attached to the idea, newest first. */
 	papers: AttachedPaper[];
 }
@@ -105,6 +117,11 @@ export interface AttachedPaper {
 	id: string;
 	name: string;
 	ext: string;
+	/**
+	 * Whether there is a file to open. A document can be a record with no bytes
+	 * behind it, and a link to its file would open a 404.
+	 */
+	hasFile: boolean;
 }
 
 /**
@@ -133,23 +150,26 @@ export function destinationLabel(
 
 const artOf = (
 	art: unknown,
-	country: string | null,
+	place: { country: string | null; city?: string | null },
 	name = ''
 ): { svg: string; hue: string | null } | null => {
-	// A row written with no stamp — an idea or a trip a script added over the
-	// API, which draws nothing — is drawn from its name and country each time
-	// it is shown, rather than left blank. Not stored, so it follows a rename,
-	// unlike a stamp the app chose once and kept.
-	const definition =
-		art && typeof art === 'object'
-			? (art as ArtDefinition)
-			: resolveStamp({ name, country: country ?? null });
 	try {
-		return { svg: stampSvg(definition), hue: stampHue(country, name) };
+		// A row written with no stamp — an idea or a trip a script added over the
+		// API, which draws nothing — is drawn from its name, country and city each
+		// time it is shown, from the same inputs `createTrip` would have stored,
+		// rather than left blank. Not stored, so it follows a rename, unlike a
+		// stamp the app chose once and kept.
+		const definition =
+			art && typeof art === 'object'
+				? (art as ArtDefinition)
+				: resolveStamp({ name, country: place.country, city: place.city ?? null });
+		return { svg: stampSvg(definition), hue: stampHue(place.country, name) };
 	} catch {
 		// A definition written by an older version of the generator that this one
-		// cannot draw. The card falls back to its "no stamp yet" state, which is
-		// a great deal better than a screen that will not render.
+		// cannot draw, or a row the generator cannot draw from at all — a blank
+		// name, one over its 120 characters, a country that is not two letters,
+		// all of which the API accepts. The card falls back to its "no stamp yet"
+		// state, which is a great deal better than a screen that will not render.
 		return null;
 	}
 };
@@ -223,7 +243,11 @@ function toView(
 		upcoming: row.endsOn >= today,
 		destinations,
 		members,
-		stamp: artOf(row.art, destinations[0]?.country ?? null, row.name)
+		stamp: artOf(
+			row.art,
+			{ country: destinations[0]?.country ?? null, city: destinations[0]?.city },
+			row.name
+		)
 	};
 }
 
@@ -276,7 +300,9 @@ export async function loadTrip(id: string, handle: Db = db): Promise<TripDetail 
 				endsAt: tripBooking.endsAt,
 				reference: tripBooking.reference,
 				documentId: tripBooking.documentId,
-				documentName: document.name
+				documentName: document.name,
+				documentExt: document.ext,
+				documentHasFile: sql<boolean>`${document.storedName} is not null`
 			})
 			.from(tripBooking)
 			.leftJoin(document, eq(document.id, tripBooking.documentId))
@@ -299,7 +325,13 @@ export async function loadTrip(id: string, handle: Db = db): Promise<TripDetail 
 	};
 }
 
-/** The documents attached to each of these trips or ideas, newest first. */
+/**
+ * The documents attached to each of these trips or ideas, newest first.
+ *
+ * Under the archive's own rule, as every documents card is: paper whose only
+ * subjects are archived is demoted here too, so a trip does not show what the
+ * Documents screen has put away.
+ */
 async function papersFor(ids: string[], handle: Queryable): Promise<Map<string, AttachedPaper[]>> {
 	const byTarget = new Map<string, AttachedPaper[]>();
 	if (ids.length === 0) return byTarget;
@@ -308,11 +340,12 @@ async function papersFor(ids: string[], handle: Queryable): Promise<Map<string, 
 			targetId: documentLink.targetId,
 			id: document.id,
 			name: document.name,
-			ext: document.ext
+			ext: document.ext,
+			hasFile: sql<boolean>`${document.storedName} is not null`
 		})
 		.from(documentLink)
 		.innerJoin(document, eq(document.id, documentLink.documentId))
-		.where(inArray(documentLink.targetId, ids))
+		.where(and(inArray(documentLink.targetId, ids), archiveScopePredicate(false)))
 		.orderBy(desc(document.addedOn), desc(document.id));
 	for (const { targetId, ...paper } of rows) {
 		byTarget.set(targetId, [...(byTarget.get(targetId) ?? []), paper]);
@@ -364,14 +397,19 @@ export async function listIdeas(handle: Db = db): Promise<IdeaView[]> {
 		note: row.note,
 		country: row.country,
 		hearts: byIdea.get(row.id) ?? [],
-		art: artOf(row.art, row.country, row.name),
+		art: artOf(row.art, { country: row.country }, row.name),
+		stampStored: row.art !== null && typeof row.art === 'object',
 		papers: papers.get(row.id) ?? []
 	}));
 }
 
 export interface TripFigures {
+	/** Trips that have not ended yet, including any the household is on now. */
 	upcoming: number;
-	/** Days until the next trip starts, or null when none is booked. */
+	/**
+	 * Days until the next trip STARTS, or null when none is still to start —
+	 * nothing booked, or every upcoming trip already under way.
+	 */
 	nextInDays: number | null;
 	nightsBooked: number;
 	ideas: number;
@@ -411,7 +449,10 @@ export async function tripFigures(handle: Db = db): Promise<TripFigures> {
 		handle.select({ n: sql<number>`count(*)::int` }).from(person)
 	]);
 
-	const next = upcoming.find((row) => row.startsOn >= today) ?? upcoming[0];
+	// Only a trip still to start is "next". Falling back to one already under way
+	// counted the days to a start that had passed, which came out as zero and
+	// read as "one starts today" for the whole of the holiday.
+	const next = upcoming.find((row) => row.startsOn >= today);
 	return {
 		upcoming: upcoming.length,
 		nextInDays: next ? nightsBetween(today, next.startsOn) : null,
@@ -428,9 +469,12 @@ export async function tripFigures(handle: Db = db): Promise<TripFigures> {
 /**
  * How long a removed trip or idea waits, hidden, before the sweep deletes it.
  *
- * Longer than the undo bar is on screen (six seconds), so an undo pressed at
- * the last moment always finds the row still there; short enough that the
- * archive is not holding paper for something the household has let go of.
+ * Longer than the undo bar is on screen with script (six seconds), so an undo
+ * pressed at the last moment always finds the row still there; short enough
+ * that the archive is not holding paper for something the household has let
+ * go of. A page without script keeps its bar until it is left, so an undo can
+ * arrive after the sweep — `restoreIdea` and `restoreTrip` say so, and the
+ * screen tells the household it came too late rather than pretending.
  */
 export const REMOVAL_GRACE_MS = 60_000;
 
@@ -438,35 +482,34 @@ export const REMOVAL_GRACE_MS = 60_000;
  * Take an idea off the board. Hidden, not deleted: undo is `restoreIdea`, and
  * the idea is gone for good — with the plans attached to it alone — once
  * `purgeRemovedTrips` finds it removed for longer than `REMOVAL_GRACE_MS`.
+ *
+ * Returns the idea's name, which the undo bar shows, or null when there was
+ * nothing on the board to take off.
  */
-export async function removeIdea(id: string, handle: Db = db): Promise<void> {
-	await handle
+export async function removeIdea(id: string, handle: Db = db): Promise<string | null> {
+	const [removed] = await handle
 		.update(tripIdea)
 		.set({ removedAt: new Date() })
-		.where(and(eq(tripIdea.id, id), isNull(tripIdea.removedAt)));
-}
-
-/** Undo `removeIdea`: the same idea, hearts and plans, back where it was. */
-export async function restoreIdea(id: string, handle: Db = db): Promise<void> {
-	await handle.update(tripIdea).set({ removedAt: null }).where(eq(tripIdea.id, id));
+		.where(and(eq(tripIdea.id, id), isNull(tripIdea.removedAt)))
+		.returning({ name: tripIdea.name });
+	return removed?.name ?? null;
 }
 
 /**
- * Does this idea still exist?
+ * Undo `removeIdea`: the same idea, hearts and plans, back where it was.
  *
- * Asked before a trip records where it came from. `trip.from_idea_id` is a real
- * foreign key, so a stale or forged id does not fail quietly — it rejects the
- * whole insert, and a household loses the trip it was trying to make over a
- * field it never filled in.
+ * False when there is no idea to bring back — the sweep got there first — so
+ * the screen can say the undo came too late instead of reporting a success
+ * that changed nothing. An undo racing the sweep waits on the row lock the
+ * sweep holds, and then finds either the idea or nothing.
  */
-export async function ideaExists(id: string | undefined, handle: Db = db): Promise<boolean> {
-	if (!id) return false;
-	const [row] = await handle
-		.select({ id: tripIdea.id })
-		.from(tripIdea)
-		.where(and(eq(tripIdea.id, id), isNull(tripIdea.removedAt)))
-		.limit(1);
-	return Boolean(row);
+export async function restoreIdea(id: string, handle: Db = db): Promise<boolean> {
+	const restored = await handle
+		.update(tripIdea)
+		.set({ removedAt: null })
+		.where(eq(tripIdea.id, id))
+		.returning({ id: tripIdea.id });
+	return restored.length > 0;
 }
 
 export interface NewIdea {
@@ -541,12 +584,24 @@ export interface NewTrip {
 	notes: string;
 	destinations: { country: string; region: string | null; city: string | null }[];
 	members: string[];
-	/** Set when the trip was promoted from an idea, which is then taken off the board. */
-	fromIdeaId?: string | null;
 	/** The definition the dialog previewed. See `NewIdea.art`. */
 	art?: unknown;
+	/**
+	 * A stamp already stored on another row — the idea a trip is promoted from
+	 * — kept when the form previewed none. A definition, not the string a form
+	 * posts, so it is taken as it is: it was checked when it was stored, and
+	 * `artOf` still refuses to draw one it cannot.
+	 */
+	storedArt?: ArtDefinition | null;
 }
 
+/**
+ * A new trip.
+ *
+ * `trip.from_idea_id` is left empty: a promoted trip's idea is deleted in the
+ * same transaction (see `promoteIdea`), which would null it straight away, and
+ * what the idea held is carried onto the trip itself instead.
+ */
 export async function createTrip(input: NewTrip, handle: Queryable = db): Promise<string> {
 	const id = uuidv7();
 	const first = input.destinations[0];
@@ -557,9 +612,9 @@ export async function createTrip(input: NewTrip, handle: Queryable = db): Promis
 		startsOn: input.startsOn,
 		endsOn: input.endsOn,
 		notes: input.notes,
-		fromIdeaId: input.fromIdeaId ?? null,
 		art:
 			parseStoredStamp(input.art) ??
+			input.storedArt ??
 			resolveStamp({
 				name: input.name,
 				country: first?.country ?? null,
@@ -598,7 +653,10 @@ export async function removeTrip(id: string, handle: Db = db): Promise<void> {
 		.where(and(eq(trip.id, id), isNull(trip.removedAt)));
 }
 
-/** Undo `removeTrip`; false when the sweep got there first and there is no trip to bring back. */
+/**
+ * Undo `removeTrip`; false when the sweep got there first and there is no trip
+ * to bring back. The same lock as `restoreIdea` settles a race with the sweep.
+ */
 export async function restoreTrip(id: string, handle: Db = db): Promise<boolean> {
 	const restored = await handle
 		.update(trip)
@@ -626,12 +684,13 @@ export async function removedTripName(id: string, handle: Db = db): Promise<stri
  * every document, tag and contact attached to it is attached to the trip. One
  * transaction, so a failure leaves the idea exactly as it was.
  *
- * An idea that is gone (removed, or promoted twice by a double click) makes
- * an ordinary trip rather than failing the form.
+ * An idea that is gone (removed, promoted twice by a double click, or a stale
+ * or forged id off the form) makes an ordinary trip rather than failing the
+ * form, so the screens hand any posted id straight here.
  */
 export async function promoteIdea(
 	ideaId: string,
-	input: Omit<NewTrip, 'fromIdeaId'>,
+	input: NewTrip,
 	handle: Db = db
 ): Promise<string> {
 	return handle.transaction(async (tx) => {
@@ -646,7 +705,11 @@ export async function promoteIdea(
 			{
 				...input,
 				notes: input.notes.trim() ? input.notes : idea.note,
-				art: parseStoredStamp(input.art) ?? idea.art ?? undefined
+				// The idea's stamp as stored, which `createTrip` keeps unless the form
+				// previewed one of its own. It cannot go in `art`: that is the string
+				// a form posts, and a stored definition is an object, which
+				// `parseStoredStamp` refuses — every promoted trip was redrawn.
+				storedArt: idea.art && typeof idea.art === 'object' ? (idea.art as ArtDefinition) : null
 			},
 			tx
 		);
@@ -669,14 +732,34 @@ export async function promoteIdea(
 }
 
 /**
+ * Kinds of paper the sweep never deletes, whatever they are filed against: the
+ * ones that belong to an area of their own as well as to the archive — a
+ * payslip is Salary's. The same list that keeps them from a token limited to
+ * Trips, asked the same way, so the sweep deletes no kind of paper a Trips
+ * token could not delete itself, and a new entry there reaches here unedited.
+ */
+const OTHER_AREAS_PAPER = new Set<string>(
+	documentTypesOutOfReach({ access: 'read-write', areas: ['trips'] }).map((entry) => entry.type)
+);
+
+/**
  * Delete what was removed more than `REMOVAL_GRACE_MS` ago, for good.
  *
- * A removed trip or idea takes with it every document attached to it ALONE —
- * the plan, the booking confirmations — files included. A document attached
- * to something else as well (the receipt that is also on a transaction) stays,
- * and only loses its link to what is gone. Run every minute from boot; a
- * document the archive refuses to delete (an import's own statement) is left
- * in place rather than failing the sweep.
+ * A removed trip or idea takes with it the documents that were ITS alone — the
+ * plan, the booking confirmations — files included. Anything something else
+ * still claims stays, and only loses its link to what is gone:
+ *
+ * - paper filed against another record as well (the receipt that is also on a
+ *   transaction);
+ * - paper another record cites as its evidence: a salary month's payslip, an
+ *   import's statement, a bill, a grant letter, a role's contract, another
+ *   trip's booking (`claimedDocuments`);
+ * - a kind of paper that belongs to another area, a payslip above all
+ *   (`OTHER_AREAS_PAPER`), even filed against nothing else.
+ *
+ * So removing a trip — which a token limited to Trips may do — can never
+ * delete somebody's payslip and the salary hanging off it. Run every minute
+ * from boot.
  *
  * One record at a time, each in a transaction of its own, so one that fails is
  * tried again next minute without holding back the rest.
@@ -712,7 +795,7 @@ export async function purgeRemovedTrips(
 }
 
 /**
- * Delete one removed trip or idea with the paper attached to it alone; null
+ * Delete one removed trip or idea with the paper that was its alone; null
  * when it is no longer removed.
  *
  * The row is locked and "still removed" asked again inside the transaction,
@@ -738,32 +821,47 @@ async function purgeOne(
 			.select({ id: documentLink.documentId })
 			.from(documentLink)
 			.where(eq(documentLink.targetId, id));
-		const elsewhere =
+		// Locked before anything is decided about them. Filing a document against
+		// another record, or citing it from one, takes a key-share lock on it,
+		// which waits for this one: a link that landed first is seen below and
+		// keeps the document, and one that comes after finds it gone and fails
+		// out loud — rather than being deleted with it unseen. In id order, so
+		// two sweeps cannot take the same documents in opposite orders.
+		const papers =
 			attached.length === 0
 				? []
 				: await tx
-						.selectDistinct({ id: documentLink.documentId })
-						.from(documentLink)
+						.select({ id: document.id, type: document.type })
+						.from(document)
 						.where(
-							and(
-								inArray(
-									documentLink.documentId,
-									attached.map((link) => link.id)
-								),
-								ne(documentLink.targetId, id)
+							inArray(
+								document.id,
+								attached.map((link) => link.id)
 							)
-						);
-		const kept = new Set(elsewhere.map((link) => link.id));
+						)
+						.orderBy(asc(document.id))
+						.for('update');
+
+		// The record first, and with it its links and every row that cascades
+		// from it — a trip's own bookings above all — so whatever still claims a
+		// document after this is something else.
+		await tx.delete(table).where(eq(table.id, id));
+
+		const claimed = await claimedDocuments(
+			papers.map((paper) => paper.id),
+			tx
+		);
 		const files: string[] = [];
 		let documents = 0;
-		for (const { id: documentId } of attached) {
-			if (kept.has(documentId)) continue;
-			const outcome = await removeDocumentRow(documentId, tx);
+		for (const paper of papers) {
+			if (claimed.has(paper.id) || OTHER_AREAS_PAPER.has(paper.type)) continue;
+			// A refusal still undoes only this one document (a savepoint), and
+			// leaves it in place rather than failing the sweep.
+			const outcome = await removeDocumentRow(paper.id, tx);
 			if (!outcome.ok) continue;
 			documents++;
 			if (outcome.storedName) files.push(outcome.storedName);
 		}
-		await tx.delete(table).where(eq(table.id, id));
 		return { documents, files };
 	});
 	if (!removed) return null;
@@ -888,6 +986,11 @@ export async function deleteBooking(id: string, handle: Db = db): Promise<void> 
  * questions: the link says "this PDF is about that trip", the column says
  * "this is THIS flight's confirmation", and a trip with five documents needs
  * both to know which is which.
+ *
+ * Null, filing nothing, when the trip is no longer one paper may be filed
+ * against — deleted in another tab and waiting for the sweep, which would
+ * delete the confirmation with it a minute later without a word. The caller
+ * still holds the uploaded file and removes it.
  */
 export async function attachBookingFile(
 	input: {
@@ -899,7 +1002,8 @@ export async function attachBookingFile(
 		ext: string;
 	},
 	handle: Db = db
-): Promise<string> {
+): Promise<string | null> {
+	if (!(await isFileableTarget(input.tripId, handle))) return null;
 	const documentId = uuidv7();
 	// Read before the transaction opens: a lookup inside the callback would be a
 	// second round trip holding the transaction open for no reason.
@@ -917,24 +1021,16 @@ export async function attachBookingFile(
 	// still linked, and still opens.
 	await handle.transaction((tx) =>
 		insertDocumentAggregate(
-			{
+			attachmentFiling({
 				id: documentId,
 				name: input.name,
 				shelfId,
-				// `other` rather than a guess: a booking confirmation is not one of the
-				// seventeen shapes the archive knows, and mislabelling it as a receipt
-				// would put it in front of the wrong readers.
-				type: 'other',
-				note: null,
 				storedName: input.storedName,
 				ext: input.ext,
-				addedOn: todayIso(),
-				expiresOn: null,
-				expiryVerb: 'expires',
-				targetIds: [input.tripId],
-				tagNames: [],
-				contentHash: input.contentHash
-			},
+				contentHash: input.contentHash,
+				targetId: input.tripId,
+				addedOn: todayIso()
+			}),
 			tx
 		)
 	);
@@ -1046,12 +1142,4 @@ export async function togglePlace(id: string, handle: Db = db): Promise<void> {
 		.update(tripPlace)
 		.set({ done: sql`not ${tripPlace.done}` })
 		.where(eq(tripPlace.id, id));
-}
-
-/** Trips that have ended, for the pass that writes their visits. */
-export async function endedTrips(handle: Db = db) {
-	return handle
-		.select()
-		.from(trip)
-		.where(and(lt(trip.endsOn, todayIso()), isNull(trip.removedAt)));
 }

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { json, apiError } from '$lib/server/api/respond';
+import { json, apiError, grantOf } from '$lib/server/api/respond';
+import { reaches } from '$lib/server/api/areas';
 import { money } from '$lib/api/serialise';
 import { getBaseCurrency } from '$lib/server/settings';
 import { parseFilter } from '$lib/transactions/filter';
@@ -8,15 +9,22 @@ import { loadSplits } from '$lib/server/splits';
 import { loadTagsFor } from '$lib/server/tags';
 import type { RequestHandler } from './$types';
 
-export const GET: RequestHandler = async ({ url }) => {
+export const GET: RequestHandler = async ({ url, locals }) => {
 	// The same pair the register screen calls, so a filter cannot mean one thing
 	// on the screen and another over the wire.
 	const baseCurrency = await getBaseCurrency();
 	const filter = parseFilter(url.searchParams, baseCurrency);
 	const page = await registerPage(filter);
 
+	// Tags hang off every kind of record, so they are `shared`: a token limited
+	// to the ledger gets its transactions without them, as it gets no answer
+	// from /api/v1/tags or the tag tables.
+	const withTags = reaches(grantOf(locals), 'shared');
 	const ids = page.rows.map((r) => r.id);
-	const [splitsByTxn, tagsByTxn] = await Promise.all([loadSplits(ids), loadTagsFor(ids)]);
+	const [splitsByTxn, tagsByTxn] = await Promise.all([
+		loadSplits(ids),
+		withTags ? loadTagsFor(ids) : null
+	]);
 
 	try {
 		return json({
@@ -41,7 +49,9 @@ export const GET: RequestHandler = async ({ url }) => {
 						categoryId: s.categoryId,
 						note: s.note
 					})),
-				tags: (tagsByTxn.get(r.id) ?? []).map((t) => ({ id: t.id, name: t.name }))
+				...(tagsByTxn && {
+					tags: (tagsByTxn.get(r.id) ?? []).map((t) => ({ id: t.id, name: t.name }))
+				})
 			}))
 		});
 	} catch (e) {

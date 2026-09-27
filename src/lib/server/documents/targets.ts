@@ -14,6 +14,7 @@
 
 import { and, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import { db, type Queryable } from '$lib/server/db';
+import { asRowId } from '$lib/ids';
 import { displayCurrency, formatMinor } from '$lib/money';
 import type { DocumentTypeKey, EnumValue } from '$lib/enums';
 import {
@@ -496,28 +497,49 @@ async function documentExists(documentId: string, handle: Queryable): Promise<bo
 }
 
 /**
- * Whether this id names a record of a kind this registry manages.
+ * Which of these ids name a record a document may be filed against right now.
  *
  * `document_link.target_id` references `entity`, so the FK accepts any
  * entity including another document; this is the one check that says which
- * are actually fileable, shared by every entry point.
+ * are actually fileable, shared by every entry point — the capture form, the
+ * inspector, the bulk bar, a single attach and the API alike.
  *
  * A trip or idea removed and waiting for the sweep is not: the sweep would
  * delete paper filed against it alone a minute later, with no word to whoever
  * filed it.
+ *
+ * Ids off a form may be anything, so one that is not a uuid is simply not
+ * fileable, rather than a query Postgres refuses with a 500.
  */
-export async function isFileableTarget(targetId: string, handle: Queryable): Promise<boolean> {
-	const [record] = await handle
+export async function fileableTargetIds(
+	targetIds: Iterable<string>,
+	handle: Queryable = db
+): Promise<Set<string>> {
+	const ids = [...new Set(targetIds)].filter((id) => asRowId(id) === id);
+	if (ids.length === 0) return new Set();
+	const records = await handle
 		.select({
+			id: entity.id,
 			kind: entity.kind,
 			removedAt: sql<Date | null>`coalesce(${trip.removedAt}, ${tripIdea.removedAt})`
 		})
 		.from(entity)
 		.leftJoin(trip, eq(trip.id, entity.id))
 		.leftJoin(tripIdea, eq(tripIdea.id, entity.id))
-		.where(eq(entity.id, targetId))
-		.limit(1);
-	return !!record && isDocumentTargetKind(record.kind) && record.removedAt === null;
+		.where(inArray(entity.id, ids));
+	const fileable = new Set(
+		records
+			.filter((record) => isDocumentTargetKind(record.kind) && record.removedAt === null)
+			.map((record) => record.id)
+	);
+	// Answered in the caller's own spelling: Postgres hands a uuid back in lower
+	// case, and a caller asking about an upper-case one checks for that.
+	return new Set(ids.filter((id) => fileable.has(id.toLowerCase())));
+}
+
+/** `fileableTargetIds` for one id. */
+export async function isFileableTarget(targetId: string, handle: Queryable): Promise<boolean> {
+	return (await fileableTargetIds([targetId], handle)).has(targetId);
 }
 
 /**
@@ -581,9 +603,9 @@ export async function detachDocument(
  *
  * `targetIds` with nothing in it is nothing to ask.
  *
- * Each target's kind is checked against the registry too, in one batched
- * query, so a document offered as a target of itself gets an empty list
- * instead of the whole library.
+ * Each target is checked by `fileableTargetIds` too, in one batched query, so
+ * a document offered as a target of itself — or a trip waiting for the sweep —
+ * gets an empty list instead of the whole library.
  */
 export async function candidateDocumentsFor(
 	targetIds: readonly string[],
@@ -591,7 +613,7 @@ export async function candidateDocumentsFor(
 ): Promise<Map<string, CandidateDocument[]>> {
 	if (targetIds.length === 0) return new Map();
 
-	const [current, links, kinds] = await Promise.all([
+	const [current, links, fileableIds] = await Promise.all([
 		handle
 			.select({
 				id: document.id,
@@ -607,15 +629,8 @@ export async function candidateDocumentsFor(
 			.select({ targetId: documentLink.targetId, documentId: documentLink.documentId })
 			.from(documentLink)
 			.where(inArray(documentLink.targetId, targetIds)),
-		handle
-			.select({ id: entity.id, kind: entity.kind })
-			.from(entity)
-			.where(inArray(entity.id, targetIds))
+		fileableTargetIds(targetIds, handle)
 	]);
-
-	const fileableTargetIds = new Set(
-		kinds.filter((row) => isDocumentTargetKind(row.kind)).map((row) => row.id)
-	);
 
 	const linkedByTarget = new Map<string, Set<string>>();
 	for (const link of links) {
@@ -627,7 +642,7 @@ export async function candidateDocumentsFor(
 	// `current` is already sorted by name; filtering preserves that order.
 	return new Map(
 		targetIds.map((targetId) => {
-			if (!fileableTargetIds.has(targetId)) return [targetId, []] as const;
+			if (!fileableIds.has(targetId)) return [targetId, []] as const;
 			const linked = linkedByTarget.get(targetId);
 			const candidates = linked ? current.filter((doc) => !linked.has(doc.id)) : current;
 			return [targetId, candidates] as const;

@@ -221,8 +221,7 @@
 	 * The cell draws flags, which are `aria-hidden` — so the countries have to
 	 * arrive here in words, or the only thing announced is the year.
 	 */
-	function markLabel(year: number, mark: HouseholdResidence): string {
-		const names = mark.countries.map(countryName).join(' · ');
+	function markLabel(year: number, names: string, mark: HouseholdResidence): string {
 		const how = markWords(mark);
 		return `Tax residence for ${year}: ${names ? `${names} — ${how}` : how}`;
 	}
@@ -247,13 +246,65 @@
 	// saving it as the whole year would contradict the tick.
 	let partFrom = $state('');
 	let partTo = $state('');
+	/** Who and where the open form states. Bound, so a save can move `where` on. */
+	let who = $state('');
+	let where = $state('');
 	function declare(year: number): void {
 		declaring = declaring === year ? null : year;
 		partial = false;
 		partFrom = '';
 		partTo = '';
+		who = people[0]?.id ?? '';
+		where = declaring === null ? '' : suggestCountry(declaring, who);
 	}
 	const nameOf = (id: string) => people.find((p) => p.id === id)?.name ?? '—';
+
+	/**
+	 * The open form's year and what it reads, or undefined once that year is gone.
+	 *
+	 * Looked up rather than assumed. Dismissing a year's only card, or withdrawing
+	 * the declaration that raised it, takes the year off the axis while its form
+	 * is still open — and a lookup asserted non-null then threw on the next render
+	 * and took the screen with it. The form now closes with its year.
+	 */
+	const declaringMark = $derived(declaring === null ? undefined : marks.get(declaring));
+
+	/**
+	 * The country the form offers for this person and year.
+	 *
+	 * The year's own countries first — what its evidence reads, then the countries
+	 * it has cards in — skipping any this person has ALREADY declared for it. A
+	 * move year takes two answers, and after the first the evidence reads only the
+	 * country just declared: offering it again made "save the second half" an
+	 * upsert over the first, since the store keys a declaration on
+	 * (person, year, country), with nothing on screen to say so.
+	 */
+	function suggestCountry(year: number, personId: string): string {
+		const said = new Set(
+			declaredFor(year)
+				.filter((d) => d.personId === personId)
+				.map((d) => d.country)
+		);
+		const offered = [
+			...(marks.get(year)?.countries ?? []),
+			...years.cards.filter((c) => c.year === year).map((c) => c.country),
+			...years.knownCountries
+		];
+		return offered.find((code) => !said.has(code)) ?? offered[0] ?? '';
+	}
+
+	/**
+	 * The declaration a save would overwrite, if any.
+	 *
+	 * Still possible on purpose — correcting a declaration's dates is the same
+	 * gesture as making it — but said before the click rather than discovered
+	 * after it.
+	 */
+	const replacing = $derived(
+		declaring === null
+			? undefined
+			: declaredFor(declaring).find((d) => d.personId === who && d.country === where)
+	);
 
 	/** The declarations standing for a year — the only tier that can be withdrawn. */
 	function declaredFor(year: number) {
@@ -379,12 +430,7 @@
 		</div>
 
 		<div class="scroll">
-			<div class="grid">
-				<span></span>
-				{#each axis as year (year)}
-					<span class="mono year-head">{year}</span>
-				{/each}
-			</div>
+			{@render yearHeads()}
 
 			<!-- ── INCOME ───────────────────────────────────────────────────── -->
 			<div class="band">
@@ -440,13 +486,9 @@
 			<!-- The years again. One axis does not mean one label for it: by the time
 			     the reader is down here the heading is several hundred pixels above,
 			     and a cell that says "never filed" without saying WHEN is a cell you
-			     have to click to read. Same columns, same row, stated twice. -->
-			<div class="grid">
-				<span></span>
-				{#each axis as year (year)}
-					<span class="mono year-head">{year}</span>
-				{/each}
-			</div>
+			     have to click to read. Same columns, same row, stated twice — from one
+			     snippet, so the two can never disagree about what a heading is. -->
+			{@render yearHeads()}
 
 			<!-- Residence decides which return is THE return, so it is read before the
 		     lanes and left correctable — including the year it cannot call. -->
@@ -460,6 +502,7 @@
 				{#each axis as year (year)}
 					{@const mark = marks.get(year)!}
 					{@const names = mark.countries.map(countryName).join(' · ')}
+					{@const label = markLabel(year, names, mark)}
 					<!-- The flags carry the countries and the names do not: three of them
 					     never fit a year-wide column, and a cell that paints over its
 					     neighbour says less than a clipped one. The spelling-out lives in
@@ -471,8 +514,8 @@
 						class="tall res {mark.state}"
 						style:--hue="var({hueFor(mark.countries[0] ?? null)})"
 						aria-expanded={declaring === year}
-						aria-label={markLabel(year, mark)}
-						title={markLabel(year, mark)}
+						aria-label={label}
+						title={label}
 						onclick={() => declare(year)}
 					>
 						<span class="cell-word">
@@ -494,8 +537,8 @@
 				{/each}
 			</div>
 
-			{#if declaring !== null}
-				{@render residence(declaring)}
+			{#if declaring !== null && declaringMark}
+				{@render residence(declaring, declaringMark)}
 			{/if}
 
 			<!-- The circularity, said out loud where it bites: the rule reads residence
@@ -732,12 +775,20 @@
 	{/if}
 {/snippet}
 
-{#snippet residence(year: number)}
+{#snippet yearHeads()}
+	<div class="grid">
+		<span></span>
+		{#each axis as year (year)}
+			<span class="mono year-head">{year}</span>
+		{/each}
+	</div>
+{/snippet}
+
+{#snippet residence(year: number, mark: HouseholdResidence)}
 	<!-- Stating residence does not choose BETWEEN countries: a year somebody moved
 	     in is two of these, and both halves owe a return. So the form states one
 	     side at a time and says so, rather than offering a picker that quietly
 	     makes the other country wrong. -->
-	{@const mark = marks.get(year)!}
 	{@const proposed = mark.countries}
 	<div class="res-panel">
 		<div class="res-head">
@@ -751,32 +802,44 @@
 				for a year somebody moved in — one per country.
 			</span>
 		</div>
-		<form method="POST" action="?/setResidence" use:enhance class="res-form">
+		<!-- Not reset after a save: the person stays chosen for the other half of
+		     a move, and the country moves on to one they have not answered yet —
+		     see `suggestCountry`. A default reset put the select back on the
+		     country just saved, one click from overwriting it. -->
+		<form
+			method="POST"
+			action="?/setResidence"
+			use:enhance={() =>
+				async ({ result, update }) => {
+					await update({ reset: false });
+					if (result.type !== 'success') return;
+					partFrom = '';
+					partTo = '';
+					where = suggestCountry(year, who);
+				}}
+			class="res-form"
+		>
 			<input type="hidden" name="year" value={year} />
-			<select name="personId" aria-label="Who" required>
+			<select name="personId" aria-label="Who" required bind:value={who}>
 				{#each people as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
 			</select>
-			<!-- THE YEAR'S OWN CANDIDATES FIRST, and one of them selected. The
-			     default here was `knownCountries[0]` — the household's alphabetically
-			     first country, the same suggestion for every year on the axis, which
-			     for a year spent somewhere else is a wrong answer one click from
-			     being saved. What this year's evidence proposes is the only sensible
+			<!-- THE YEAR'S OWN CANDIDATES FIRST, and one of them chosen. The default
+			     here was `knownCountries[0]` — the household's alphabetically first
+			     country, the same suggestion for every year on the axis, which for a
+			     year spent somewhere else is a wrong answer one click from being
+			     saved. What this year's evidence proposes is the only sensible
 			     default, and a move year puts both halves at the top of the list. -->
-			<select name="country" aria-label="Country for {year}" required>
+			<select name="country" aria-label="Country for {year}" required bind:value={where}>
 				{#if proposed.length > 0}
 					<optgroup label="{year} reads">
 						{#each proposed as code (code)}
-							<option value={code} selected={code === proposed[0]}>{countryName(code)}</option>
+							<option value={code}>{countryName(code)}</option>
 						{/each}
 					</optgroup>
 				{/if}
 				<optgroup label={proposed.length > 0 ? 'Somewhere else' : 'Country'}>
 					{#each countryOptions().filter((c) => !proposed.includes(c.code)) as c (c.code)}
-						<option
-							value={c.code}
-							selected={proposed.length === 0 && c.code === years.knownCountries[0]}
-							>{c.name}</option
-						>
+						<option value={c.code}>{c.name}</option>
 					{/each}
 				</optgroup>
 			</select>
@@ -821,8 +884,14 @@
 					</label>
 				</span>
 			{/if}
-			<button type="submit" class="btn small btn-primary">Save</button>
+			<button type="submit" class="btn small btn-primary">{replacing ? 'Replace' : 'Save'}</button>
 		</form>
+		{#if replacing}
+			<p class="quiet res-hint">
+				{nameOf(who)} already said {countryName(where)}{replacing.span} for {year}. Saving replaces
+				that answer — for the other half of a move, choose the other country.
+			</p>
+		{/if}
 		{#if partial}
 			<p class="quiet res-hint">
 				Give at least one date. The other may be left empty — a date in <em>from</em> alone means

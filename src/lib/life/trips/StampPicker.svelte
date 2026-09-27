@@ -44,13 +44,25 @@
 		country = '',
 		city = '',
 		/** The field the definition is posted back in. */
-		field = 'art'
+		field = 'art',
+		kept = null
 	}: {
 		name: string;
 		country?: string;
 		city?: string;
 		field?: string;
+		/**
+		 * A stamp already stored — an idea's, as it becomes a trip — shown as it
+		 * is until somebody asks for another. Nothing is posted for it: the
+		 * server copies the stored definition across, where a preview drawn here
+		 * would replace a stamp the household may have chosen by hand.
+		 */
+		kept?: { svg: string; hue: string | null } | null;
 	} = $props();
+
+	/** Set once somebody asks for a new drawing in place of the kept one. */
+	let redrawing = $state(false);
+	const keeping = $derived(kept !== null && !redrawing);
 
 	/** Set by "Try another"; cleared whenever the place itself changes. */
 	let seed = $state<number | undefined>(undefined);
@@ -97,63 +109,80 @@
 </script>
 
 <div class="picker">
-	<div class="preview" aria-live="polite">
-		{#if svg}
-			<!-- Checked, not trusted: `assertInertSvg` runs inside `stampSvg` and
+	{#if keeping && kept}
+		<div class="preview" style:color={kept.hue ? `var(--${kept.hue})` : undefined}>
+			<!-- Drawn by the server, where `assertInertSvg` has already refused
+			     anything that could execute. -->
+			<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+			{@html kept.svg}
+		</div>
+		<div class="controls">
+			<span class="caption">The idea's stamp comes with it.</span>
+			<div class="buttons">
+				<button class="link" type="button" onclick={() => (redrawing = true)}>
+					<Icon name="rotate" size={14} /> Draw a new one
+				</button>
+			</div>
+		</div>
+	{:else}
+		<div class="preview" aria-live="polite">
+			{#if svg}
+				<!-- Checked, not trusted: `assertInertSvg` runs inside `stampSvg` and
 			     refuses a drawing carrying a script, a handler or an external
 			     reference. See $lib/life/art. -->
-			<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-			{@html svg}
-		{:else}
-			<span class="none">No stamp yet</span>
-		{/if}
-	</div>
-
-	<div class="controls">
-		<span class="caption">Drawn from the name and the country.</span>
-		<div class="buttons">
-			<button
-				class="link"
-				type="button"
-				onclick={() => (seed = Math.floor(Math.random() * 4_294_967_295))}
-			>
-				<Icon name="rotate" size={14} /> Try another
-			</button>
-			<button
-				class="link"
-				type="button"
-				onclick={() => (picking = !picking)}
-				aria-expanded={picking}
-			>
-				<Icon name="pencil" size={14} />
-				{picking ? 'Done' : 'Pick the picture'}
-			</button>
+				<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+				{@html svg}
+			{:else}
+				<span class="none">No stamp yet</span>
+			{/if}
 		</div>
-	</div>
 
-	{#if picking}
-		<div class="symbols" role="group" aria-label="Choose a symbol">
-			{#each choices as choice (choice.id)}
+		<div class="controls">
+			<span class="caption">Drawn from the name and the country.</span>
+			<div class="buttons">
 				<button
-					class="symbol"
-					class:chosen={icon === choice.id}
+					class="link"
 					type="button"
-					title={choice.label}
-					aria-label={choice.label}
-					aria-pressed={icon === choice.id}
-					onclick={() => (icon = icon === choice.id ? undefined : choice.id)}
+					onclick={() => (seed = Math.floor(Math.random() * 4_294_967_295))}
 				>
-					<!-- Same rule as the preview above: `assertInertSvg` has already
-					     refused anything that could execute. -->
-					<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-					{@html symbolSvg(choice.id)}
+					<Icon name="rotate" size={14} /> Try another
 				</button>
-			{/each}
+				<button
+					class="link"
+					type="button"
+					onclick={() => (picking = !picking)}
+					aria-expanded={picking}
+				>
+					<Icon name="pencil" size={14} />
+					{picking ? 'Done' : 'Pick the picture'}
+				</button>
+			</div>
 		</div>
-	{/if}
 
-	{#if definition}
-		<input type="hidden" name={field} value={JSON.stringify(definition)} />
+		{#if picking}
+			<div class="symbols" role="group" aria-label="Choose a symbol">
+				{#each choices as choice (choice.id)}
+					<button
+						class="symbol"
+						class:chosen={icon === choice.id}
+						type="button"
+						title={choice.label}
+						aria-label={choice.label}
+						aria-pressed={icon === choice.id}
+						onclick={() => (icon = icon === choice.id ? undefined : choice.id)}
+					>
+						<!-- Same rule as the preview above: `assertInertSvg` has already
+					     refused anything that could execute. -->
+						<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+						{@html symbolSvg(choice.id)}
+					</button>
+				{/each}
+			</div>
+		{/if}
+
+		{#if definition}
+			<input type="hidden" name={field} value={JSON.stringify(definition)} />
+		{/if}
 	{/if}
 </div>
 
