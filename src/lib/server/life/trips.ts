@@ -7,9 +7,9 @@
  * computed here rather than in the component, so the list and the detail page
  * cannot disagree about the same trip.
  */
-import { and, asc, desc, eq, gte, inArray, lt, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, sql } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
-import { db, type Db } from '$lib/server/db';
+import { db, type Db, type Queryable } from '$lib/server/db';
 import {
 	place,
 	person,
@@ -21,7 +21,7 @@ import {
 	tripMember,
 	tripPlace
 } from '$lib/server/db/schema';
-import { document } from '$lib/server/db/schema';
+import { contactLink, document, documentLink, tagLink } from '$lib/server/db/schema';
 import type { EnumValue } from '$lib/enums';
 import type { PlaceRow } from '$lib/server/life/places';
 import {
@@ -35,6 +35,8 @@ import { orderBookings, type OrderableBooking } from '$lib/life/trips/booking-or
 import { insertDocumentAggregate } from '$lib/server/documents/mutations';
 import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { SYSTEM_SHELF_KEYS } from '$lib/documents/shelves';
+import { removeDocumentRow } from '$lib/server/documents/lifecycle';
+import { removeUpload } from '$lib/server/system/files';
 
 export interface TripPerson {
 	id: string;
@@ -94,6 +96,15 @@ export interface IdeaView {
 	country: string | null;
 	hearts: TripPerson[];
 	art: { svg: string; hue: string | null } | null;
+	/** Plans and other paper attached to the idea, newest first. */
+	papers: AttachedPaper[];
+}
+
+/** A document attached to a trip or an idea, for a link that opens it. */
+export interface AttachedPaper {
+	id: string;
+	name: string;
+	ext: string;
 }
 
 /**
@@ -125,9 +136,16 @@ const artOf = (
 	country: string | null,
 	name = ''
 ): { svg: string; hue: string | null } | null => {
-	if (!art || typeof art !== 'object') return null;
+	// A row written with no stamp — an idea or a trip a script added over the
+	// API, which draws nothing — is drawn from its name and country each time
+	// it is shown, rather than left blank. Not stored, so it follows a rename,
+	// unlike a stamp the app chose once and kept.
+	const definition =
+		art && typeof art === 'object'
+			? (art as ArtDefinition)
+			: resolveStamp({ name, country: country ?? null });
 	try {
-		return { svg: stampSvg(art as ArtDefinition), hue: stampHue(country, name) };
+		return { svg: stampSvg(definition), hue: stampHue(country, name) };
 	} catch {
 		// A definition written by an older version of the generator that this one
 		// cannot draw. The card falls back to its "no stamp yet" state, which is
@@ -213,7 +231,11 @@ const todayIso = (): string => new Date().toISOString().slice(0, 10);
 
 /** Every trip, newest first, with what each one needs to draw a row. */
 export async function listTrips(handle: Db = db): Promise<TripView[]> {
-	const rows = await handle.select().from(trip).orderBy(desc(trip.startsOn));
+	const rows = await handle
+		.select()
+		.from(trip)
+		.where(isNull(trip.removedAt))
+		.orderBy(desc(trip.startsOn));
 	const ids = rows.map((row) => row.id);
 	const [destinations, members] = await Promise.all([
 		destinationsByTrip(ids, handle),
@@ -228,13 +250,21 @@ export async function listTrips(handle: Db = db): Promise<TripView[]> {
 export interface TripDetail extends TripView {
 	bookings: BookingView[];
 	places: PlaceView[];
+	/**
+	 * Paper attached to the trip that is not a booking's confirmation — the
+	 * plan it was promoted with, above all. A confirmation shows on its booking.
+	 */
+	papers: AttachedPaper[];
 }
 
 export async function loadTrip(id: string, handle: Db = db): Promise<TripDetail | null> {
-	const [row] = await handle.select().from(trip).where(eq(trip.id, id));
+	const [row] = await handle
+		.select()
+		.from(trip)
+		.where(and(eq(trip.id, id), isNull(trip.removedAt)));
 	if (!row) return null;
 
-	const [destinations, members, bookings, places] = await Promise.all([
+	const [destinations, members, bookings, places, papers] = await Promise.all([
 		destinationsByTrip([id], handle),
 		membersByTrip([id], handle),
 		handle
@@ -251,7 +281,8 @@ export async function loadTrip(id: string, handle: Db = db): Promise<TripDetail 
 			.from(tripBooking)
 			.leftJoin(document, eq(document.id, tripBooking.documentId))
 			.where(eq(tripBooking.tripId, id)),
-		handle.select().from(tripPlace).where(eq(tripPlace.tripId, id)).orderBy(asc(tripPlace.ordinal))
+		handle.select().from(tripPlace).where(eq(tripPlace.tripId, id)).orderBy(asc(tripPlace.ordinal)),
+		papersFor([id], handle)
 	]);
 
 	const view = toView(row, destinations.get(id) ?? [], members.get(id) ?? [], todayIso());
@@ -261,8 +292,32 @@ export async function loadTrip(id: string, handle: Db = db): Promise<TripDetail 
 		// `booking-order.ts` for why a flight sorts before the hotel it delivers
 		// you to when the two share a moment.
 		bookings: orderBookings(bookings as OrderableBooking[]) as BookingView[],
-		places: places.map((place) => ({ id: place.id, label: place.label, done: place.done }))
+		places: places.map((place) => ({ id: place.id, label: place.label, done: place.done })),
+		papers: (papers.get(id) ?? []).filter(
+			(paper) => !bookings.some((booking) => booking.documentId === paper.id)
+		)
 	};
+}
+
+/** The documents attached to each of these trips or ideas, newest first. */
+async function papersFor(ids: string[], handle: Queryable): Promise<Map<string, AttachedPaper[]>> {
+	const byTarget = new Map<string, AttachedPaper[]>();
+	if (ids.length === 0) return byTarget;
+	const rows = await handle
+		.select({
+			targetId: documentLink.targetId,
+			id: document.id,
+			name: document.name,
+			ext: document.ext
+		})
+		.from(documentLink)
+		.innerJoin(document, eq(document.id, documentLink.documentId))
+		.where(inArray(documentLink.targetId, ids))
+		.orderBy(desc(document.addedOn), desc(document.id));
+	for (const { targetId, ...paper } of rows) {
+		byTarget.set(targetId, [...(byTarget.get(targetId) ?? []), paper]);
+	}
+	return byTarget;
 }
 
 /** The idea board, in the household's own order. */
@@ -270,9 +325,14 @@ export async function listIdeas(handle: Db = db): Promise<IdeaView[]> {
 	const rows = await handle
 		.select()
 		.from(tripIdea)
+		.where(isNull(tripIdea.removedAt))
 		.orderBy(asc(tripIdea.sortOrder), asc(tripIdea.createdAt));
 	if (rows.length === 0) return [];
 
+	const papers = await papersFor(
+		rows.map((row) => row.id),
+		handle
+	);
 	const hearts = await handle
 		.select({
 			ideaId: tripIdeaHeart.ideaId,
@@ -304,7 +364,8 @@ export async function listIdeas(handle: Db = db): Promise<IdeaView[]> {
 		note: row.note,
 		country: row.country,
 		hearts: byIdea.get(row.id) ?? [],
-		art: artOf(row.art, row.country, row.name)
+		art: artOf(row.art, row.country, row.name),
+		papers: papers.get(row.id) ?? []
 	}));
 }
 
@@ -331,13 +392,18 @@ export async function tripFigures(handle: Db = db): Promise<TripFigures> {
 		handle
 			.select({ startsOn: trip.startsOn, endsOn: trip.endsOn })
 			.from(trip)
-			.where(gte(trip.endsOn, today))
+			.where(and(gte(trip.endsOn, today), isNull(trip.removedAt)))
 			.orderBy(asc(trip.startsOn)),
-		handle.select({ n: sql<number>`count(*)::int` }).from(tripIdea),
+		handle
+			.select({ n: sql<number>`count(*)::int` })
+			.from(tripIdea)
+			.where(isNull(tripIdea.removedAt)),
 		handle.select({ n: sql<number>`count(*)::int` }).from(
 			handle
 				.select({ ideaId: tripIdeaHeart.ideaId })
 				.from(tripIdeaHeart)
+				.innerJoin(tripIdea, eq(tripIdea.id, tripIdeaHeart.ideaId))
+				.where(isNull(tripIdea.removedAt))
 				.groupBy(tripIdeaHeart.ideaId)
 				.having(sql`count(*) = (select count(*) from ${person})`)
 				.as('agreed')
@@ -359,8 +425,30 @@ export async function tripFigures(handle: Db = db): Promise<TripFigures> {
 
 // ---- Writes ----
 
+/**
+ * How long a removed trip or idea waits, hidden, before the sweep deletes it.
+ *
+ * Longer than the undo bar is on screen (six seconds), so an undo pressed at
+ * the last moment always finds the row still there; short enough that the
+ * archive is not holding paper for something the household has let go of.
+ */
+export const REMOVAL_GRACE_MS = 60_000;
+
+/**
+ * Take an idea off the board. Hidden, not deleted: undo is `restoreIdea`, and
+ * the idea is gone for good — with the plans attached to it alone — once
+ * `purgeRemovedTrips` finds it removed for longer than `REMOVAL_GRACE_MS`.
+ */
 export async function removeIdea(id: string, handle: Db = db): Promise<void> {
-	await handle.delete(tripIdea).where(eq(tripIdea.id, id));
+	await handle
+		.update(tripIdea)
+		.set({ removedAt: new Date() })
+		.where(and(eq(tripIdea.id, id), isNull(tripIdea.removedAt)));
+}
+
+/** Undo `removeIdea`: the same idea, hearts and plans, back where it was. */
+export async function restoreIdea(id: string, handle: Db = db): Promise<void> {
+	await handle.update(tripIdea).set({ removedAt: null }).where(eq(tripIdea.id, id));
 }
 
 /**
@@ -376,7 +464,7 @@ export async function ideaExists(id: string | undefined, handle: Db = db): Promi
 	const [row] = await handle
 		.select({ id: tripIdea.id })
 		.from(tripIdea)
-		.where(eq(tripIdea.id, id))
+		.where(and(eq(tripIdea.id, id), isNull(tripIdea.removedAt)))
 		.limit(1);
 	return Boolean(row);
 }
@@ -459,7 +547,7 @@ export interface NewTrip {
 	art?: unknown;
 }
 
-export async function createTrip(input: NewTrip, handle: Db = db): Promise<string> {
+export async function createTrip(input: NewTrip, handle: Queryable = db): Promise<string> {
 	const id = uuidv7();
 	const first = input.destinations[0];
 	await handle.insert(trip).values({
@@ -498,8 +586,196 @@ export async function createTrip(input: NewTrip, handle: Db = db): Promise<strin
 	return id;
 }
 
-export async function deleteTrip(id: string, handle: Db = db): Promise<void> {
-	await handle.delete(trip).where(eq(trip.id, id));
+/**
+ * Delete a trip, with an undo. Hidden at once and deleted by
+ * `purgeRemovedTrips` after `REMOVAL_GRACE_MS` — bookings, places and every
+ * document attached to it alone go with it then.
+ */
+export async function removeTrip(id: string, handle: Db = db): Promise<void> {
+	await handle
+		.update(trip)
+		.set({ removedAt: new Date() })
+		.where(and(eq(trip.id, id), isNull(trip.removedAt)));
+}
+
+/** Undo `removeTrip`; false when the sweep got there first and there is no trip to bring back. */
+export async function restoreTrip(id: string, handle: Db = db): Promise<boolean> {
+	const restored = await handle
+		.update(trip)
+		.set({ removedAt: null })
+		.where(eq(trip.id, id))
+		.returning({ id: trip.id });
+	return restored.length > 0;
+}
+
+/** The name the undo bar shows, for a trip removed and not yet swept. */
+export async function removedTripName(id: string, handle: Db = db): Promise<string | null> {
+	const [row] = await handle
+		.select({ name: trip.name, removedAt: trip.removedAt })
+		.from(trip)
+		.where(eq(trip.id, id));
+	return row?.removedAt ? row.name : null;
+}
+
+/**
+ * Turn an idea into a trip, losing nothing it held.
+ *
+ * The idea is deleted — it is the same plan now, not a duplicate on the board
+ * — so everything on it moves first: its note becomes the trip's notes unless
+ * the form gave some, its stamp is kept unless the form previewed another, and
+ * every document, tag and contact attached to it is attached to the trip. One
+ * transaction, so a failure leaves the idea exactly as it was.
+ *
+ * An idea that is gone (removed, or promoted twice by a double click) makes
+ * an ordinary trip rather than failing the form.
+ */
+export async function promoteIdea(
+	ideaId: string,
+	input: Omit<NewTrip, 'fromIdeaId'>,
+	handle: Db = db
+): Promise<string> {
+	return handle.transaction(async (tx) => {
+		const [idea] = await tx
+			.select()
+			.from(tripIdea)
+			.where(and(eq(tripIdea.id, ideaId), isNull(tripIdea.removedAt)))
+			.for('update');
+		if (!idea) return createTrip(input, tx);
+
+		const id = await createTrip(
+			{
+				...input,
+				notes: input.notes.trim() ? input.notes : idea.note,
+				art: parseStoredStamp(input.art) ?? idea.art ?? undefined
+			},
+			tx
+		);
+		await tx.execute(sql`
+			insert into ${documentLink} (document_id, target_id)
+			select document_id, ${id}::uuid from ${documentLink} where target_id = ${ideaId}
+			on conflict do nothing`);
+		await tx.execute(sql`
+			insert into ${tagLink} (tag_id, target_id)
+			select tag_id, ${id}::uuid from ${tagLink} where target_id = ${ideaId}
+			on conflict do nothing`);
+		await tx.execute(sql`
+			insert into ${contactLink} (contact_id, target_id)
+			select contact_id, ${id}::uuid from ${contactLink} where target_id = ${ideaId}
+			on conflict do nothing`);
+		// Its links cascade with it; the copies above are what is kept.
+		await tx.delete(tripIdea).where(eq(tripIdea.id, ideaId));
+		return id;
+	});
+}
+
+/**
+ * Delete what was removed more than `REMOVAL_GRACE_MS` ago, for good.
+ *
+ * A removed trip or idea takes with it every document attached to it ALONE —
+ * the plan, the booking confirmations — files included. A document attached
+ * to something else as well (the receipt that is also on a transaction) stays,
+ * and only loses its link to what is gone. Run every minute from boot; a
+ * document the archive refuses to delete (an import's own statement) is left
+ * in place rather than failing the sweep.
+ *
+ * One record at a time, each in a transaction of its own, so one that fails is
+ * tried again next minute without holding back the rest.
+ */
+export async function purgeRemovedTrips(
+	handle: Db = db,
+	now = new Date()
+): Promise<{ trips: number; ideas: number; documents: number }> {
+	const cutoff = new Date(now.getTime() - REMOVAL_GRACE_MS);
+	const [trips, ideas] = await Promise.all([
+		handle.select({ id: trip.id }).from(trip).where(lt(trip.removedAt, cutoff)),
+		handle.select({ id: tripIdea.id }).from(tripIdea).where(lt(tripIdea.removedAt, cutoff))
+	]);
+	const purged = { trips: 0, ideas: 0, documents: 0 };
+	const work = [
+		...trips.map((row) => ({ kind: 'trips' as const, id: row.id })),
+		...ideas.map((row) => ({ kind: 'ideas' as const, id: row.id }))
+	];
+	for (const { kind, id } of work) {
+		try {
+			const documents = await purgeOne(kind === 'trips' ? trip : tripIdea, id, cutoff, handle);
+			if (documents === null) continue;
+			purged[kind]++;
+			purged.documents += documents;
+		} catch (error) {
+			console.error(
+				`Removed ${kind === 'trips' ? 'trip' : 'idea'} ${id} could not be deleted:`,
+				error
+			);
+		}
+	}
+	return purged;
+}
+
+/**
+ * Delete one removed trip or idea with the paper attached to it alone; null
+ * when it is no longer removed.
+ *
+ * The row is locked and "still removed" asked again inside the transaction,
+ * because the list above is already stale: an undo that lands first keeps
+ * everything, and one that lands after waits for the lock and finds nothing to
+ * restore. Files are unlinked only once the transaction has committed.
+ */
+async function purgeOne(
+	table: typeof trip | typeof tripIdea,
+	id: string,
+	cutoff: Date,
+	handle: Db
+): Promise<number | null> {
+	const removed = await handle.transaction(async (tx) => {
+		const [row] = await tx
+			.select({ id: table.id })
+			.from(table)
+			.where(and(eq(table.id, id), lt(table.removedAt, cutoff)))
+			.for('update');
+		if (!row) return null;
+
+		const attached = await tx
+			.select({ id: documentLink.documentId })
+			.from(documentLink)
+			.where(eq(documentLink.targetId, id));
+		const elsewhere =
+			attached.length === 0
+				? []
+				: await tx
+						.selectDistinct({ id: documentLink.documentId })
+						.from(documentLink)
+						.where(
+							and(
+								inArray(
+									documentLink.documentId,
+									attached.map((link) => link.id)
+								),
+								ne(documentLink.targetId, id)
+							)
+						);
+		const kept = new Set(elsewhere.map((link) => link.id));
+		const files: string[] = [];
+		let documents = 0;
+		for (const { id: documentId } of attached) {
+			if (kept.has(documentId)) continue;
+			const outcome = await removeDocumentRow(documentId, tx);
+			if (!outcome.ok) continue;
+			documents++;
+			if (outcome.storedName) files.push(outcome.storedName);
+		}
+		await tx.delete(table).where(eq(table.id, id));
+		return { documents, files };
+	});
+	if (!removed) return null;
+
+	// Committed. Only now are the bytes nobody's; a file that will not go is
+	// bytes nothing names, not a reason to report the record as still there.
+	for (const name of removed.files) {
+		await removeUpload(name).catch((error) =>
+			console.error(`The file ${name} of a removed trip could not be deleted:`, error)
+		);
+	}
+	return removed.documents;
 }
 
 export interface TripEdit {
@@ -774,5 +1050,8 @@ export async function togglePlace(id: string, handle: Db = db): Promise<void> {
 
 /** Trips that have ended, for the pass that writes their visits. */
 export async function endedTrips(handle: Db = db) {
-	return handle.select().from(trip).where(lt(trip.endsOn, todayIso()));
+	return handle
+		.select()
+		.from(trip)
+		.where(and(lt(trip.endsOn, todayIso()), isNull(trip.removedAt)));
 }

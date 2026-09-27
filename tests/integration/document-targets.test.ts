@@ -16,7 +16,8 @@ import {
 	tagLink,
 	taxStatement,
 	tenancy,
-	trip
+	trip,
+	tripIdea
 } from '$lib/server/db/schema';
 import { shelfIdByKey } from '$lib/server/documents/shelves';
 import { upsertTag } from '$lib/server/tags';
@@ -69,6 +70,7 @@ const target = {
 	tax_statement: rowId('dt-tax-statement'),
 	organisation: rowId('dt-organisation'),
 	trip: rowId('dt-trip'),
+	trip_idea: rowId('dt-trip-idea'),
 	bottle: rowId('dt-bottle'),
 	recipe: rowId('dt-recipe')
 } as const;
@@ -145,6 +147,7 @@ beforeAll(async () => {
 	await testDb
 		.insert(trip)
 		.values({ id: target.trip, name: 'Porto', startsOn: '2026-06-01', endsOn: '2026-06-08' });
+	await testDb.insert(tripIdea).values({ id: target.trip_idea, name: 'Lofoten' });
 	// A second shelf beside the seeded Cellar, so the key does not collide.
 	await testDb.insert(collection).values({ id: cellar, key: 'dt-cellar', name: 'Cellar' });
 	await testDb.insert(bottle).values({
@@ -235,6 +238,7 @@ describe('the registry', () => {
 			'subject',
 			'organisation',
 			'trip',
+			'trip_idea',
 			'bottle',
 			'recipe'
 		]);
@@ -255,6 +259,7 @@ describe('the registry', () => {
 			'Tax statements',
 			'Organisations',
 			'Trips',
+			'Trip ideas',
 			'Bottles',
 			'Recipes'
 		]);
@@ -367,6 +372,7 @@ describe('naming a row of every kind', () => {
 			'subject',
 			'organisation',
 			'trip',
+			'trip_idea',
 			'bottle',
 			'recipe'
 		]);

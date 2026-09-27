@@ -27,7 +27,7 @@ import {
 import { CATEGORY_GROUP_SEED, RESERVE_COLOR_TOKENS } from '$lib/categories';
 import { passwordsMatchError } from '$lib/password-policy';
 import { disableOpenMode, enableOpenMode, isOpenMode } from '$lib/server/auth/open-mode';
-import { asEnumValue, ENUMS } from '$lib/enums';
+import { asEnumValue, ENUMS, isEnumValue } from '$lib/enums';
 import { isCountryCode } from '$lib/countries';
 import { enrollmentLinkDays, passwordMinLength } from '$lib/server/system/policy';
 import { env } from '$env/dynamic/private';
@@ -44,7 +44,15 @@ import {
 } from '$lib/server/backup';
 import { importConfig as importConfigFile } from '$lib/server/system/config-file';
 import { availableCurrencies } from '$lib/server/fx/currencies';
-import { getBaseCurrency, getModules, getSetting, setSetting } from '$lib/server/settings';
+import {
+	foldFilingAge,
+	getBaseCurrency,
+	getFilingAge,
+	getModules,
+	getSetting,
+	setSetting
+} from '$lib/server/settings';
+import { DEFAULT_FILING_AGE } from '$lib/documents/tax-years';
 import { DEFAULT_GAINS_POLICY, parseGainsPolicy, type GainsPolicy } from '$lib/invest/gains';
 import { getCalendarMarkers } from '$lib/server/calendar';
 import {
@@ -62,9 +70,19 @@ import { serverStatus } from '$lib/server/system/status';
 import { ocrLanguages } from '$lib/server/documents/extract';
 import { OCR_LANGUAGES, OCR_LANGUAGE_LABELS } from '$lib/server/ocr';
 import { MODULE_KEYS, type ModuleKey } from '$lib/modules/registry';
-import { createToken, listTokens, revokeToken } from '$lib/server/api/tokens';
+import {
+	createToken,
+	listTokens,
+	revokeToken,
+	setTokenAccess,
+	setTokenAreas
+} from '$lib/server/api/tokens';
+import { areasFromForm } from '$lib/api/areas';
 import type { Action } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+
+/** A token form that chose neither everything nor some areas. */
+const REACH_REFUSAL = 'Choose everything or the areas this token reaches.';
 
 /**
  * Refusing from inside a transaction has to throw: `fail()` only returns a
@@ -153,7 +171,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		calendarMarkers,
 		calendarSyncMinutes,
 		investTax,
-		ocrLangs
+		ocrLangs,
+		filingAge
 	] = await Promise.all([
 		// All three render only inside the isAdmin branches, so a member skips the queries.
 		isAdmin ? getModules() : null,
@@ -184,7 +203,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		isAdmin ? getSyncIntervalMinutes() : 15,
 		// How realised gains are taxed — beside base currency, both facts about the taxing country.
 		isAdmin ? getSetting<GainsPolicy>('investTax', DEFAULT_GAINS_POLICY) : null,
-		isAdmin ? ocrLanguages() : null
+		isAdmin ? ocrLanguages() : null,
+		// Beside the people it is about: from what age a member owes a return for
+		// merely having lived somewhere.
+		isAdmin ? getFilingAge() : null
 	]);
 
 	const groups = await loadCategoryGroups();
@@ -230,6 +252,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		passwordMinLength: passwordMinLength(),
 		enrollmentLinkDays: enrollmentLinkDays(),
 		moduleToggles: modules,
+		filingAge,
+		defaultFilingAge: DEFAULT_FILING_AGE,
 		baseCurrency,
 		currencies,
 		investTax,
@@ -248,6 +272,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		apiTokens: tokens.map((t) => ({
 			id: t.id,
 			label: t.label,
+			access: t.access,
+			areas: t.areas,
 			created: t.createdAt.toISOString().slice(0, 10),
 			lastUsed: t.lastUsedAt ? t.lastUsedAt.toISOString().slice(0, 10) : null
 		}))
@@ -499,11 +525,55 @@ export const actions = administered({
 		return { ok: true };
 	},
 
+	// Who owes a return for merely having lived somewhere, from what age. The
+	// value is a household fact, not a rate: a country where a minor files for
+	// themselves sets it lower, and 0 puts everybody on the grid from birth.
+	setFilingAge: async ({ request }) => {
+		const form = await request.formData();
+		const age = foldFilingAge(String(form.get('filingAge') ?? ''));
+		if (age === null) return fail(400, { message: 'Give a whole age between 0 and 120.' });
+		await setSetting('tax.filingAge', age);
+		return { ok: true };
+	},
+
 	createApiToken: async ({ request }) => {
 		const form = await request.formData();
-		const { raw } = await createToken(String(form.get('label') ?? ''));
+		// Read-only unless asked otherwise, so a missing or mangled field never
+		// hands out write access.
+		const access = asEnumValue('api_token.access', form.get('access'), 'read');
+		// Refused rather than defaulted, for the same reason: the default for a
+		// missing choice would be "everything".
+		const areas = areasFromForm(form);
+		if (areas === undefined) return fail(400, { message: REACH_REFUSAL });
+		const { raw } = await createToken(String(form.get('label') ?? ''), access, areas);
 		// Returned once and never stored: only its hash is in the database.
 		return { createdToken: raw };
+	},
+
+	// Read-only and read-write are one switch on an issued token, so widening
+	// or narrowing what a dashboard may do never means handing it a new token.
+	setApiTokenAccess: async ({ request }) => {
+		const form = await request.formData();
+		const access = form.get('access');
+		if (!isEnumValue('api_token.access', access)) {
+			return fail(400, { message: 'Choose read-only or read-write.' });
+		}
+		// Not asRowId, for the same reason as revokeApiToken below.
+		await setTokenAccess(String(form.get('id') ?? ''), access);
+		return { ok: true };
+	},
+
+	// Which parts of the household a token reaches, changeable on an issued
+	// token for the same reason its access is.
+	setApiTokenAreas: async ({ request }) => {
+		const form = await request.formData();
+		// Said outright, because the fallback for a missing choice here would be
+		// "everything", and a mangled form must not widen a token.
+		const areas = areasFromForm(form);
+		if (areas === undefined) return fail(400, { message: REACH_REFUSAL });
+		// Not asRowId, for the same reason as revokeApiToken below.
+		await setTokenAreas(String(form.get('id') ?? ''), areas);
+		return { ok: true };
 	},
 
 	revokeApiToken: async ({ request }) => {

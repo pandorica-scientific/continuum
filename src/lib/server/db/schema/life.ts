@@ -78,7 +78,14 @@ export const tripIdea = pgTable('trip_idea', {
 	/** An uploaded photograph on the data volume, as `/files/[name]`. */
 	photo: text('photo'),
 	sortOrder: integer('sort_order').notNull().default(0),
-	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+	/**
+	 * Set when somebody takes the idea off the board, cleared by undo. The row,
+	 * its hearts and the plans attached to it stay whole until the sweep in
+	 * `purgeRemovedTrips` deletes them a minute later, so undo brings back the
+	 * same idea rather than a copy rebuilt from what the undo bar remembered.
+	 */
+	removedAt: timestamp('removed_at', { withTimezone: true })
 });
 
 /**
@@ -123,7 +130,9 @@ export const trip = pgTable(
 		 * it turned into.
 		 */
 		fromIdeaId: uuid('from_idea_id').references(() => tripIdea.id, { onDelete: 'set null' }),
-		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+		/** As `trip_idea.removed_at`: hidden at once, deleted with its paper a minute later. */
+		removedAt: timestamp('removed_at', { withTimezone: true })
 	},
 	(table) => [
 		index('trip_starts_on_idx').on(table.startsOn),

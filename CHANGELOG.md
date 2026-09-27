@@ -2,6 +2,29 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security
 
+## 0.12.0 — Unreleased
+
+> An API token can be read-write and limited to parts of the household, and a trip idea holds the plan somebody drew up for it.
+
+### ✨ Added
+
+- ✍️ **An API token is read-only or read-write, chosen when it is created and switchable afterwards in Settings** — a script that files or recategorises transactions no longer has to go through the screens, and the switch applies to the token's next request.
+- 🗄️ **Every table is reachable under `/api/v1/tables`, read by any token and written by a read-write one** — derived from the schema rather than an endpoint per table, so a table added later is reachable in the same release.
+- 🧭 **A token can be limited to areas of the household, such as Trips for a travel planner** — chosen when it is created and changeable afterwards, while people, tags and anything else every area shares stay out of its reach, and payslips stay out of any token without Salary.
+- 📄 **A PDF can be attached to a trip, an idea or any other record a token reaches, under `/api/v1/files`** — filed in the archive and linked to the record, under a name the server chooses rather than one the caller sends.
+- 💡 **A trip idea holds documents, and its plan opens from the card** — so a plan drawn up for somewhere you might go has a place before anybody has picked dates.
+
+### 🔧 Changed
+
+- 🧳 **Making an idea a trip keeps everything the idea held** — its note becomes the trip's notes and its plans, tags and contacts move to the trip, where the note used to be dropped and the new-trip page redrew the stamp.
+- ↩️ **Undo brings back the same idea, and deleting a trip has an undo too** — a removed trip or idea stays hidden for a minute and then goes for good with the paper attached to it alone, where undo used to rebuild the idea at the end of the board and a deleted trip left its confirmations in the archive.
+
+### 🔒 Security
+
+- 🔐 **Tokens issued before this release stay read-only, but now read every table too** — including identity-document numbers and document text the earlier endpoints never showed, so revoke or limit any token held by something you would not trust with those.
+- 🚪 **The sign-in tables, settings, password hashes and calendar credentials are out of reach of any token** — a row written there would let a token mint a session or a sibling token that outlives its own revocation.
+- 📎 **A token can read which uploaded file a row names but never change it** — pointing one document at another's file would have let deleting the first remove the second, and re-reading a payslip would have opened whatever path the row named.
+
 ## 0.11.0 — Unreleased
 
 > A broker gets a record of its own, and a statement's rhythm comes from the period it covers.
@@ -14,16 +37,25 @@
 - 🔗 **An account can say which organisation it is held at** — so a portfolio and the broker that issues its paper stay one counterparty rather than two spellings of one.
 - 🧾 **An obligation says why it exists, and how to make it go away** — pressing a missing return names the role period that raised it, so ending that period before the year removes the obligation without filing anything.
 - 🗂️ **Income & Tax reads a year at a time as well as a career at a time** — the Year dossier puts each year on its own card with what earned on the left and the returns it produced on the right, and the years nothing is missing from fold down to a line.
+- 🎂 **Settings → Household says from what age a member owes a return** — below it, somebody with no income of their own that year raises nothing, and 0 expects one from birth.
 - 🪜 **A promotion is one action** — the role held closes the day before the new one starts, so no payslip belongs to both and the months before the promotion stay expected.
 
 ### 🔧 Changed
 
 - 🏛️ **Income & Tax is one screen instead of two tabs** — employers, brokers and the returns they produce share one axis of years, with the employment record opening under its own span. Employers and Tax years were two screens for one derivation, and neither said that what you earned decides what you owe.
 - 💼 **An employer starts with Contract, Annexes and HR rather than one row for all three** — so "is the contract on file" and "has it been amended" stop being the same number. Employers already on the shelf keep the rows they have.
+- 📍 **The residence form is about the year you pressed** — it opens on what that year's own evidence proposes, with a move year's two countries at the top of the picker, instead of suggesting the household's alphabetically first country for every year on the axis.
+- ✅ **A part-year residence is a tick rather than a convention** — the form starts on the whole year and the two date fields appear only when you say it was split, in place of a footnote explaining that blank dates meant the whole year.
+- ℹ️ **"Why a return is owed at all" is folded away until asked for** — a paragraph and a legend sat permanently between the residence row and the returns it decides; it now opens when you press it.
+- 🗓️ **The tax half of Income & Tax repeats the years above it** — a cell reading "never filed" said nothing about which year until you clicked it, because the only row of years was several hundred pixels up the screen.
 - 📊 **The Statements shelf reads a statement's rhythm from the period it covers** — so a quarterly report draws across its three months instead of having nowhere to go, and a bank's yearly summary stops drawing eleven gaps.
 
 ### 🐛 Fixed
 
+- 🧑‍🤝‍🧑 **An administrator's buttons stay inside the household card** — a person row held four things in three columns, so "Make admin" and "Deactivate" dropped into the avatar column and drew outside the card on every row but your own.
+- 📅 **The residence dates are bounded to the year they divide** — the picker opened on today and offered a date the save then refused for not being in the year.
+- 🍼 **A child owes no return until they are old enough to file one** — the citizenship fallback handed a newborn a nil return for the year they were born and one for every year after it.
+- 📐 **A residence cell keeps to its own column** — three countries in one year-wide cell wrote over the years either side of it, so the cell carries their flags and spells the names out in its label instead.
 - 🔢 **The "missing" figure above Income & Tax counts the returns too** — it read the lanes only, so it could say nothing was missing above a screen listing eight returns that never arrived.
 - 📎 **The same file attached twice to one tax statement is filed once** — the upload stored a content hash and never read it, so one Polish form ended up filed under two different names.
 - 🏷️ **A tax document moved to another year or country is renamed to match** — dragging a Polish form onto the Polish card left it still titled with the Czech one.

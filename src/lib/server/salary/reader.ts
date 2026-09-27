@@ -7,11 +7,9 @@
 // its own, and keeping it apart from how salary is RECORDED is what stopped the
 // two importing each other.
 
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import { env } from '$env/dynamic/private';
 import { db, type Db } from '$lib/server/db';
 import { extractPdfLines } from '$lib/server/import/pdftext';
+import { readUpload } from '$lib/server/system/files';
 import { getBaseCurrency, getSetting, setSetting } from '$lib/server/settings';
 import { availableCurrencies } from '$lib/server/fx/currencies';
 import {
@@ -304,8 +302,10 @@ export async function readStoredPayslip(
 	subject: string
 ): Promise<PayslipReading> {
 	try {
-		const data = await readFile(join(env.UPLOAD_DIR || 'data', storedName));
-		return await readPayslip(new Uint8Array(data), subject);
+		// Through readUpload, which refuses any name it did not mint: stored_name
+		// is a column, and a column's value is not a path to trust.
+		const data = await readUpload(storedName);
+		return data ? await readPayslip(data, subject) : EMPTY;
 	} catch {
 		return EMPTY;
 	}

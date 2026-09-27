@@ -21,6 +21,8 @@
 	import ActionError from '$lib/components/ActionError.svelte';
 	import PeopleSettings from '$lib/components/PeopleSettings.svelte';
 	import { modules } from '$lib/modules/registry';
+	import { API_AREA_OPTIONS, describeReach } from '$lib/api/areas';
+	import type { EnumValue } from '$lib/enums';
 	import { passwordHint } from '$lib/password-policy';
 	import { currencyLabel } from '$lib/currencies';
 
@@ -449,6 +451,33 @@
 				enrollmentLinkDays={data.enrollmentLinkDays}
 			/>
 
+			{#if data.isAdmin}
+				<!-- Beside the people it is about, because it is a fact about them and
+				     not about tax rates: a return is owed for having LIVED somewhere,
+				     and a child who has never earned anything has still lived. Without
+				     this the floor tier handed a newborn a nil return for the year they
+				     were born and one every year after. -->
+				<div class="card">
+					<form method="POST" action="?/setFilingAge" use:enhance class="currency-form">
+						<Field label="Owes a return from age">
+							<input
+								name="filingAge"
+								inputmode="numeric"
+								value={data.filingAge ?? data.defaultFilingAge}
+							/>
+						</Field>
+						<button type="submit" class="btn">Save</button>
+					</form>
+					<p class="quiet">
+						Under this age, a member with no income of their own that year owes nothing — Income &
+						Tax draws no card for them. A job, a filing on record or a residence you declared is
+						evidence of their own and still counts at any age. {data.defaultFilingAge} is the default
+						because that is when a person files for themselves in most places; set it lower for a country
+						that starts earlier, or 0 to expect a return from birth.
+					</p>
+				</div>
+			{/if}
+
 			<form
 				method="POST"
 				action="?/changePassword"
@@ -874,16 +903,46 @@
 				</form>
 			</section>
 
+			<!-- One control for creating a token and for changing an issued one. The
+			     area boxes show only while "Only these areas" is chosen, by :has()
+			     rather than state, so each token row carries its own choice with no
+			     bookkeeping. -->
+			{#snippet reachFields(areas: readonly EnumValue<'api_token.area'>[] | null)}
+				<fieldset class="token-reach">
+					<legend>Reaches</legend>
+					<label class="reach-choice">
+						<input type="radio" name="reach" value="everything" checked={areas === null} />
+						Everything
+					</label>
+					<label class="reach-choice">
+						<input type="radio" name="reach" value="areas" checked={areas !== null} />
+						Only these areas
+					</label>
+					<span class="reach-areas">
+						{#each API_AREA_OPTIONS as area (area.key)}
+							<label class="reach-area">
+								<input
+									type="checkbox"
+									name="area"
+									value={area.key}
+									checked={areas?.includes(area.key) ?? false}
+								/>
+								<span aria-hidden="true">{area.emoji}</span>
+								{area.label}
+							</label>
+						{/each}
+					</span>
+				</fieldset>
+			{/snippet}
+
 			<section class="section" hidden={active !== 'tokens'}>
 				<div class="eyebrow-row">
-					<Eyebrow
-						hue="--brand"
-						icon="bolt"
-						label="API tokens (read-only access to the whole ledger)"
-					/>
+					<Eyebrow hue="--brand" icon="bolt" label="API tokens" />
 					<InfoHint label="What an API token can do">
-						A token grants read access to every transaction, account and figure in this ledger. It
-						cannot change anything.
+						A token reaches everything — every table except sign-in and settings — or only the areas
+						you tick, such as Trips for a travel planner. A read-only token cannot change anything;
+						a read-write token can also add, change and delete rows, with none of the checks these
+						screens make. Both can be changed at any time and apply to the token's next request.
 					</InfoHint>
 				</div>
 
@@ -899,6 +958,14 @@
 						<span>Label</span>
 						<input class="api-token-label" name="label" placeholder="Home Assistant" />
 					</label>
+					<label class="token-access">
+						<span>Access</span>
+						<select name="access">
+							<option value="read" selected>Read-only</option>
+							<option value="read-write">Read-write</option>
+						</select>
+					</label>
+					{@render reachFields(null)}
 					<button type="submit" class="btn btn-primary">Create token</button>
 				</form>
 
@@ -906,12 +973,39 @@
 					<div class="card token-row">
 						<div class="tr-main">
 							<span class="tr-label">{t.label}</span>
-							<span class="tr-meta">created {t.created} · last used {t.lastUsed ?? 'never'}</span>
+							<span class="tr-meta">
+								<span class:tr-writes={t.access === 'read-write'}>
+									{t.access === 'read-write' ? 'read-write' : 'read-only'}
+								</span>
+								· reaches {describeReach(t.areas)} · created {t.created} · last used {t.lastUsed ??
+									'never'}
+							</span>
+							<details class="tr-reach">
+								<summary>Change what it reaches</summary>
+								<form method="POST" action="?/setApiTokenAreas" use:enhance class="token-add">
+									<input type="hidden" name="id" value={t.id} />
+									{@render reachFields(t.areas)}
+									<button type="submit" class="btn">Save</button>
+								</form>
+							</details>
 						</div>
-						<form method="POST" action="?/revokeApiToken" use:enhance>
-							<input type="hidden" name="id" value={t.id} />
-							<button type="submit" class="btn">Revoke</button>
-						</form>
+						<div class="tr-actions">
+							<form method="POST" action="?/setApiTokenAccess" use:enhance>
+								<input type="hidden" name="id" value={t.id} />
+								<input
+									type="hidden"
+									name="access"
+									value={t.access === 'read-write' ? 'read' : 'read-write'}
+								/>
+								<button type="submit" class="btn">
+									{t.access === 'read-write' ? 'Make read-only' : 'Make read-write'}
+								</button>
+							</form>
+							<form method="POST" action="?/revokeApiToken" use:enhance>
+								<input type="hidden" name="id" value={t.id} />
+								<button type="submit" class="btn">Revoke</button>
+							</form>
+						</div>
 					</div>
 				{/each}
 			</section>
@@ -1510,6 +1604,62 @@
 	.tr-meta {
 		font-size: var(--text-sm);
 		color: var(--fg3);
+	}
+	.tr-writes {
+		color: var(--orange);
+		font-weight: 500;
+	}
+	.token-add label.token-access {
+		flex: 0 1 auto;
+	}
+	/* The whole width of the form, so the area list wraps under the label and
+	   access rather than squeezing in beside them. */
+	.token-reach {
+		flex: 1 1 100%;
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-3) var(--space-6);
+		margin: 0;
+		padding: 0;
+		border: 0;
+		font-size: var(--text-sm);
+		color: var(--fg3);
+	}
+	.token-reach legend {
+		padding: 0;
+		margin-bottom: var(--space-3);
+	}
+	.token-add .token-reach label {
+		flex: none;
+		flex-direction: row;
+		align-items: center;
+		gap: var(--space-3);
+		color: var(--fg2);
+	}
+	.reach-areas {
+		display: none;
+		flex: 1 1 100%;
+		flex-wrap: wrap;
+		gap: var(--space-3) var(--space-6);
+	}
+	.token-reach:has(input[name='reach'][value='areas']:checked) .reach-areas {
+		display: flex;
+	}
+	.tr-reach summary {
+		font-size: var(--text-sm);
+		color: var(--fg3);
+		cursor: pointer;
+	}
+	.tr-reach[open] {
+		margin-top: var(--space-4);
+	}
+	.tr-reach form {
+		margin-top: var(--space-4);
+	}
+	.tr-actions {
+		display: flex;
+		gap: var(--space-3);
+		flex-wrap: wrap;
 	}
 	/* A grid of cards rather than eighteen rows in one: the modules are a set
 	   of independent choices, and a column of rows reads as an ordered list of

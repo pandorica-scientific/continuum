@@ -17,7 +17,7 @@ import {
 // does not resolve SvelteKit's $lib.
 import type { OverviewPlacement } from '../../../overview/layout';
 import type { TaxViewPrefs } from '../../../tax';
-import type { EnumValue } from '../../../enums';
+import { ENUMS, type EnumValue } from '../../../enums';
 
 export const person = pgTable('person', {
 	id: uuid('id').primaryKey(),
@@ -88,12 +88,23 @@ export const setupClaim = pgTable('setup_claim', {
 	claimedAt: timestamp('claimed_at', { withTimezone: true }).notNull().defaultNow()
 });
 
-// A bearer token for the read-only API. Only the hash is stored — the raw
-// token is shown once at creation, exactly as session tokens are handled.
+// A bearer token for the API. Only the hash is stored — the raw token is shown
+// once at creation, exactly as session tokens are handled.
 export const apiToken = pgTable('api_token', {
 	// sha256 hex of the bearer token
 	id: text('id').primaryKey(),
 	label: text('label').notNull(),
+	// Read-only unless someone chose otherwise: a token created before writes
+	// existed was issued as read-only, and gaining write access must be a choice
+	// made in Settings, never a side effect of an upgrade.
+	access: text('access').$type<EnumValue<'api_token.access'>>().notNull().default('read'),
+	/**
+	 * The areas this token reaches (`ENUMS['api_token.area']`), or NULL for all
+	 * of them — which is what every token issued before areas existed keeps.
+	 * NULL and not an empty array for "everything", so that a token whose list
+	 * has been emptied reaches nothing rather than the whole household.
+	 */
+	areas: text('areas').array().$type<EnumValue<'api_token.area'>[]>(),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 	lastUsedAt: timestamp('last_used_at', { withTimezone: true })
 });
@@ -139,4 +150,9 @@ ALTER TABLE setup_claim ADD CONSTRAINT setup_claim_singleton CHECK (claimed = tr
 -- or a person and their paper stop agreeing about which country is which.
 ALTER TABLE person ADD CONSTRAINT person_citizenship_check
 	CHECK (citizenship IS NULL OR citizenship ~ '^[A-Z]{2}$');
+--> statement-breakpoint
+-- An array, so the generated enum CHECKs (one value per column) cannot cover
+-- it; written from the same list instead.
+ALTER TABLE api_token ADD CONSTRAINT api_token_areas_check
+	CHECK (areas IS NULL OR areas <@ ARRAY[${ENUMS['api_token.area'].map((area) => `'${area}'`).join(', ')}]::text[]);
 `;

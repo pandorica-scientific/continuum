@@ -1,6 +1,7 @@
 <script lang="ts">
 	// SPDX-License-Identifier: AGPL-3.0-or-later
 	import { enhance } from '$app/forms';
+	import { goto } from '$app/navigation';
 	import ScreenHeader from '$lib/components/ScreenHeader.svelte';
 	import SummaryBand from '$lib/components/SummaryBand.svelte';
 	import ControlRow from '$lib/components/ControlRow.svelte';
@@ -102,27 +103,30 @@
 			.sort(([a], [b]) => b - a);
 	});
 
-	/** The idea taken off the board, held for six seconds so it can be put back without refetching. */
-	let undo = $state<{
-		name: string;
-		emoji: string;
-		note: string;
-		country: string | null;
-		hearts: string[];
-	} | null>(null);
+	/**
+	 * What the undo bar offers back for six seconds: an idea taken off the
+	 * board, or a trip deleted from its own page. Only the id and the name —
+	 * removal hides the row rather than deleting it, so undo brings back the
+	 * same record, hearts, stamp and plans included.
+	 */
+	let undo = $state<{ kind: 'idea' | 'trip'; id: string; name: string } | null>(null);
 	let undoTimer: ReturnType<typeof setTimeout> | null = null;
 
-	function holdUndo(idea: (typeof data.ideas)[number]) {
+	function holdUndo(held: { kind: 'idea' | 'trip'; id: string; name: string }) {
 		if (undoTimer) clearTimeout(undoTimer);
-		undo = {
-			name: idea.name,
-			emoji: idea.emoji,
-			note: idea.note,
-			country: idea.country,
-			hearts: idea.hearts.map((heart) => heart.id)
-		};
+		undo = held;
 		undoTimer = setTimeout(() => (undo = null), 6000);
 	}
+
+	// A trip deleted from its page arrives here with `?removed=`; the bar takes
+	// it once, and the address drops the parameter — a real navigation, so a
+	// later reload of this list does not offer the same trip back again.
+	$effect(() => {
+		const removed = data.removedTrip;
+		if (!removed) return;
+		holdUndo({ kind: 'trip', id: removed.id, name: removed.name });
+		goto('/trips', { replaceState: true, noScroll: true, keepFocus: true });
+	});
 </script>
 
 <ScreenHeader
@@ -172,7 +176,7 @@
 					method="POST"
 					action="?/removeIdea"
 					use:enhance={() => {
-						holdUndo(idea);
+						holdUndo({ kind: 'idea', id: idea.id, name: idea.name });
 						return async ({ update }) => update({ reset: false });
 					}}
 				>
@@ -184,6 +188,7 @@
 						hearts={idea.hearts}
 						{hues}
 						art={idea.art}
+						papers={idea.papers}
 						makeHref="/trips/new?idea={idea.id}"
 						onmake={() => (making = idea)}
 					/>
@@ -249,22 +254,16 @@
 <!-- At the component root so it's visible however far the reader has scrolled. -->
 {#if undo}
 	<div class="undo" role="status">
-		<span>{undo.name} — off the board.</span>
+		<span>{undo.name} — {undo.kind === 'idea' ? 'off the board' : 'deleted'}.</span>
 		<form
 			method="POST"
-			action="?/restoreIdea"
+			action={undo.kind === 'idea' ? '?/restoreIdea' : '?/restoreTrip'}
 			use:enhance={() => {
 				undo = null;
 				return async ({ update }) => update({ reset: false });
 			}}
 		>
-			<input type="hidden" name="name" value={undo.name} />
-			<input type="hidden" name="emoji" value={undo.emoji} />
-			<input type="hidden" name="note" value={undo.note} />
-			<input type="hidden" name="country" value={undo.country ?? ''} />
-			{#each undo.hearts as heart (heart)}
-				<input type="hidden" name="heart" value={heart} />
-			{/each}
+			<input type="hidden" name="id" value={undo.id} />
 			<button class="undo-do" type="submit">Undo</button>
 		</form>
 		<button class="undo-x" type="button" onclick={() => (undo = null)} aria-label="Dismiss">

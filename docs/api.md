@@ -1,11 +1,47 @@
 # API and Home Assistant
 
-## Read-only API
+## API
 
-Settings → API tokens creates a bearer token (shown once) that grants read-only
-access to the whole ledger under `/api/v1` — accounts, transactions (accepting the
-register's filter params, `group=<category group>` among them), categories, tags,
-net worth and cash-flow totals. Every amount crosses the wire as integer minor
+Settings → API tokens creates a bearer token (shown once) that is either
+**read-only** or **read-write**. A token is read-only unless you choose otherwise
+when creating it, and either can be switched later from the same list; the change
+applies to the token's next request. A token carries no expiry: it works until you
+revoke it, which takes effect at once. Settings shows when each was last used,
+refreshed at most once every five minutes. Failed bearer attempts are
+rate-limited the same way sign-in is; successful calls are not.
+
+Both kinds read exactly the same data; they differ only in writing. A
+**read-only** token gets a `403` for any method other than `GET` or `HEAD`; a
+**read-write** token may also `POST`, `PATCH` and `DELETE`.
+
+### Areas
+
+A token reaches **everything**, or only the **areas** ticked for it — the module
+toggles (Trips, Cookbook, Collections, Tax, Salary, Documents and the rest) plus
+**Accounts & transactions** for the ledger no toggle owns. It is chosen when the
+token is created and changeable later, like read or read-write. Every token issued
+before areas existed reaches everything.
+
+Each table belongs to one area; `GET /api/v1/tables` lists a limited token's own
+tables only, with each table's `area`. People, tags, organisations, currencies, the
+entity registry and net worth serve every area at once, so only a token that
+reaches everything reaches them — a token limited to Trips cannot read who lives in
+the household or what anything else is tagged with. Of the endpoints above,
+accounts, transactions, categories and cash flow belong to the ledger; tags and net
+worth to everything. Anything outside a token's areas is a `403`.
+
+A travel planner, for example, gets a **read-write** token limited to **Trips**: it
+can add ideas and trips, attach a plan to either, and see nothing else.
+
+A payslip needs **Salary** as well as whatever else would reach it, Documents
+included. A token without Salary finds no payslip anywhere: not the document, its
+text, its links or any other row naming one, under `/api/v1/tables` or
+`/api/v1/files`. It cannot write a payslip, retype a document as one or link one
+to anything either; those answer `403`.
+
+The endpoints below read accounts, transactions (accepting the register's filter
+params, `group=<category group>` among them), categories, tags, net worth and
+cash-flow totals under `/api/v1`. Every amount crosses the wire as integer minor
 units plus a currency code, never a float:
 
 ```sh
@@ -14,12 +50,8 @@ curl -H "Authorization: Bearer <token>" \
 # { "total": { "amountMinor": 646055100, "currency": "CZK" }, … }
 ```
 
-There are no write endpoints and no webhooks — a household produces a handful of
-events a week, so a dashboard polls. A token carries no expiry and no scope: it
-reads everything under `/api/v1` until you revoke it, which takes effect at once.
-Settings shows when each was last used, refreshed at most once every five minutes.
-Failed bearer attempts are rate-limited the same way sign-in is; successful calls
-are not.
+There are no webhooks — a household produces a handful of events a week, so a
+dashboard polls.
 
 `/api/v1/transactions` measures `from`, `to` and `month` on the day the money moved —
 the value date where the bank printed one, the booking date otherwise — which is the
@@ -37,6 +69,92 @@ figures `in`, `out`, `saved` and `kept`, and `previous` — the same `caption` a
 far. `kept` is the cash left over **after** saving; what was put aside is `saved`. All
 four are display-grade sums converted into the base currency, not ledger-grade ones:
 the per-transaction endpoints are the exact figures.
+
+### Tables
+
+Every table in the database is also reachable under `/api/v1/tables` — trips,
+bottles, recipes, loans, documents and the rest — so anything the screens hold can
+be read, and written with a read-write token. Names are the database's own, so
+`\d loan_event` in `psql` documents the call.
+
+| Call                                  | Does                                                                                                        |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/tables`                  | Every reachable table: its columns (type, nullable, default, writable) and its primary key                  |
+| `GET /api/v1/tables/<table>`          | Rows in primary-key order; `limit` (default 100, at most 1000), `offset`, and `<column>=<value>` to filter  |
+| `POST /api/v1/tables/<table>`         | Insert one row (a JSON object) or up to 1000 (an array), all or none; answers `201` with the rows as stored |
+| `PATCH /api/v1/tables/<table>?<key>`  | Change the columns in the JSON body on the one row the primary key names                                    |
+| `DELETE /api/v1/tables/<table>?<key>` | Delete that one row, answering with what it held                                                            |
+
+`<key>` is every primary-key column and nothing else — `?id=…` for most tables,
+`?tag_id=…&target_id=…` for a link table — so a mistyped filter cannot widen a
+change or a delete to the whole table. A one-column uuid key left out of an insert
+is minted the way the app mints it. Timestamps are ISO 8601 strings with an
+offset, such as `2026-09-27T08:00:00Z` or `2026-09-27T10:00:00+02:00`; one without
+an offset is refused rather than read in the server's time zone. `bigint` columns
+(the money columns among them) are whole numbers, as elsewhere in the API, from
+−9007199254740991 to 9007199254740991 — the range a JSON number carries exactly.
+
+```sh
+# Every trip, then a new one, then its notes changed
+curl -H "Authorization: Bearer <token>" http://continuum.local/api/v1/tables/trip
+curl -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+  -d '{"name": "Lisbon", "starts_on": "2026-10-01", "ends_on": "2026-10-08"}' \
+  http://continuum.local/api/v1/tables/trip
+curl -X PATCH -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+  -d '{"notes": "Tram 28"}' \
+  "http://continuum.local/api/v1/tables/trip?id=0190…"
+```
+
+A write is a row, not an action. The database's own rules still apply — foreign
+keys, CHECK constraints, and the triggers that register a record for tagging — and
+a refusal comes back as a `400` or `409` in Postgres's own words. Nothing the
+screens do around a write runs: no import deduplication, no transfer pairing, and
+no file on disk created or removed with a document row.
+
+A trip or an idea removed in the app is hidden for a minute, so the undo bar can
+bring it back, and then deleted with the documents attached to it alone. A client
+can do the same by setting `removed_at` to now, rather than deleting the row, which
+leaves its documents behind.
+
+Never reachable, not even to read: `api_token`, `session`, `enrollment_token`,
+`setup_claim` and `settings`, which decide who can sign in or hold the Home
+Assistant token. A person's password hash and a calendar's credential are left out
+of their rows; a person's role and whether they may sign in can be read but not
+written; a connected calendar is read-only. Those are Settings actions. A column
+naming an uploaded file — a document's `stored_name`, a photo, a property's
+images — can be read but not written: a file uploaded under `/api/v1/files` is
+named by the server, so all a caller could put there is another row's file. The
+job queue is read-only too, since a queued import carries its file's bytes and
+`/api/v1/files` is the one way in for those.
+
+### Files
+
+A PDF can be attached to any record a token reaches — a trip, a trip idea, a bottle,
+a recipe — and is filed in the archive as a document linked to it, on the Inbox
+shelf, the way the Trips screen files a booking confirmation. PDF only, checked by
+the file's contents: an HTML page served from Continuum's own address could run
+script as whoever opened it.
+
+| Call                                 | Does                                                                                             |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| `POST /api/v1/files`                 | Attach a PDF: multipart `file`, `attach_to` (the record's id) and optional `name`; answers `201` |
+| `GET /api/v1/files?attached_to=<id>` | What is attached to that record                                                                  |
+| `GET /api/v1/files/<id>`             | The PDF itself                                                                                   |
+| `DELETE /api/v1/files/<id>`          | Remove it and its file, to replace a plan                                                        |
+
+A limited token sees and removes a document only when every record it is attached
+to is inside its areas, so a passport scan filed against a trip and a person stays
+out of a travel planner's reach. A record outside its areas answers `404`, as a
+record that does not exist does. A token given **Documents** reaches the whole
+archive instead — every document, whatever it is filed against — as the Documents
+screen does.
+
+```sh
+# A plan for an idea
+curl -X POST -H "Authorization: Bearer <token>" \
+  -F file=@lofoten.pdf -F attach_to=0190… -F name="Lofoten in March" \
+  http://continuum.local/api/v1/files
+```
 
 ## Smart-meter billing
 

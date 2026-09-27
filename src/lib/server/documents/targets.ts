@@ -37,7 +37,8 @@ import {
 	taxStatement,
 	tenancy,
 	transaction,
-	trip
+	trip,
+	tripIdea
 } from '$lib/server/db/schema';
 import { archiveScopePredicate, assertDocumentExists, NO_SUCH_DOCUMENT } from './visibility';
 
@@ -62,6 +63,7 @@ export const DOCUMENT_TARGET_KINDS = [
 	'tax_statement',
 	'organisation',
 	'trip',
+	'trip_idea',
 	'bottle',
 	'recipe'
 ] as const;
@@ -295,13 +297,22 @@ const REGISTRY: Record<DocumentTargetKind, TargetKindSpec> = {
 	trip: defineKind('trip', {
 		groupLabel: 'Trips',
 		pickable: true,
-		nameSql: sql`select ${trip.id} as id, ${trip.name} as name from ${trip}`,
+		// Not one removed and waiting for the sweep: paper filed against it now
+		// would go with it a minute later.
+		nameSql: sql`select ${trip.id} as id, ${trip.name} as name from ${trip} where ${trip.removedAt} is null`,
 		// Two trips to the same place years apart share a name; the year tells them apart.
 		extras: {
 			columns: sql`to_char(${trip.startsOn}, 'YYYY') as meta`,
 			join: sql`join ${trip} on ${trip.id} = t.id`,
 			read: (raw) => ({ meta: raw.meta == null ? undefined : String(raw.meta) })
 		}
+	}),
+	// Where a travel planner's PDF lands before anybody has chosen dates.
+	trip_idea: defineKind('trip_idea', {
+		groupLabel: 'Trip ideas',
+		pickable: true,
+		// Not one removed and waiting for the sweep, as for a trip.
+		nameSql: sql`select ${tripIdea.id} as id, ${tripIdea.name} as name from ${tripIdea} where ${tripIdea.removedAt} is null`
 	}),
 	bottle: defineKind('bottle', {
 		groupLabel: 'Bottles',
@@ -490,14 +501,23 @@ async function documentExists(documentId: string, handle: Queryable): Promise<bo
  * `document_link.target_id` references `entity`, so the FK accepts any
  * entity including another document; this is the one check that says which
  * are actually fileable, shared by every entry point.
+ *
+ * A trip or idea removed and waiting for the sweep is not: the sweep would
+ * delete paper filed against it alone a minute later, with no word to whoever
+ * filed it.
  */
-async function isFileableTarget(targetId: string, handle: Queryable): Promise<boolean> {
+export async function isFileableTarget(targetId: string, handle: Queryable): Promise<boolean> {
 	const [record] = await handle
-		.select({ kind: entity.kind })
+		.select({
+			kind: entity.kind,
+			removedAt: sql<Date | null>`coalesce(${trip.removedAt}, ${tripIdea.removedAt})`
+		})
 		.from(entity)
+		.leftJoin(trip, eq(trip.id, entity.id))
+		.leftJoin(tripIdea, eq(tripIdea.id, entity.id))
 		.where(eq(entity.id, targetId))
 		.limit(1);
-	return !!record && isDocumentTargetKind(record.kind);
+	return !!record && isDocumentTargetKind(record.kind) && record.removedAt === null;
 }
 
 /**

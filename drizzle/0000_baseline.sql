@@ -26,6 +26,8 @@ CREATE TABLE "currency_rate" (
 CREATE TABLE "api_token" (
 	"id" text PRIMARY KEY NOT NULL,
 	"label" text NOT NULL,
+	"access" text DEFAULT 'read' NOT NULL,
+	"areas" text[],
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"last_used_at" timestamp with time zone
 );
@@ -879,7 +881,8 @@ CREATE TABLE "trip" (
 	"notes" text DEFAULT '' NOT NULL,
 	"art" jsonb,
 	"from_idea_id" uuid,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"removed_at" timestamp with time zone
 );
 --> statement-breakpoint
 CREATE TABLE "trip_booking" (
@@ -911,7 +914,8 @@ CREATE TABLE "trip_idea" (
 	"art" jsonb,
 	"photo" text,
 	"sort_order" integer DEFAULT 0 NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"removed_at" timestamp with time zone
 );
 --> statement-breakpoint
 CREATE TABLE "trip_idea_heart" (
@@ -1280,6 +1284,9 @@ FOR EACH ROW EXECUTE FUNCTION maintain_transfer_pair_legs();
 ALTER TABLE person ADD CONSTRAINT person_role_check
 	CHECK (role in ('admin', 'member'));
 --> statement-breakpoint
+ALTER TABLE api_token ADD CONSTRAINT api_token_access_check
+	CHECK (access in ('read', 'read-write'));
+--> statement-breakpoint
 ALTER TABLE account ADD CONSTRAINT account_kind_check
 	CHECK (kind in ('current', 'savings', 'brokerage'));
 --> statement-breakpoint
@@ -1383,7 +1390,7 @@ ALTER TABLE tax_statement ADD CONSTRAINT tax_statement_role_check
 	CHECK (role in ('residence', 'source'));
 --> statement-breakpoint
 ALTER TABLE entity ADD CONSTRAINT entity_kind_check
-	CHECK (kind in ('person', 'account', 'transaction', 'transaction_split', 'property', 'tenancy', 'loan', 'document', 'contact', 'tag', 'subject', 'tax_statement', 'organisation', 'trip', 'bottle', 'recipe'));
+	CHECK (kind in ('person', 'account', 'transaction', 'transaction_split', 'property', 'tenancy', 'loan', 'document', 'contact', 'tag', 'subject', 'tax_statement', 'organisation', 'trip', 'bottle', 'recipe', 'trip_idea'));
 --> statement-breakpoint
 
 -- ---- Singletons and shapes ----
@@ -1395,6 +1402,11 @@ ALTER TABLE setup_claim ADD CONSTRAINT setup_claim_singleton CHECK (claimed = tr
 -- or a person and their paper stop agreeing about which country is which.
 ALTER TABLE person ADD CONSTRAINT person_citizenship_check
 	CHECK (citizenship IS NULL OR citizenship ~ '^[A-Z]{2}$');
+--> statement-breakpoint
+-- An array, so the generated enum CHECKs (one value per column) cannot cover
+-- it; written from the same list instead.
+ALTER TABLE api_token ADD CONSTRAINT api_token_areas_check
+	CHECK (areas IS NULL OR areas <@ ARRAY['ledger', 'import', 'property', 'investments', 'loans', 'retirement', 'salary', 'home', 'calendar', 'tax', 'documents', 'contacts', 'trips', 'cookbook', 'collections']::text[]);
 --> statement-breakpoint
 ALTER TABLE broker_import_state ADD CONSTRAINT broker_import_state_singleton
 	CHECK (id = 'global');
@@ -1542,7 +1554,7 @@ DECLARE
 	t text;
 	has_created_at boolean;
 BEGIN
-	FOREACH t IN ARRAY ARRAY['person', 'account', 'transaction', 'transaction_split', 'property', 'tenancy', 'loan', 'document', 'contact', 'tag', 'subject', 'tax_statement', 'organisation', 'trip', 'bottle', 'recipe']
+	FOREACH t IN ARRAY ARRAY['person', 'account', 'transaction', 'transaction_split', 'property', 'tenancy', 'loan', 'document', 'contact', 'tag', 'subject', 'tax_statement', 'organisation', 'trip', 'bottle', 'recipe', 'trip_idea']
 	LOOP
 		EXECUTE format(
 			'ALTER TABLE %I ADD COLUMN entity_kind text GENERATED ALWAYS AS (%L) STORED', t, t);

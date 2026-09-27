@@ -23,6 +23,7 @@
 		hearts,
 		hues,
 		art,
+		papers = [],
 		makeHref,
 		onmake
 	}: {
@@ -34,6 +35,8 @@
 		hues: Record<string, string>;
 		/** The stamp, already inked, or null where the generator could not draw one. */
 		art: { svg: string; hue: string | null } | null;
+		/** Plans filed against the idea — a travel planner's PDF — each opening in a tab. */
+		papers?: { id: string; name: string }[];
 		/**
 		 * Where "Make this a trip" goes with no script — a real route, carrying
 		 * the idea's id, so the card works in a browser that cannot open a dialog.
@@ -80,6 +83,12 @@
 		     emoji was a third copy of the picture already filling half the card. -->
 		<h3>{name}</h3>
 		{#if note}<p class="note">{note}</p>{/if}
+		{#each papers as paper (paper.id)}
+			<a class="paper" href="/documents/{paper.id}/file" target="_blank">
+				<Icon name="receipt" size={13} />
+				<span>{paper.name}</span>
+			</a>
+		{/each}
 
 		<div class="foot">
 			<div class="hearts">
@@ -202,6 +211,20 @@
 		margin: 0;
 		font-size: var(--text-md);
 		color: var(--fg3);
+	}
+	/* One line each, cut short rather than wrapped: a planner names its PDFs at
+	   length, and the card is a fixed 268px. */
+	.paper {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		min-width: 0;
+		font-size: var(--text-sm);
+	}
+	.paper span {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.foot {
 		margin-top: auto;

@@ -83,15 +83,10 @@
 		</div>
 		<!-- Delete sits above Edit — rarer and heavier of the two — rather than at the foot of a long page. -->
 		<div class="fact edit">
-			<form
-				method="POST"
-				action="?/delete"
-				use:enhance={({ cancel }) => {
-					// Deletes bookings and places too — confirmed once rather than offering an undo.
-					if (!confirm(`Delete ${trip.name}? Its bookings and places go with it.`)) cancel();
-					return async ({ update }) => update();
-				}}
-			>
+			<!-- No confirm: the list it lands on offers an undo, and nothing — the
+			     bookings, the places, the paper — is deleted until that has had its
+			     minute. -->
+			<form method="POST" action="?/delete" use:enhance>
 				<button class="link danger-link" type="submit">
 					<Icon name="plus" size={14} /> Delete this trip
 				</button>
@@ -114,6 +109,23 @@
 		<Readiness lines={data.readiness} {hues} caption={data.visaCaption} />
 	</div>
 </section>
+
+{#if trip.papers.length > 0}
+	<!-- The plan the trip was promoted with, and any other paper filed against
+	     it that is not a booking's confirmation — those show on their booking. -->
+	<section class="section">
+		<Eyebrow icon="folders" label="Plans" hue="--rose" caption="Filed in the archive." />
+		<div class="card pad papers">
+			{#each trip.papers as paper (paper.id)}
+				<a class="paper" href="/documents/{paper.id}/file" target="_blank">
+					<Icon name="receipt" size={13} />
+					{paper.name}
+					<span class="quiet">{paper.ext}</span>
+				</a>
+			{/each}
+		</div>
+	</section>
+{/if}
 
 <section class="section">
 	<Eyebrow icon="suitcase" label="Bookings" hue="--rose" caption="In the order they happen." />
@@ -423,6 +435,17 @@
 	.add input {
 		flex: 1;
 		min-width: 0;
+	}
+	.papers {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-3) var(--space-6);
+	}
+	.paper {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-3);
+		font-size: var(--text-sm);
 	}
 	.note-read {
 		display: flex;

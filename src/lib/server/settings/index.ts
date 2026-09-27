@@ -3,6 +3,7 @@ import { eq, sql } from 'drizzle-orm';
 import { db, type Db, type Queryable, type Tx } from '$lib/server/db';
 import { person, settings } from '$lib/server/db/schema';
 import { defaultModules, type ModuleToggles } from '$lib/modules/registry';
+import { DEFAULT_FILING_AGE } from '$lib/documents/tax-years';
 
 /** `handle` mirrors setSetting: a caller inside a transaction, or a test with
  *  its own database, has to be able to read through the same connection. */
@@ -181,6 +182,30 @@ export async function getBaseCurrency(handle: Queryable = db): Promise<string> {
 
 export async function getHouseholdName(): Promise<string> {
 	return getSetting<string>('householdName', '');
+}
+
+/**
+ * From what age a household member owes a return for merely having lived
+ * somewhere. See `DEFAULT_FILING_AGE` for why this exists at all.
+ *
+ * Folded here rather than at the two call sites: anything outside a human age
+ * is read as "unset" rather than trusted, because a stored 200 would silently
+ * excuse the whole household and a stored -1 would put a newborn back on the
+ * grid.
+ */
+export async function getFilingAge(handle: Queryable = db): Promise<number> {
+	const stored = await getSetting<unknown>('tax.filingAge', DEFAULT_FILING_AGE, handle);
+	return foldFilingAge(stored) ?? DEFAULT_FILING_AGE;
+}
+
+/** A whole age from 0 to 120, or null for anything that is not one. 0 means everybody from birth. */
+export function foldFilingAge(value: unknown): number | null {
+	// Digits only for text: Number() reads '' and '  ' as 0, which would put
+	// every newborn on the grid, and takes '1e1' and '0x12' as 10 and 18.
+	const age =
+		typeof value === 'string' ? (/^\d+$/.test(value.trim()) ? Number(value.trim()) : null) : value;
+	if (typeof age !== 'number' || !Number.isInteger(age) || age < 0 || age > 120) return null;
+	return age;
 }
 
 /** The wizard has run once at least one person exists. */

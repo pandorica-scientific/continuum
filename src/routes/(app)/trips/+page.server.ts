@@ -12,7 +12,11 @@ import {
 	ideaExists,
 	listIdeas,
 	listTrips,
+	promoteIdea,
+	removedTripName,
 	removeIdea,
+	restoreIdea,
+	restoreTrip,
 	tripFigures
 } from '$lib/server/life/trips';
 import { writeVisitsForEndedTrips } from '$lib/server/life/visits';
@@ -20,7 +24,7 @@ import { tripReadiness } from '$lib/server/life/readiness';
 import { readinessWord, worstOf } from '$lib/life/readiness';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ url }) => {
 	// Done on read rather than on a timer — there's no scheduler to trust.
 	await writeVisitsForEndedTrips();
 
@@ -78,9 +82,19 @@ export const load: PageServerLoad = async () => {
 				return hue === 'yellow' || hue === 'red';
 			}).length
 		},
-		people: people.map((p) => ({ ...p, hue: hues.get(p.id) ?? '--fg3' }))
+		people: people.map((p) => ({ ...p, hue: hues.get(p.id) ?? '--fg3' })),
+		// A trip deleted from its own page lands here with its id, so the undo bar
+		// can offer it back. Null once the sweep has taken it, or for a stale link.
+		removedTrip: await removedTripFrom(url.searchParams.get('removed'))
 	};
 };
+
+async function removedTripFrom(raw: string | null) {
+	const id = asOptionalRowId(raw);
+	if (!id) return null;
+	const name = await removedTripName(id);
+	return name ? { id, name } : null;
+}
 
 export const actions: Actions = {
 	removeIdea: async ({ request }) => {
@@ -92,21 +106,23 @@ export const actions: Actions = {
 	},
 
 	/**
-	 * Put a removed idea back. The original row is already gone by the time the
-	 * undo bar fires, so this re-adds it from what the bar was holding.
+	 * Put a removed idea back: the same row, which removal only hid, so its
+	 * hearts, stamp and plans come back with it rather than a copy rebuilt from
+	 * what the undo bar remembered.
 	 */
 	restoreIdea: async ({ request }) => {
 		const form = await request.formData();
-		const name = String(form.get('name') ?? '').trim();
-		if (!name) return fail(400, { message: 'An idea needs a name.' });
-		await addIdea({
-			name,
-			emoji: String(form.get('emoji') ?? ''),
-			note: String(form.get('note') ?? ''),
-			country: String(form.get('country') ?? '') || null,
-			hearts: form.getAll('heart').map(String).filter(Boolean)
-		});
+		const id = asRowId(form.get('id'));
+		await restoreIdea(id);
 		return { restored: true };
+	},
+
+	/** The same, for a trip deleted from its own page. */
+	restoreTrip: async ({ request }) => {
+		const form = await request.formData();
+		const id = asRowId(form.get('id'));
+		// An undo from a page left open past the sweep has nothing to open.
+		redirect(303, (await restoreTrip(id)) ? `/trips/${id}` : '/trips');
 	},
 
 	addIdea: async ({ request }) => {
@@ -148,7 +164,7 @@ export const actions: Actions = {
 		const fromIdeaId = (await ideaExists(asOptionalRowId(form.get('fromIdeaId'))))
 			? asOptionalRowId(form.get('fromIdeaId'))!
 			: null;
-		const id = await createTrip({
+		const input = {
 			name,
 			emoji: String(form.get('emoji') ?? ''),
 			startsOn,
@@ -162,12 +178,11 @@ export const actions: Actions = {
 				}
 			],
 			members: form.getAll('member').map(String).filter(Boolean),
-			fromIdeaId,
 			art: form.get('art')
-		});
-
-		// Promoting an idea takes it off the board — it's the same plan now, not a duplicate.
-		if (fromIdeaId) await removeIdea(fromIdeaId);
+		};
+		// Promoting an idea takes it off the board — it's the same plan now, not a
+		// duplicate — and carries its note, stamp and plans onto the trip.
+		const id = fromIdeaId ? await promoteIdea(fromIdeaId, input) : await createTrip(input);
 
 		redirect(303, `/trips/${id}`);
 	}

@@ -159,6 +159,19 @@ export function registerCoreBoot(): void {
 		}
 	});
 
+	// Trips and ideas removed with an undo are hidden, not deleted; this is what
+	// deletes them — and the paper attached to them alone — once the undo has
+	// had its minute. Every minute, so nothing lingers much past that.
+	registerBootTask({
+		id: 'trip-removals',
+		label: 'Removed trips and ideas',
+		every: MINUTE,
+		run: async () => {
+			const { purgeRemovedTrips } = await import('$lib/server/life/trips');
+			await purgeRemovedTrips();
+		}
+	});
+
 	// Today's net worth, for the month-on-month delta. One row per day, upserted.
 	registerBootTask({
 		id: 'networth',

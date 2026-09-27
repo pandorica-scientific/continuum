@@ -1,5 +1,5 @@
 {
-  "id": "5a9034c1-f40d-4f2c-b02b-56414f570b72",
+  "id": "45630a08-db7b-4ddc-bfec-af661c433d47",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -103,6 +103,19 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "access": {
+          "name": "access",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'read'"
+        },
+        "areas": {
+          "name": "areas",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -8274,6 +8287,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "removed_at": {
+          "name": "removed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -8602,6 +8621,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "removed_at": {
+          "name": "removed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {},

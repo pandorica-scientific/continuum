@@ -16,7 +16,7 @@ import {
 	addPlace,
 	deleteBooking,
 	deletePlace,
-	deleteTrip,
+	removeTrip,
 	destinationLabel,
 	loadTrip,
 	saveNotes,
@@ -225,8 +225,11 @@ export const actions: Actions = {
 		return { saved: true };
 	},
 
+	// Hidden, with the undo bar on the list it lands on; deleted — bookings,
+	// places and its paper — by the sweep a minute later.
 	delete: async ({ params }) => {
-		await deleteTrip(tripId(params));
-		redirect(303, '/trips');
+		const id = tripId(params);
+		await removeTrip(id);
+		redirect(303, `/trips?removed=${id}`);
 	}
 };

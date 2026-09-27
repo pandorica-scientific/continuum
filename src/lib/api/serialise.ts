@@ -16,11 +16,26 @@ export interface Money {
 
 const SAFE = BigInt(Number.MAX_SAFE_INTEGER);
 
+/**
+ * A bigint as a JSON number. bigint does not survive JSON.stringify, so it has
+ * to become a Number. At household scale this range cannot be exceeded; the
+ * guard exists so that if it ever is, it fails loudly instead of quietly
+ * reporting a wrong figure.
+ *
+ * Also what /api/v1/tables uses for its bigint columns. That is not the deep
+ * converter refused above: it converts by the column's declared type, never by
+ * whatever value happens to turn up.
+ */
+export function safeInteger(value: bigint): number {
+	if (!isSafeBigint(value)) throw new Error(`${value} is outside the safe integer range for JSON`);
+	return Number(value);
+}
+
+/** Whether a bigint survives the trip to a JSON number unchanged. */
+export function isSafeBigint(value: bigint): boolean {
+	return value <= SAFE && value >= -SAFE;
+}
+
 export function money(amountMinor: bigint, currency: string): Money {
-	// bigint does not survive JSON.stringify, so it has to become a Number. At
-	// household scale this range cannot be exceeded; the guard exists so that if
-	// it ever is, it fails loudly instead of quietly reporting a wrong figure.
-	if (amountMinor > SAFE || amountMinor < -SAFE)
-		throw new Error(`Amount ${amountMinor} is outside the safe integer range for JSON`);
-	return { amountMinor: Number(amountMinor), currency };
+	return { amountMinor: safeInteger(amountMinor), currency };
 }
