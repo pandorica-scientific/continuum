@@ -114,9 +114,10 @@ export interface TaxYearInput {
  * The age of majority is the default because it is the age at which a person
  * files for themselves anywhere this app is used, and the household can move it
  * (Settings → Household) for a country that starts earlier. It bounds the FLOOR
- * only: a minor with a job, a filing on record or a residence somebody declared
- * has evidence of their own, and every tier above citizenship still answers for
- * them at any age.
+ * only: a minor with a job, a filed residence return or a residence somebody
+ * declared has evidence of their own, and every tier above citizenship still
+ * answers for them at any age. A filing that names a minor keeps them on that
+ * filing's card, but says nothing about where they lived.
  */
 export const DEFAULT_FILING_AGE = 18;
 
@@ -305,28 +306,27 @@ export function taxResidences(input: TaxYearInput): ResolvedResidence[] {
 			const employmentCountries = engagements
 				.filter((e) => e.personId === person.id && yearsOf(e, floorYear, thisYear).includes(year))
 				.map((e) => e.country);
+			const residence = residenceForYear({
+				declared,
+				statementCountries,
+				employmentCountries,
+				citizenship: input.citizenship?.[person.id] ?? null
+			});
 			// A child with nothing of their own in this year owes nothing in it. The
 			// floor tier would otherwise hand a newborn a nil return for the year
-			// they were born and one every year after — see DEFAULT_FILING_AGE. A
-			// minor who DOES have evidence keeps it: this only refuses to invent an
-			// obligation out of citizenship and an age.
+			// they were born and one every year after — see DEFAULT_FILING_AGE.
+			//
+			// The tier that answered IS the evidence test, so it is read off the
+			// answer rather than worked out a second time beside it. Anything above
+			// citizenship is the minor's own and stands; citizenship alone is the
+			// obligation this refuses to invent. A filing naming the child is not a
+			// tier at all — a `source` return proves income, never residence — and
+			// counting it here only let the year fall through to citizenship, which
+			// raised a card for a country the filing never mentioned. The filing
+			// still puts them on its own card: that is `taxYearCards` reading it.
 			const minor = birthYear !== null && year - birthYear < filingAge;
-			const evidence =
-				declared.length > 0 ||
-				statementCountries.length > 0 ||
-				employmentCountries.length > 0 ||
-				filings.some((f) => f.personId === person.id && f.year === year);
-			if (minor && !evidence) continue;
-			resolved.push({
-				personId: person.id,
-				year,
-				residence: residenceForYear({
-					declared,
-					statementCountries,
-					employmentCountries,
-					citizenship: input.citizenship?.[person.id] ?? null
-				})
-			});
+			if (minor && residence.evidence === 'citizenship') continue;
+			resolved.push({ personId: person.id, year, residence });
 		}
 	}
 	return resolved;

@@ -6,7 +6,7 @@ import { person } from '$lib/server/db/schema';
 import { personHues } from '$lib/people';
 import { countryName } from '$lib/life/geo/countries';
 import { ENUMS, isEnumValue } from '$lib/enums';
-import { saveUploadAndHash } from '$lib/server/system/files';
+import { removeUpload, saveUploadAndHash } from '$lib/server/system/files';
 import { tripReadiness } from '$lib/server/life/readiness';
 import { visaCaption } from '$lib/life/visa';
 import {
@@ -75,7 +75,7 @@ async function attachFile(file: File, bookingId: string, trip: string): Promise<
 	} catch (cause) {
 		return cause instanceof Error ? cause.message : 'That file cannot be attached.';
 	}
-	await attachBookingFile({
+	const filed = await attachBookingFile({
 		bookingId,
 		tripId: trip,
 		name: file.name.replace(/\.[^.]+$/, '') || 'Confirmation',
@@ -83,7 +83,11 @@ async function attachFile(file: File, bookingId: string, trip: string): Promise<
 		contentHash: saved.contentHash,
 		ext: (file.name.split('.').pop() ?? 'PDF').toUpperCase()
 	});
-	return null;
+	if (filed) return null;
+	// A page left open on a trip deleted since: nothing was filed, so the bytes
+	// just saved are nobody's.
+	await removeUpload(saved.storedName);
+	return 'This trip has been deleted, so nothing can be attached to it.';
 }
 
 export const actions: Actions = {

@@ -10,6 +10,7 @@
 	 */
 	import { enhance } from '$app/forms';
 	import Icon from '$lib/components/Icon.svelte';
+	import { documentFileHref } from '$lib/ui/file-viewer';
 	import type { IconName } from '$lib/icons';
 	import type { EnumValue } from '$lib/enums';
 
@@ -22,6 +23,9 @@
 		reference: string;
 		documentId: string | null;
 		documentName: string | null;
+		documentExt: string | null;
+		/** False for a confirmation that is a record with no file behind it. */
+		documentHasFile: boolean;
 	}
 
 	let {
@@ -106,10 +110,24 @@
 						     with five documents still knows which is this flight's. -->
 						<span class="paper">
 							{#if booking.documentId}
-								<a class="attached" href="/documents/{booking.documentId}/file" target="_blank">
-									<Icon name="receipt" size={13} />
-									{booking.documentName ?? 'Confirmation'}
-								</a>
+								{#if booking.documentHasFile}
+									<!-- `data-file-ext` lets the in-page viewer take the click. -->
+									<a
+										class="attached"
+										href={documentFileHref(booking.documentId)}
+										target="_blank"
+										rel="noopener"
+										data-file-ext={booking.documentExt}
+									>
+										<Icon name="receipt" size={13} />
+										{booking.documentName ?? 'Confirmation'}
+									</a>
+								{:else}
+									<span class="attached">
+										<Icon name="receipt" size={13} />
+										{booking.documentName ?? 'Confirmation'}
+									</span>
+								{/if}
 								<form method="POST" action="?/detachBooking" use:enhance>
 									<input type="hidden" name="id" value={booking.id} />
 									<button class="unlink" type="submit">Unhook</button>

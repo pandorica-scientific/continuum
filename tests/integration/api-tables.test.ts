@@ -174,6 +174,34 @@ describe("the database's refusals", () => {
 		expect(refused.message).toMatch(/read-only/);
 	});
 
+	// Postgres' detail for a NOT NULL or CHECK refusal is "Failing row contains
+	// (…)": the whole row, hidden columns included.
+	it('never answers with the failing row, which holds the hidden columns', async () => {
+		const someone = await makePerson(testDb, { passwordHash: 'hash-that-must-not-leak' });
+		const refused = await refusal(
+			updateRow(EVERYTHING, 'person', query({ id: someone.id }), { name: null }, testDb)
+		);
+		expect(refused.status).toBe(400);
+		expect(refused.message).toMatch(/not-null/);
+		expect(refused.message).not.toMatch(/Failing row|hash-that-must-not-leak/);
+	});
+
+	// ON DELETE RESTRICT and NO ACTION hold a delete back for the same reason.
+	it('answers a delete a RESTRICT key holds back with 409, as any other held delete', async () => {
+		const [shelf] = await insertRows(
+			EVERYTHING,
+			'shelf',
+			{ key: 'cars', label: 'Cars', template: 'dossier', unit: 'subject', question: 'Which car?' },
+			testDb
+		);
+		await makeDocument(testDb, { shelfId: shelf.id as string });
+		const refused = await refusal(
+			deleteRow(EVERYTHING, 'shelf', query({ id: shelf.id as string }), testDb)
+		);
+		expect(refused.status).toBe(409);
+		await testDb.execute(`delete from document; delete from shelf where key = 'cars'`);
+	});
+
 	it('does not know the tables that decide who can sign in', async () => {
 		expect((await refusal(listRows(EVERYTHING, 'session', query({}), testDb))).status).toBe(404);
 		expect(
@@ -203,10 +231,136 @@ describe('reading rows', () => {
 		).toHaveLength(1);
 	});
 
+	// Postgres keeps microseconds and an answer carries milliseconds; a value
+	// the API handed out has to find its own row again.
+	it('finds a row by a timestamp it answered with, offset and all', async () => {
+		await insertRows(EVERYTHING, 'tag', { name: 'Travel', normalised_name: 'travel' }, testDb);
+		const [tag] = (await listRows(EVERYTHING, 'tag', query({}), testDb)).rows;
+		const found = await listRows(
+			EVERYTHING,
+			'tag',
+			query({ created_at: tag.created_at as string }),
+			testDb
+		);
+		expect(found.rows.map((row) => row.id)).toEqual([tag.id]);
+
+		await updateRow(
+			EVERYTHING,
+			'tag',
+			query({ id: tag.id as string }),
+			{ created_at: '2026-09-27T10:00:00.123+02:00' },
+			testDb
+		);
+		// As a query string arrives: its `+` reads as a space.
+		const spaced = new URLSearchParams('created_at=2026-09-27T10:00:00.123+02:00');
+		expect((await listRows(EVERYTHING, 'tag', spaced, testDb)).total).toBe(1);
+	});
+
+	// 0050 would be stored and read back by the driver as 1950.
+	it('refuses a timestamp the driver would read back as another year', async () => {
+		const refused = await refusal(
+			insertRows(
+				EVERYTHING,
+				'tag',
+				{ name: 'Old', normalised_name: 'old', created_at: '0050-01-01T00:00:00Z' },
+				testDb
+			)
+		);
+		expect(refused.status).toBe(400);
+		expect((await listRows(EVERYTHING, 'tag', query({}), testDb)).total).toBe(0);
+	});
+
+	it('takes a page size in digits only', async () => {
+		for (const limit of ['', '0x10', '1e2', '-1']) {
+			expect(
+				(await refusal(listRows(EVERYTHING, 'trip', query({ limit }), testDb))).status,
+				limit
+			).toBe(400);
+		}
+	});
+
 	it('carries money as whole minor units, as the rest of the API does', async () => {
 		const txn = await makeTransaction(testDb, { amountMinor: -123456n });
 		const { rows } = await listRows(EVERYTHING, 'transaction', query({ id: txn.id }), testDb);
 		expect(rows[0].amount_minor).toBe(-123456);
+	});
+});
+
+describe('rows the app depends on', () => {
+	it('fixes a shelf key once the shelf exists, and keeps a system shelf', async () => {
+		const [shelf] = await insertRows(
+			EVERYTHING,
+			'shelf',
+			{ key: 'boats', label: 'Boats', template: 'dossier', unit: 'subject', question: 'Which?' },
+			testDb
+		);
+		const moved = await refusal(
+			updateRow(EVERYTHING, 'shelf', query({ id: shelf.id as string }), { key: 'x' }, testDb)
+		);
+		expect(moved.message).toMatch(/fixed/);
+		await deleteRow(EVERYTHING, 'shelf', query({ id: shelf.id as string }), testDb);
+
+		const [inbox] = await testDb
+			.select({ id: schema.shelf.id })
+			.from(schema.shelf)
+			.where(eq(schema.shelf.key, 'inbox'));
+		const kept = await refusal(deleteRow(EVERYTHING, 'shelf', query({ id: inbox.id }), testDb));
+		expect(kept.status).toBe(409);
+		expect(kept.message).toMatch(/system shelf/);
+	});
+
+	it('keeps a built-in document type and deletes a household one', async () => {
+		const kept = await refusal(
+			deleteRow(EVERYTHING, 'document_type', query({ key: 'payslip' }), testDb)
+		);
+		expect(kept.status).toBe(409);
+		await insertRows(
+			EVERYTHING,
+			'document_type',
+			{ key: 'boat_papers', label: 'Boat papers' },
+			testDb
+		);
+		expect(
+			await deleteRow(EVERYTHING, 'document_type', query({ key: 'boat_papers' }), testDb)
+		).toMatchObject({ key: 'boat_papers', builtin: false });
+	});
+
+	it('removes a member but never an administrator', async () => {
+		const admin = await makePerson(testDb, { name: 'Ada Admin', role: 'admin' });
+		const member = await makePerson(testDb, { name: 'Max Member', role: 'member' });
+		const refused = await refusal(deleteRow(EVERYTHING, 'person', query({ id: admin.id }), testDb));
+		expect(refused.status).toBe(409);
+		expect(refused.message).toMatch(/Settings/);
+		expect(await deleteRow(EVERYTHING, 'person', query({ id: member.id }), testDb)).toMatchObject({
+			id: member.id
+		});
+	});
+
+	// The sweep deletes a removed trip a minute after `removed_at`; any other
+	// time would skip that minute or hide the trip for good.
+	it('stamps removed_at with the time of the call, whatever time is sent', async () => {
+		const [trip] = await insertRows(EVERYTHING, 'trip', holiday, testDb);
+		const before = Date.now();
+		for (const sent of ['2000-01-01T00:00:00Z', '2999-01-01T00:00:00Z']) {
+			const removed = await updateRow(
+				EVERYTHING,
+				'trip',
+				query({ id: trip.id as string }),
+				{ removed_at: sent },
+				testDb
+			);
+			const at = Date.parse(removed.removed_at as string);
+			expect(at).toBeGreaterThanOrEqual(before - 1000);
+			expect(at).toBeLessThanOrEqual(Date.now() + 1000);
+		}
+		const restored = await updateRow(
+			EVERYTHING,
+			'trip',
+			query({ id: trip.id as string }),
+			{ removed_at: null },
+			testDb
+		);
+		expect(restored.removed_at).toBeNull();
 	});
 });
 
@@ -353,5 +507,23 @@ describe('payslips, for a token without Salary', () => {
 			.where(eq(schema.document.id, lease.id));
 		expect(kept.type).toBe('contract');
 		expect(someone.id).toBeTruthy();
+	});
+
+	// A document is an entity, so a link, a lane or a tag pointing at "any
+	// record" can point at a payslip through its target as well.
+	it('keeps a payslip out of the far end of a link too', async () => {
+		const { payslip, lease } = await filed();
+		const linked = await refusal(
+			insertRows(ARCHIVE, 'document_link', { document_id: lease.id, target_id: payslip.id }, testDb)
+		);
+		expect(linked.status).toBe(403);
+
+		await makeDocumentLink(testDb, { documentId: lease.id, targetId: payslip.id });
+		const links = await listRows(ARCHIVE, 'document_link', query({}), testDb);
+		expect(links.rows.map((row) => row.target_id)).not.toContain(payslip.id);
+		expect((await listRows(PAYROLL, 'document_link', query({}), testDb)).rows).toContainEqual({
+			document_id: lease.id,
+			target_id: payslip.id
+		});
 	});
 });

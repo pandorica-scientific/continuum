@@ -55,7 +55,7 @@ export function documentTypesOutOfReach(
  * The curated endpoints, by the segment after `/api/v1/`. Tags hang off every
  * kind of record and net worth adds all of them up, so both are `shared`.
  */
-const ENDPOINT_REACH: Record<string, Reach> = {
+export const ENDPOINT_REACH: Record<string, Reach> = {
 	accounts: 'ledger',
 	transactions: 'ledger',
 	categories: 'ledger',
@@ -69,22 +69,17 @@ const ENDPOINT_REACH: Record<string, Reach> = {
  *
  * Null for the two routes that answer row by row and check each row
  * themselves: the table list, which shows a token only its own tables, and
- * files, whose area is the record a file is attached to. Anything nobody has
- * placed is `shared`, so a route added later is refused to a limited token
- * until somebody decides otherwise.
+ * files, whose area is the record a file is attached to. Each of those is
+ * placed to one segment below it — a table's name, a file's id — and no
+ * deeper, so a route added later beneath either is not waved through with it.
+ * Anything nobody has placed is `shared`, so a route added later is refused to
+ * a limited token until somebody decides otherwise.
  */
-export function reachOfPath(
-	pathname: string,
-	tableReach: (table: string) => Reach | undefined
-): Reach | null {
-	const [version, first, second] = pathname.replace(/^\/api\/?/, '').split('/');
+export function reachOfPath(pathname: string, tableReach: (table: string) => Reach): Reach | null {
+	const [version, first, ...rest] = pathname.replace(/^\/api\/?/, '').split('/');
 	if (version !== 'v1' || !first) return 'shared';
-	if (first === 'tables') return second ? (tableReach(second) ?? 'shared') : null;
-	if (first === 'files') return null;
-	return ENDPOINT_REACH[first] ?? 'shared';
-}
-
-/** "trips, cookbook", for a refusal that says what the token does reach. */
-export function describeAreas(areas: readonly ApiArea[]): string {
-	return areas.length === 0 ? 'nothing' : areas.join(', ');
+	if (first === 'tables' && rest.length <= 1) return rest[0] ? tableReach(rest[0]) : null;
+	if (first === 'files' && rest.length <= 1) return null;
+	// Own keys only: `constructor` is on every object and names no endpoint.
+	return Object.hasOwn(ENDPOINT_REACH, first) ? ENDPOINT_REACH[first] : 'shared';
 }

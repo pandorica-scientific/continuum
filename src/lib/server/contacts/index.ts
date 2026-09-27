@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { extname } from 'node:path';
-import { asc, eq, sql } from 'drizzle-orm';
-import { db } from '$lib/server/db';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { db, type Db } from '$lib/server/db';
 import { contact, contactLink, entity } from '$lib/server/db/schema';
+import type { EntityKind } from '$lib/enums';
+import { asRowId } from '$lib/ids';
 import { removeUpload } from '$lib/server/system/files';
 import { normaliseSearch } from '$lib/contacts/search';
 
@@ -154,25 +156,74 @@ export const emptyLinks = (): ContactLinks => ({
 });
 
 /**
- * Replace every link for one contact, in one transaction.
+ * The kinds of record the contact form edits links to, each with the bucket it
+ * posts them in. One list, read by the load and by the save, so the two cannot
+ * disagree about which links a save is allowed to replace.
+ */
+const EDITED_KINDS = {
+	tenancy: 'tenancyIds',
+	property: 'propertyIds',
+	loan: 'loanIds',
+	account: 'accountIds'
+} as const satisfies Partial<Record<EntityKind, keyof ContactLinks>>;
+
+const editedKinds = Object.keys(EDITED_KINDS) as (keyof typeof EDITED_KINDS)[];
+
+/**
+ * Replace this contact's links of the kinds the form edits, in one transaction.
  *
  * Delete-then-insert rather than a diff: the sets are a handful of ids, and
  * computing a minimal patch would be more code with more ways to leave a stale
- * row behind. One `contact_link` table with the target as an `entity` means
- * there is no per-kind column to confuse; what the caller must still get
- * right is which bucket an id came from, checked when links are read back.
+ * row behind.
+ *
+ * Only those kinds, though. A contact can be linked to anything that is an
+ * entity — a trip or an idea (over the API, or carried across when an idea is
+ * promoted), an organisation, a bottle — and this form neither shows nor posts
+ * those, so deleting every link and putting back what it posted wiped them on
+ * every save. For the same reason an id goes back only into the kind it was
+ * posted as: one naming anything else would be a link this form could never
+ * take away again.
  */
-export async function replaceContactLinks(id: string, links: ContactLinks): Promise<void> {
-	const unique = (ids: string[]) => [...new Set(ids)].filter(Boolean);
+export async function replaceContactLinks(
+	id: string,
+	links: ContactLinks,
+	handle: Db = db
+): Promise<void> {
+	const posted = editedKinds.flatMap((kind) =>
+		links[EDITED_KINDS[kind]].map((targetId) => ({ kind, targetId: asRowId(targetId) }))
+	);
 
-	await db.transaction(async (tx) => {
-		await tx.delete(contactLink).where(eq(contactLink.contactId, id));
-		const targetIds = unique([
-			...links.tenancyIds,
-			...links.propertyIds,
-			...links.loanIds,
-			...links.accountIds
-		]);
+	await handle.transaction(async (tx) => {
+		await tx
+			.delete(contactLink)
+			.where(
+				and(
+					eq(contactLink.contactId, id),
+					inArray(
+						contactLink.targetId,
+						tx.select({ id: entity.id }).from(entity).where(inArray(entity.kind, editedKinds))
+					)
+				)
+			);
+		if (posted.length === 0) return;
+
+		const kinds = await tx
+			.select({ id: entity.id, kind: entity.kind })
+			.from(entity)
+			.where(
+				inArray(
+					entity.id,
+					posted.map((link) => link.targetId)
+				)
+			);
+		const kindOf = new Map(kinds.map((row) => [row.id, row.kind]));
+		const targetIds = [
+			...new Set(
+				posted
+					.filter((link) => kindOf.get(link.targetId) === link.kind)
+					.map((link) => link.targetId)
+			)
+		];
 		if (targetIds.length > 0) {
 			await tx
 				.insert(contactLink)
@@ -204,13 +255,11 @@ export async function loadContactLinks(): Promise<Map<string, ContactLinks>> {
 	};
 
 	for (const row of rows) {
-		const into = bucket(row.contactId);
-		if (row.kind === 'tenancy') into.tenancyIds.push(row.targetId);
-		else if (row.kind === 'property') into.propertyIds.push(row.targetId);
-		else if (row.kind === 'loan') into.loanIds.push(row.targetId);
-		else if (row.kind === 'account') into.accountIds.push(row.targetId);
-		// Any other kind is a link this screen does not render. Ignored rather than
-		// bucketed somewhere arbitrary, so a future kind cannot show up mislabelled.
+		// Any kind the form does not edit is a link this screen does not render.
+		// Ignored rather than bucketed somewhere arbitrary, so a future kind cannot
+		// show up mislabelled — and a save leaves it alone, for the same reason.
+		const into = EDITED_KINDS[row.kind as keyof typeof EDITED_KINDS];
+		if (into) bucket(row.contactId)[into].push(row.targetId);
 	}
 	return byContact;
 }

@@ -11,17 +11,16 @@ import { apiToken } from '$lib/server/db/schema';
 import { hashToken } from '$lib/server/auth/token-hash';
 import type { ApiAccess, ApiArea, ApiGrant } from './areas';
 
-export type { ApiAccess, ApiArea, ApiGrant } from './areas';
-
 /**
  * @param areas The areas the token reaches, or null for all of them. Kept as
  * given, so an empty list is a token that reaches nothing — never widened to
- * everything on the way in.
+ * everything on the way in. Required, with no default: a caller that forgot
+ * to ask would otherwise issue a token to the whole household.
  */
 export async function createToken(
 	label: string,
 	access: ApiAccess,
-	areas: readonly ApiArea[] | null = null,
+	areas: readonly ApiArea[] | null,
 	handle: Queryable = db
 ): Promise<{ raw: string; id: string }> {
 	const raw = randomBytes(32).toString('base64url');

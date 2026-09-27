@@ -196,15 +196,15 @@ dedupFingerprint)` is unique; fingerprints prefer the bank's own reference,
 - **Entity links**: every record that can be tagged, filed a document against
   or linked to a contact carries a row in the `entity` supertype, and the three
   link tables (`document_link`, `tag_link`, `contact_link`) point at that rather
-  than at a table per pair. Registration is a BEFORE INSERT trigger on each of
-  the twelve registered tables, and each concrete table carries a generated
+  than at a table per pair. Registration is a BEFORE INSERT trigger on each
+  table `ENTITY_KINDS` names, and each concrete table carries a generated
   `entity_kind` column plus a composite foreign key into `(id, kind)`, which is
   what makes a mismatched kind unrepresentable rather than merely discouraged —
   none of which Drizzle models, so `drizzle-kit push` would build a database
   without it. `DOCUMENT_TARGET_KINDS` (`src/lib/server/documents/targets.ts`) is
-  the one list of the nine kinds a document may be filed against — person,
-  property, tenancy, account, loan, contact, subject, transaction, tax statement
-  — and every picker, filter and "what is filed here" query reads it instead of
+  the one list of the kinds a document may be filed against — people,
+  properties, accounts and transactions, organisations and tax statements,
+  trips, ideas, bottles and recipes among them — and every picker, filter and "what is filed here" query reads it instead of
   repeating four of them. There is no free-text subject anywhere, so a rename
   follows every document and a typo cannot mint a phantom column; catch-all
   subjects are case-insensitively unique.
@@ -295,11 +295,13 @@ only the session.
   budget lets any caller shut everyone out. Set `ADDRESS_HEADER`/`XFF_DEPTH`
   only where a trusted proxy chain is the only way in.
 - **API authentication** is applied once by the SvelteKit hook to the complete
-  `/api/v1` boundary, and so is each token's access and areas. A newly added
+  `/api` boundary — not `/api/v1`, since the sign-in redirect exempts the whole
+  `/api` tree — and so is each token's access and areas. A newly added
   endpoint therefore fails closed before its handler runs — refused to a
   read-only token if it writes, and to a token limited to some areas until it is
   placed in one; endpoint files only format domain results. `/api` is exempt from
-  the form-origin check because nothing under it reads a cookie.
+  the form-origin check because nothing under it reads a cookie: the hook does
+  not look the session up for it at all.
 - **Initial setup** is guarded by a singleton row claimed in the same
   transaction that creates the household. Losing concurrent requests do no
   password hashing, and one request can initialise at most twenty people.
@@ -391,10 +393,12 @@ only the session.
   different questions and never each other's: `visit` is the only answer to
   where the household has been, and `sight_visit` the only answer to what it
   has seen. A rubbed coin over an uncoloured country is correct. A trip or an
-  idea is removed by setting `removed_at`, which every read there skips, and
-  deleted — with the documents attached to it alone — by the `trip-removals`
-  boot task a minute later; that minute is what undo restores from, so undo
-  brings back the same row rather than a copy
+  idea is removed by setting `removed_at`, which every read there skips and
+  every write that files paper refuses, and deleted — with the documents
+  attached to it alone — by the `trip-removals` boot task a minute later; that
+  minute is what undo restores from, so undo brings back the same row rather
+  than a copy. A payslip, or a document another record cites (a salary month,
+  an import, a bill), is never deleted with it: it only loses the link
 - `tests/unit` — pure logic; `tests/acceptance` — the committed synthetic
   statement corpus; `tests/integration` — isolated embedded-PostgreSQL rollback
   and concurrency cases. A handful of unit tests live beside the module they

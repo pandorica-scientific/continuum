@@ -39,7 +39,7 @@ describe('paper that belongs to an area of its own', () => {
 });
 
 describe('the area a path touches', () => {
-	const tables = (name: string) => (name === 'trip' ? 'trips' : undefined);
+	const tables = (name: string) => (name === 'trip' ? 'trips' : 'shared');
 
 	it('is the table area for one table, and shared for a table nobody knows', () => {
 		expect(reachOfPath('/api/v1/tables/trip', tables)).toBe('trips');
@@ -50,6 +50,13 @@ describe('the area a path touches', () => {
 		expect(reachOfPath('/api/v1/tables', tables)).toBeNull();
 		expect(reachOfPath('/api/v1/files', tables)).toBeNull();
 		expect(reachOfPath('/api/v1/files/abc', tables)).toBeNull();
+	});
+
+	// Placed to one segment below: a route added deeper is nobody's yet.
+	it('is shared below a table or a file, and for a name every object carries', () => {
+		expect(reachOfPath('/api/v1/files/abc/versions', tables)).toBe('shared');
+		expect(reachOfPath('/api/v1/tables/trip/export', tables)).toBe('shared');
+		expect(reachOfPath('/api/v1/constructor', tables)).toBe('shared');
 	});
 
 	it('is shared for anything nobody placed, so a later route fails closed', () => {

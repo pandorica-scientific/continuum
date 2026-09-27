@@ -44,7 +44,8 @@ export interface NetWorth {
 
 /**
  * Read-only — this runs on every page load and from `GET /api/v1/networth`,
- * so writing here would make the documented read-only API mutate on every poll.
+ * so writing here would make a GET, which the API promises changes nothing,
+ * mutate on every poll.
  * Snapshots are written separately by `recordNetWorthSnapshot`.
  */
 export async function computeNetWorth(handle: Queryable = db): Promise<NetWorth> {
@@ -296,7 +297,7 @@ export async function computeNetWorth(handle: Queryable = db): Promise<NetWorth>
 /**
  * Record today's net worth, so the month-on-month delta has a history to read.
  * One row per day, upserted — called from the scheduler, never from a page load
- * or from the read-only API.
+ * or from an API read.
  */
 export async function recordNetWorthSnapshot(handle: Queryable = db): Promise<void> {
 	const { totalMinor, baseCurrency } = await computeNetWorth(handle);

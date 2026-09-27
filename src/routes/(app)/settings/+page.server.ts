@@ -78,6 +78,7 @@ import {
 	setTokenAreas
 } from '$lib/server/api/tokens';
 import { areasFromForm } from '$lib/api/areas';
+import { areasWithData } from '$lib/server/api/tables';
 import type { Action } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -269,6 +270,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		status,
 		ocrLanguages: ocrLangs ? ocrLangs.split('+') : [],
 		ocrLanguageOptions: OCR_LANGUAGES.map((code) => ({ code, label: OCR_LANGUAGE_LABELS[code] })),
+		// Only the areas some table or endpoint belongs to: a token limited to one
+		// with nothing of its own would answer 403 to every call.
+		apiAreas: isAdmin ? areasWithData() : [],
 		apiTokens: tokens.map((t) => ({
 			id: t.id,
 			label: t.label,

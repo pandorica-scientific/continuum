@@ -92,7 +92,7 @@ export const ENUMS = {
 	 * Settings toggles name, plus `ledger` for the accounts, transactions,
 	 * categories and rules no toggle owns. A table belongs to exactly one of
 	 * these or to `shared` — people, tags, the entity registry — which is not
-	 * grantable and so only a token limited to nothing reaches. Written out
+	 * grantable and so only a token that is not limited at all reaches. Written out
 	 * rather than read from the module registry, because this file is loaded by
 	 * drizzle-kit outside Vite; `tests/unit/api-areas.test.ts` holds the two
 	 * lists together.
