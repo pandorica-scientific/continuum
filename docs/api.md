@@ -18,19 +18,27 @@ Both kinds read exactly the same data; they differ only in writing. A
 
 A token reaches **everything**, or only the **areas** ticked for it — the module
 toggles (Trips, Cookbook, Collections, Tax, Salary, Documents and the rest) plus
-**Accounts & transactions** for the ledger no toggle owns. It is chosen when the
-token is created and changeable later, like read or read-write. Settings offers
-only the areas something belongs to: Retirement adds up other areas' figures and
-Home Assistant lives in Settings, so neither has anything of its own to reach.
+**Accounts & transactions** for the ledger no toggle owns and **Household** for
+who lives here. It is chosen when the token is created and changeable later, like
+read or read-write. Settings offers only the areas something belongs to:
+Retirement adds up other areas' figures and Home Assistant lives in Settings, so
+neither has anything of its own to reach.
 
 Each table belongs to one area; `GET /api/v1/tables` lists a limited token's own
 tables only, with each table's `area`. People, tags, organisations, currencies, the
 entity registry and net worth serve every area at once, so only a token that
 reaches everything reaches them — a token limited to Trips cannot read who lives in
-the household or what anything else is tagged with. Of the endpoints below,
-accounts, transactions, categories and cash flow belong to the ledger; tags and net
-worth to everything, and a transaction's tags are left out for a token limited to
-the ledger. Anything outside a token's areas is a `403`.
+the household or what anything else is tagged with. **Household** is the one
+exception: it reads each person's `id`, `name`, `birth_year` and `citizenship`
+under `/api/v1/tables/person`, and nothing else of theirs — not who is an
+administrator or may sign in, and not the paper filed against them. It writes none
+of it, whether the token is read-only or read-write; adding or renaming somebody
+needs a token that reaches everything. Tick it beside Trips so a travel planner
+can say who a trip's members are.
+
+Of the endpoints below, accounts, transactions, categories and cash flow belong to
+the ledger; tags and net worth to everything, and a transaction's tags are left out
+for a token limited to the ledger. Anything outside a token's areas is a `403`.
 
 A travel planner, for example, gets a **read-write** token limited to **Trips**: it
 can add ideas and trips, attach a plan to either, and see nothing else.

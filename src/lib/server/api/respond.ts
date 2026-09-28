@@ -2,7 +2,7 @@
 // Shared response shape and the bearer-token gate for /api.
 
 import { verifyToken } from '$lib/server/api/tokens';
-import { tableReach } from '$lib/server/api/tables';
+import { tableReach, tableReadReach } from '$lib/server/api/tables';
 import { reaches, reachOfPath, type ApiGrant } from '$lib/server/api/areas';
 import { describeReach } from '$lib/api/areas';
 import { blockedForSeconds, recordFailure } from '$lib/server/auth/ratelimit';
@@ -100,8 +100,12 @@ async function requireToken(
 	// The same reasoning for areas: decided here, so an endpoint added later is
 	// refused to a limited token without its handler having to ask. The two
 	// routes that answer row by row (the table list, files) get the grant and
-	// check each row themselves.
-	const reach = reachOfPath(routedPath(pathname), tableReach);
+	// check each row themselves. A table another area reads part of is read
+	// with that area and written only with the table's own.
+	const reach = reachOfPath(
+		routedPath(pathname),
+		READ_METHODS.has(request.method) ? tableReadReach : tableReach
+	);
 	if (reach !== null && !reaches(grant, reach)) {
 		return apiError(
 			`This token reaches ${describeReach(grant.areas ?? [])} only; an administrator can widen it in Settings → API tokens.`,

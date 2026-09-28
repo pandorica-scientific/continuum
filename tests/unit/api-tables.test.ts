@@ -132,6 +132,8 @@ describe('which tables /api/v1/tables reaches', () => {
 		const areas = areasWithData();
 		expect(areas).toContain('trips');
 		expect(areas).toContain('ledger');
+		// Placed by the part of the person table it reads, not by a table of its own.
+		expect(areas).toContain('household');
 		expect(areas).not.toContain('retirement');
 		expect(areas).not.toContain('home');
 	});
@@ -275,6 +277,33 @@ describe('which tables /api/v1/tables reaches', () => {
 		expect(names).not.toContain('salary_entry');
 		expect(names).not.toContain('person');
 		expect(describeTables({ access: 'read', areas: [] })).toEqual([]);
+	});
+
+	// The boundary reads a table with a view by the view's area alone, which is
+	// right only while the whole table is one no limited token reaches.
+	it('gives a view only to a shared table', () => {
+		const viewed = [...apiTables().values()].filter((t) => t.view);
+		expect(viewed.map((t) => t.name)).toEqual(['person']);
+		for (const t of viewed) expect(t.reach, t.name).toBe('shared');
+	});
+
+	// Who somebody is, not what Settings decides about them nor how they like
+	// their screens.
+	it("shows Household a person's name, birth year and citizenship, and none of it writable", () => {
+		const [person] = describeTables({ access: 'read-write', areas: ['household'] });
+		expect(person).toMatchObject({
+			name: 'person',
+			area: 'household',
+			writable: false,
+			primaryKey: ['id']
+		});
+		expect(person.columns.map((c) => c.name)).toEqual(['id', 'name', 'birth_year', 'citizenship']);
+		expect(person.columns.every((c) => !c.writable && !c.updatable)).toBe(true);
+		// Everything still reads the whole table, and writes the name.
+		const whole = describeTables(EVERYTHING).find((t) => t.name === 'person');
+		expect(whole?.area).toBe('shared');
+		expect(whole?.columns.map((c) => c.name)).toContain('role');
+		expect(whole?.columns.find((c) => c.name === 'name')?.writable).toBe(true);
 	});
 });
 

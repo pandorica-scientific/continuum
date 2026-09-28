@@ -7,17 +7,25 @@ import { MODULES } from '$lib/modules/registry';
 type ApiArea = EnumValue<'api_token.area'>;
 
 /**
+ * The areas that are no module, and so name themselves: the ledger is the part
+ * of the app that is always on, and the household is its people, as Settings →
+ * Household lists them.
+ */
+const OWN_NAMES = {
+	ledger: { emoji: '💰', label: 'Accounts & transactions' },
+	household: { emoji: '👥', label: 'Household' }
+};
+
+/**
  * Worded the way the module toggles word them, so "Trips" in the token form is
- * the same Trips as in the module list above it. The ledger is no module — it
- * is the part of the app that is always on — so it names itself.
+ * the same Trips as in the module list above it.
  */
 export const API_AREA_OPTIONS: { key: ApiArea; emoji: string; label: string }[] = ENUMS[
 	'api_token.area'
-].map((key) =>
-	key === 'ledger'
-		? { key, emoji: '💰', label: 'Accounts & transactions' }
-		: { key, emoji: MODULES[key].emoji, label: MODULES[key].label }
-);
+].map((key) => {
+	const named = key === 'ledger' || key === 'household' ? OWN_NAMES[key] : MODULES[key];
+	return { key, emoji: named.emoji, label: named.label };
+});
 
 /**
  * The areas a token form asked for: null for everything, otherwise the ticked

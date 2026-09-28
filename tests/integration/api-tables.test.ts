@@ -186,6 +186,34 @@ describe("the database's refusals", () => {
 		expect(refused.message).not.toMatch(/Failing row|hash-that-must-not-leak/);
 	});
 
+	it("reads Household a person's name, birth year and citizenship, and writes nothing", async () => {
+		const census = { access: 'read-write', areas: ['household'] } as const;
+		const someone = await makePerson(testDb, {
+			name: 'Ada',
+			birthYear: 1990,
+			citizenship: 'CZ',
+			passwordHash: 'hash'
+		});
+		const listed = await listRows(census, 'person', query({ id: someone.id }), testDb);
+		expect(listed.rows).toEqual([
+			{ id: someone.id, name: 'Ada', birth_year: 1990, citizenship: 'CZ' }
+		]);
+		// A column outside the view is not there to filter on, nor to write.
+		expect(
+			(await refusal(listRows(census, 'person', query({ role: 'admin' }), testDb))).status
+		).toBe(400);
+		expect(
+			(
+				await refusal(
+					updateRow(census, 'person', query({ id: someone.id }), { name: 'Eve' }, testDb)
+				)
+			).status
+		).toBe(405);
+		// Without Household, a limited token is not served the table at all.
+		const planner = { access: 'read-write', areas: ['trips'] } as const;
+		expect((await refusal(listRows(planner, 'person', query({}), testDb))).status).toBe(403);
+	});
+
 	// ON DELETE RESTRICT and NO ACTION hold a delete back for the same reason.
 	it('answers a delete a RESTRICT key holds back with 409, as any other held delete', async () => {
 		const [shelf] = await insertRows(

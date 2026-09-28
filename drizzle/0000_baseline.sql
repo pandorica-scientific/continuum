@@ -1406,7 +1406,7 @@ ALTER TABLE person ADD CONSTRAINT person_citizenship_check
 -- An array, so the generated enum CHECKs (one value per column) cannot cover
 -- it; written from the same list instead.
 ALTER TABLE api_token ADD CONSTRAINT api_token_areas_check
-	CHECK (areas IS NULL OR areas <@ ARRAY['ledger', 'import', 'property', 'investments', 'loans', 'retirement', 'salary', 'home', 'calendar', 'tax', 'documents', 'contacts', 'trips', 'cookbook', 'collections']::text[]);
+	CHECK (areas IS NULL OR areas <@ ARRAY['ledger', 'household', 'import', 'property', 'investments', 'loans', 'retirement', 'salary', 'home', 'calendar', 'tax', 'documents', 'contacts', 'trips', 'cookbook', 'collections']::text[]);
 --> statement-breakpoint
 ALTER TABLE broker_import_state ADD CONSTRAINT broker_import_state_singleton
 	CHECK (id = 'global');
