@@ -260,6 +260,20 @@ const TABLE_REACH: Record<string, Reach> = {
 	tag_link: 'shared'
 };
 
+/**
+ * The columns of a `shared` table that one area reads, and never writes, as
+ * table → the area and its columns. The rest of the table, and writing to it,
+ * stay with a token that reaches everything.
+ *
+ * - `person` to Household — who lives here: a name, a birth year and a
+ *   citizenship, so the person ids a trip's members carry are somebody. Who is
+ *   an administrator and who may sign in are Settings' business, and a
+ *   person's screen preferences nobody else's.
+ */
+const AREA_VIEWS: Record<string, { area: ApiArea; columns: readonly string[] }> = {
+	person: { area: 'household', columns: ['id', 'name', 'birth_year', 'citizenship'] }
+};
+
 /** Rows one call may list or insert. A household's largest table pages at this. */
 const MAX_ROWS = 1000;
 const DEFAULT_LIMIT = 100;
@@ -294,6 +308,12 @@ export interface ApiTable {
 	 * sits and through whichever column it names one.
 	 */
 	documentColumns: ApiColumn[];
+	/**
+	 * The part of this table another area reads, as a table of its own: those
+	 * columns only, never written, with that area as its reach. Null for a
+	 * table no other area reads.
+	 */
+	view: ApiTable | null;
 }
 
 /**
@@ -363,7 +383,7 @@ function describe(table: PgTable): ApiTable | null {
 			? only
 			: null;
 
-	return {
+	const whole: ApiTable = {
 		name: config.name,
 		table,
 		columns,
@@ -371,8 +391,22 @@ function describe(table: PgTable): ApiTable | null {
 		writable: writableTable,
 		generatedKey,
 		reach: TABLE_REACH[config.name] ?? 'shared',
-		documentColumns: columns.filter((c) => namesDocument(table, c.name, new Set()))
+		documentColumns: columns.filter((c) => namesDocument(table, c.name, new Set())),
+		view: null
 	};
+	const view = AREA_VIEWS[config.name];
+	if (view) {
+		const read = (c: ApiColumn) => view.columns.includes(c.name);
+		whole.view = {
+			...whole,
+			columns: columns.filter(read).map((c) => ({ ...c, writable: false, updatable: false })),
+			writable: false,
+			generatedKey: null,
+			reach: view.area,
+			documentColumns: whole.documentColumns.filter(read)
+		};
+	}
+	return whole;
 }
 
 let registry: Map<string, ApiTable> | null = null;
@@ -400,6 +434,28 @@ export function tableReach(name: string): Reach {
 }
 
 /**
+ * The area reading a table needs, for the boundary: its view's where it has
+ * one, and its own otherwise. Only a `shared` table has a view, so a token
+ * that reaches the whole table reaches the view too. Writing always needs the
+ * table's own, and so does a file attached to one of its rows: Household reads
+ * a person's name, not their passport scan.
+ */
+export function tableReadReach(name: string): Reach {
+	return apiTables().get(name)?.view?.reach ?? tableReach(name);
+}
+
+/**
+ * A table as this grant sees it: whole within its areas, only its view's
+ * columns where the grant reaches the view alone, and null where it sees none
+ * of it.
+ */
+function asSeenBy(grant: ApiGrant, table: ApiTable): ApiTable | null {
+	if (reaches(grant, table.reach)) return table;
+	if (table.view && reaches(grant, table.view.reach)) return table.view;
+	return null;
+}
+
+/**
  * The areas a token can usefully be limited to: each one some table or
  * endpoint belongs to. An area with nothing of its own — Retirement adds up
  * other areas' rows, Home Assistant lives in Settings — would make a token
@@ -407,7 +463,7 @@ export function tableReach(name: string): Reach {
  */
 export function areasWithData(): ApiArea[] {
 	const placed = new Set<Reach>([
-		...[...apiTables().values()].map((t) => t.reach),
+		...[...apiTables().values()].flatMap((t) => (t.view ? [t.reach, t.view.reach] : [t.reach])),
 		...Object.values(ENDPOINT_REACH)
 	]);
 	return ENUMS['api_token.area'].filter((area) => placed.has(area));
@@ -420,7 +476,8 @@ export function areasWithData(): ApiArea[] {
  */
 export function describeTables(grant: ApiGrant) {
 	return [...apiTables().values()]
-		.filter((t) => reaches(grant, t.reach))
+		.map((t) => asSeenBy(grant, t))
+		.filter((t): t is ApiTable => t !== null)
 		.sort((a, b) => a.name.localeCompare(b.name))
 		.map((t) => ({
 			name: t.name,
@@ -438,14 +495,22 @@ export function describeTables(grant: ApiGrant) {
 		}));
 }
 
-function requireTable(name: string): ApiTable {
+/**
+ * The table as this grant sees it. The boundary refuses a table outside the
+ * token's areas before any handler runs; asked again here so that a limited
+ * token is handed only the columns it reads, and a caller that skipped the
+ * boundary is refused rather than served the whole table.
+ */
+function requireTable(grant: ApiGrant, name: string): ApiTable {
 	const table = apiTables().get(name);
 	if (!table) throw new ApiError(`There is no table "${name}".`, 404);
-	return table;
+	const seen = asSeenBy(grant, table);
+	if (!seen) throw new ApiError(`This token does not reach table "${name}".`, 403);
+	return seen;
 }
 
-function requireWritable(name: string): ApiTable {
-	const table = requireTable(name);
+function requireWritable(grant: ApiGrant, name: string): ApiTable {
+	const table = requireTable(grant, name);
 	if (!table.writable) throw new ApiError(`Table "${name}" is read-only over the API.`, 405);
 	return table;
 }
@@ -792,7 +857,7 @@ export async function listRows(
 	params: URLSearchParams,
 	handle: Queryable = db
 ) {
-	const table = requireTable(name);
+	const table = requireTable(grant, name);
 	const limit = wholeParam(params, 'limit', DEFAULT_LIMIT, MAX_ROWS);
 	const offset = wholeParam(params, 'offset', 0, Number.MAX_SAFE_INTEGER);
 	const where = and(
@@ -825,7 +890,7 @@ export async function insertRows(
 	body: unknown,
 	handle: Queryable = db
 ) {
-	const table = requireWritable(name);
+	const table = requireWritable(grant, name);
 	const bodies = Array.isArray(body) ? body : [body];
 	if (bodies.length === 0 || bodies.length > MAX_ROWS) {
 		throw new ApiError(`Send from 1 to ${MAX_ROWS} rows.`, 400);
@@ -854,7 +919,7 @@ export async function updateRow(
 	body: unknown,
 	handle: Queryable = db
 ) {
-	const table = requireWritable(name);
+	const table = requireWritable(grant, name);
 	const where = and(rowKey(table, params), documentScope(table, grant));
 	const values = valuesFrom(table, body, 'update');
 	if (Object.keys(values).length === 0) throw new ApiError('Nothing to change.', 400);
@@ -882,7 +947,7 @@ export async function deleteRow(
 	params: URLSearchParams,
 	handle: Queryable = db
 ) {
-	const table = requireWritable(name);
+	const table = requireWritable(grant, name);
 	const where = and(rowKey(table, params), documentScope(table, grant));
 	const guard = PROTECTED_ROWS[table.name];
 	const rows = await refusingBadRows(() =>

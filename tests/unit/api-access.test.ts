@@ -8,6 +8,8 @@ const GRANTS: Record<string, { access: 'read' | 'read-write'; areas: string[] | 
 	writer: { access: 'read-write', areas: null },
 	// A travel planner: writes trips, reaches nothing else.
 	planner: { access: 'read-write', areas: ['trips'] },
+	// Who lives here, and nothing else.
+	census: { access: 'read-write', areas: ['household'] },
 	// Limited to an empty list: reaches nothing, never everything.
 	emptied: { access: 'read', areas: [] }
 };
@@ -123,6 +125,16 @@ describe('a token limited to some areas', () => {
 		]) {
 			expect((await call('GET', pathname, 'planner'))?.status, pathname).toBe(403);
 		}
+	});
+
+	// Household reads part of the person table, and writes none of it: adding,
+	// renaming or removing somebody still needs a token that reaches everything.
+	it('reads people with Household, and never writes them', async () => {
+		expect(await call('GET', '/api/v1/tables/person', 'census')).toBeNull();
+		for (const method of ['POST', 'PATCH', 'DELETE']) {
+			expect((await call(method, '/api/v1/tables/person', 'census'))?.status, method).toBe(403);
+		}
+		expect((await call('GET', '/api/v1/tables/trip', 'census'))?.status).toBe(403);
 	});
 
 	it('reaches nothing with an empty list', async () => {

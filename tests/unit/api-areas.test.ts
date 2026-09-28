@@ -7,9 +7,11 @@ import { areasFromForm, describeReach } from '$lib/api/areas';
 
 describe('the areas a token can be limited to', () => {
 	// Written out in enums.ts because drizzle-kit loads that file outside Vite;
-	// this is what keeps it the module list plus the ledger.
-	it('are the module toggles and the ledger, nothing more or less', () => {
-		expect([...ENUMS['api_token.area']].sort()).toEqual(['ledger', ...MODULE_KEYS].sort());
+	// this is what keeps it the module list plus the ledger and the household.
+	it('are the module toggles, the ledger and the household, nothing more or less', () => {
+		expect([...ENUMS['api_token.area']].sort()).toEqual(
+			['ledger', 'household', ...MODULE_KEYS].sort()
+		);
 	});
 });
 
@@ -118,5 +120,6 @@ describe('the areas a Settings form asks for', () => {
 		expect(describeReach(null)).toBe('everything');
 		expect(describeReach([])).toBe('nothing');
 		expect(describeReach(['trips', 'ledger'])).toBe('Accounts & transactions, Trips');
+		expect(describeReach(['household', 'trips'])).toBe('Household, Trips');
 	});
 });

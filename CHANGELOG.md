@@ -2,6 +2,14 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security
 
+## 0.12.1 — Unreleased
+
+> An API token can read who lives in the household without reaching everything.
+
+### ✨ Added
+
+- 👥 **A token can be given Household, which reads each person's name, birth year and citizenship and writes none of it** — a travel planner limited to Trips could see a trip's members only as ids, since people were out of reach of any limited token.
+
 ## 0.12.0 — Unreleased
 
 > An API token can be read-write and limited to parts of the household, and a trip idea holds the plan somebody drew up for it.
