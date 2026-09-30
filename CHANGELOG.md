@@ -2,6 +2,23 @@
 
 ✨ Added · 🔧 Changed · 🐛 Fixed · 🔒 Security
 
+## 0.12.2 — Unreleased
+
+> Every country's places worth seeing now have their engravings, drawn in the shape they were made.
+
+### ✨ Added
+
+- 🪙 **3,341 places across 247 countries and territories carry an engraving under their coin** — up from 828 across 71, so most country pages showed no coin row at all.
+
+### 🔧 Changed
+
+- 🖋️ **Eight engravings were redrawn, Angkor Wat among them** — the new versions replace the old files under the same names.
+
+### 🐛 Fixed
+
+- 📐 **An engraving keeps the shape it was drawn in** — Chile's nine, the moai of Easter Island among them, were stretched to fill a square, as every wide engraving in this batch would have been.
+- 🗂️ **A place the dataset lists twice under two names shows one coin** — 27 second copies, Historic Centre of Vienna beside Wien among them, no longer offer the same sight twice in a country's row.
+
 ## 0.12.1 — Unreleased
 
 > An API token can read who lives in the household without reaching everything.

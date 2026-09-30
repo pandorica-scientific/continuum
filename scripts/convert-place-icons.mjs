@@ -26,6 +26,11 @@
  * each at these settings, against 26 kB for re-encoding the supplied 256px PNGs
  * — no smaller, and softer, because those have already been downsampled once.
  *
+ * 256 is the LONG side, not both. Most masters are not square — 1536×1024 is
+ * the commonest — and forcing them to 256×256 stretches every building upward
+ * by half. The coin draws its image `object-fit: contain`, so a 256×171 file
+ * sits centred in the disc with the vignette's transparent edges round it.
+ *
  * Delivery is partial and will be for a while. A place whose engraving has not
  * arrived simply has no coin.
  *
@@ -37,7 +42,17 @@
  * COPIES metadata, and the masters have none — so webpmux adds it afterwards.
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+	closeSync,
+	existsSync,
+	mkdirSync,
+	openSync,
+	readSync,
+	readdirSync,
+	rmSync,
+	statSync,
+	writeFileSync
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 
@@ -73,6 +88,26 @@ const xmp = (id) => `<?xpacket begin="\uFEFF" id="W5M0MpCehiHzreSzNTczkc9d"?>
 </x:xmpmeta>
 <?xpacket end="w"?>`;
 
+/** The long side of every engraving. See "Why 256" above. */
+const LONG_SIDE = 256;
+
+/**
+ * A PNG's width and height, from its header.
+ *
+ * The first chunk of every PNG is IHDR, and its width and height sit at fixed
+ * offsets 16 and 20 as big-endian integers — no decoder needed for two numbers.
+ */
+function pngSize(path) {
+	const head = Buffer.alloc(24);
+	const handle = openSync(path, 'r');
+	try {
+		readSync(handle, head, 0, 24, 0);
+	} finally {
+		closeSync(handle);
+	}
+	return { width: head.readUInt32BE(16), height: head.readUInt32BE(20) };
+}
+
 const source = process.argv[2];
 if (!source) {
 	console.error('usage: node scripts/convert-place-icons.mjs <masters-directory>');
@@ -103,6 +138,9 @@ let bytes = 0;
 for (const name of masters) {
 	const id = basename(name, '.png');
 	const out = join(OUT, `${id}.webp`);
+	// cwebp keeps the aspect ratio when one side is 0.
+	const { width, height } = pngSize(join(source, name));
+	const [w, h] = width >= height ? [LONG_SIDE, 0] : [0, LONG_SIDE];
 	execFileSync('cwebp', [
 		'-quiet',
 		'-q',
@@ -110,8 +148,8 @@ for (const name of masters) {
 		'-alpha_q',
 		'90',
 		'-resize',
-		'256',
-		'256',
+		String(w),
+		String(h),
 		'-m',
 		'6',
 		join(source, name),

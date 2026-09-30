@@ -267,7 +267,15 @@
 		border-color: color-mix(in srgb, var(--coin) 55%, transparent);
 		background: color-mix(in srgb, var(--coin) 82%, var(--label-paper));
 	}
+	/*
+	 * Pinned to the disc, as the canvas above it is. As a grid item its
+	 * `height: 100%` resolved against an auto row and fell back to the image's
+	 * own ratio, so a portrait engraving drew 82×123 and the disc cut off its
+	 * top and bottom thirds — `contain` only contains inside a definite box.
+	 */
 	.art {
+		position: absolute;
+		inset: 0;
 		width: 100%;
 		height: 100%;
 		object-fit: contain;
